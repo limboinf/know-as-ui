@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi 扩展开发手册 · Field Manual</title>
+<style>
+  :root{
+    --paper:#f6f2ea;
+    --paper-deep:#efe9dd;
+    --ink:#26221b;
+    --ink-soft:#5d564a;
+    --ink-faint:#8a8172;
+    --accent:#c2491d;       /* 铁锈橙 */
+    --accent-deep:#8f3512;
+    --line:#d8cfbd;
+    --code-bg:#211d16;
+    --code-ink:#e8e0d0;
+    --ok:#3d7a44;
+    --warn:#a8681c;
+    --bad:#a83232;
+    --serif:"Songti SC","Noto Serif SC",Georgia,serif;
+    --sans:"PingFang SC",-apple-system,"Helvetica Neue",sans-serif;
+    --mono:"SF Mono",Menlo,"JetBrains Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;scroll-padding-top:76px}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.75;
+    /* 纸张纹理感 */
+    background-image:radial-gradient(var(--line) 0.6px, transparent 0.6px);
+    background-size:22px 22px;
+  }
+  ::selection{background:var(--accent);color:var(--paper)}
+
+  /* ===== 顶栏 ===== */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:50;
+    display:flex;align-items:center;gap:14px;
+    padding:10px 22px;
+    background:color-mix(in oklch, var(--paper) 88%, transparent);
+    backdrop-filter:blur(8px);
+    border-bottom:1.5px solid var(--ink);
+  }
+  .topbar .brand{font-family:var(--serif);font-weight:700;font-size:17px;letter-spacing:.5px}
+  .topbar .brand em{font-style:normal;color:var(--accent)}
+  .progress-rail{flex:1;height:4px;background:var(--line);border-radius:99px;overflow:hidden}
+  .progress-fill{height:100%;width:0%;background:var(--accent);transition:width .3s ease-out}
+  .progress-label{font-family:var(--mono);font-size:12px;color:var(--ink-faint);min-width:96px;text-align:right}
+
+  /* ===== 布局 ===== */
+  .wrap{display:grid;grid-template-columns:250px minmax(0,1fr);max-width:1240px;margin:0 auto;padding-top:60px}
+  nav.toc{
+    position:sticky;top:60px;height:calc(100vh - 60px);overflow-y:auto;
+    padding:28px 18px 40px 10px;border-right:1px solid var(--line);
+    scrollbar-width:thin;
+  }
+  nav.toc .toc-title{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-faint);margin-bottom:14px}
+  nav.toc a{
+    display:flex;gap:9px;align-items:baseline;
+    color:var(--ink-soft);text-decoration:none;font-size:13.5px;
+    padding:5px 9px;border-left:2px solid transparent;margin-left:-11px;
+  }
+  nav.toc a .no{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+  nav.toc a:hover{color:var(--accent)}
+  nav.toc a.active{color:var(--accent-deep);border-left-color:var(--accent);font-weight:600;background:var(--paper-deep)}
+  main{padding:48px 46px 120px;min-width:0}
+
+  /* ===== 章节头 ===== */
+  .chapter-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+  .chapter-no{
+    font-family:var(--mono);font-size:52px;font-weight:700;line-height:1;
+    color:transparent;-webkit-text-stroke:1.3px var(--accent);
+  }
+  h2.ch{font-family:var(--serif);font-size:clamp(24px,3vw,32px);font-weight:800;letter-spacing:.01em}
+  section.chapter{margin-bottom:88px;padding-top:8px;border-top:1.5px solid var(--ink)}
+  section.chapter > .chapter-head{margin-top:26px}
+  .lede{font-family:var(--serif);font-size:17.5px;color:var(--ink-soft);margin:14px 0 30px;max-width:62ch}
+
+  h3{font-size:19px;margin:38px 0 14px;display:flex;align-items:center;gap:10px}
+  h3::before{content:"§";color:var(--accent);font-family:var(--serif);font-weight:700}
+  p{max-width:70ch;margin-bottom:12px}
+  ul.plain{margin:0 0 14px 20px;max-width:68ch}
+  ul.plain li{margin-bottom:6px}
+  strong{font-weight:650}
+  code:not(pre code){
+    font-family:var(--mono);font-size:.86em;
+    background:var(--paper-deep);border:1px solid var(--line);
+    padding:1.5px 6px;border-radius:4px;color:var(--accent-deep);
+  }
+  .kbd{font-family:var(--mono);font-size:.82em;border:1px solid var(--ink-soft);border-bottom-width:2.5px;border-radius:5px;padding:1px 7px;background:#fffdf8}
+
+  /* ===== 提示框 ===== */
+  .note{border-left:3px solid var(--accent);background:var(--paper-deep);padding:13px 18px;margin:18px 0;max-width:72ch;font-size:15px}
+  .note.danger{border-color:var(--bad)}
+  .note.warn{border-color:var(--warn)}
+  .note.ok{border-color:var(--ok)}
+  .note b:first-child{display:block;margin-bottom:3px}
+
+  /* ===== 代码块 ===== */
+  .codewrap{position:relative;margin:16px 0 22px;max-width:860px}
+  .codewrap .filetab{
+    display:inline-block;font-family:var(--mono);font-size:11.5px;
+    background:var(--ink);color:var(--paper);padding:3px 12px;border-radius:6px 6px 0 0;
+  }
+  pre{
+    background:var(--code-bg);color:var(--code-ink);
+    padding:18px 20px;border-radius:0 8px 8px 8px;
+    overflow-x:auto;font-family:var(--mono);font-size:13.2px;line-height:1.65;
+    border:1px solid #3a342a;
+  }
+  pre .cm{color:#8a8065}      /* comment */
+  pre .kw{color:#e0915a}      /* keyword */
+  pre .st{color:#b5c98a}      /* string */
+  pre .fn{color:#8fb8d8}      /* func/api */
+  pre .ty{color:#d8b46a}      /* type */
+  .copybtn{
+    position:absolute;top:6px;right:8px;z-index:2;
+    font-family:var(--mono);font-size:11px;color:#9a9078;
+    background:#33"2d23";background:#332d23;border:1px solid #4a4335;border-radius:5px;
+    padding:3px 10px;cursor:pointer;transition:.15s;
+  }
+  .copybtn:hover{color:var(--code-ink);border-color:#6a6250}
+  .copybtn.done{color:#b5c98a;border-color:#5a6a45}
+
+  /* ===== 表格 ===== */
+  table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;max-width:900px}
+  th{
+    text-align:left;font-family:var(--mono);font-size:11.5px;text-transform:uppercase;
+    letter-spacing:.1em;color:var(--paper);background:var(--ink);padding:8px 12px;
+  }
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:color-mix(in oklch, var(--paper-deep) 55%, transparent)}
+  td code{white-space:nowrap}
+
+  /* ===== 徽标 ===== */
+  .badge{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:1.5px 8px;border-radius:99px;letter-spacing:.05em;vertical-align:middle}
+  .badge.block{background:#f3dede;color:var(--bad);border:1px solid #ddb}
+  .badge.mod{background:#eee3cd;color:var(--warn);border:1px solid #ddc9a0}
+  .badge.ui{background:#dde8dd;color:var(--ok);border:1px solid #bccfbc}
+  .badge.info{background:var(--paper-deep);color:var(--ink-soft);border:1px solid var(--line)}
+
+  /* ===== 图表 ===== */
+  .diagram{max-width:900px;margin:20px 0 26px;border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:16px 16px 8px;overflow-x:auto}
+  .diagram svg{display:block;width:100%;min-width:640px;height:auto}
+  .diagram figcaption{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.12em;text-transform:uppercase;padding:10px 2px 6px;border-top:1px dashed var(--line);margin-top:10px}
+  .dg-box{fill:#fffdf8;stroke:#26221b;stroke-width:1.5}
+  .dg-accent{fill:#f7e3d8;stroke:#c2491d;stroke-width:1.5}
+  .dg-red{fill:#f6dede;stroke:#a83232;stroke-width:1.5}
+  .dg-green{fill:#e2ecdd;stroke:#3d7a44;stroke-width:1.5}
+  .dg-title{font:600 13px "SF Mono",Menlo,monospace;fill:#26221b}
+  .dg-sub{font:11px "SF Mono",Menlo,monospace;fill:#5d564a}
+  .dg-tiny{font:10px "SF Mono",Menlo,monospace;fill:#8a8172}
+  .dg-line{stroke:#26221b;stroke-width:1.5;fill:none}
+  .dg-dim{stroke:#b3ab99;stroke-width:1.5;fill:none}
+  .dg-flow{stroke:#c2491d;stroke-width:2;fill:none}
+  .dg-dash{stroke-dasharray:5 4}
+  .dg-lbl{font:10.5px "SF Mono",Menlo,monospace;fill:#c2491d}
+  .dg-lbl-ink{font:10.5px "SF Mono",Menlo,monospace;fill:#5d564a}
+
+  /* ===== 生命周期模拟器 ===== */
+  .sim{
+    max-width:900px;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0 10px;
+    background:color-mix(in oklch, var(--paper) 92%, white);
+  }
+  .sim-log{height:330px;overflow-y:auto;padding:18px 20px;font-family:var(--mono);font-size:13px;line-height:1.9}
+  .sim-line{opacity:0;transform:translateY(6px);animation:simIn .35s ease-out forwards}
+  @keyframes simIn{to{opacity:1;transform:none}}
+  .sim-line .t{color:var(--ink-faint)}
+  .sim-line.evt{color:var(--accent-deep);font-weight:600}
+  .sim-line.act{color:var(--ink)}
+  .sim-line.hl{background:var(--paper-deep);border-radius:4px;padding:0 6px}
+  .sim-ctrl{display:flex;gap:10px;align-items:center;border-top:1.5px solid var(--ink);padding:13px 18px;background:var(--paper-deep);flex-wrap:wrap}
+  .sim-btn{
+    font-family:var(--mono);font-size:13px;font-weight:600;cursor:pointer;
+    background:var(--ink);color:var(--paper);border:none;border-radius:6px;padding:8px 18px;
+    transition:.15s;
+  }
+  .sim-btn:hover{background:var(--accent-deep)}
+  .sim-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--ink-soft)}
+  .sim-btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
+  .sim-scenario{font-size:13px;color:var(--ink-soft)}
+
+  /* ===== 自测题 ===== */
+  details.quiz{max-width:860px;border:1.5px solid var(--ink);border-radius:9px;margin:14px 0;overflow:hidden;background:#fffdf8}
+  details.quiz summary{
+    cursor:pointer;padding:13px 18px;font-weight:600;list-style:none;
+    display:flex;align-items:center;gap:12px;user-select:none;
+  }
+  details.quiz summary::-webkit-details-marker{display:none}
+  details.quiz summary::before{content:"?";font-family:var(--mono);font-weight:700;color:var(--paper);background:var(--accent);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+  details.quiz[open] summary::before{content:"!";background:var(--ink)}
+  details.quiz .ans{padding:4px 18px 16px 54px;color:var(--ink-soft);font-size:15px;border-top:1px dashed var(--line)}
+
+  /* ===== 打卡清单 ===== */
+  .checkpoint{max-width:860px;margin:6px 0 26px}
+  .ckpt-item{
+    display:flex;gap:12px;align-items:flex-start;padding:9px 12px;border-radius:7px;cursor:pointer;
+    transition:background .15s;
+  }
+  .ckpt-item:hover{background:var(--paper-deep)}
+  .ckpt-box{
+    width:20px;height:20px;border:2px solid var(--ink-soft);border-radius:5px;flex-shrink:0;margin-top:4px;
+    display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent;transition:.15s;
+  }
+  .ckpt-item.done .ckpt-box{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+  .ckpt-item.done .ckpt-text{text-decoration:line-through;color:var(--ink-faint)}
+
+  /* ===== 搜索 ===== */
+  .api-search{
+    width:min(420px,100%);font-family:var(--mono);font-size:14px;
+    padding:10px 14px;border:1.5px solid var(--ink);border-radius:8px;background:#fffdf8;
+    outline:none;margin:10px 0 4px;
+  }
+  .api-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklch,var(--accent) 18%, transparent)}
+  .hidden-row{display:none!important}
+
+  footer.colophon{border-top:1.5px solid var(--ink);margin-top:40px;padding-top:18px;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+
+  @media (max-width:920px){
+    .wrap{grid-template-columns:1fr}
+    nav.toc{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);padding:16px 12px}
+    main{padding:36px 20px 100px}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">pi <em>extensions</em> · 开发手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 9 章</span>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc">
+  <div class="toc-title">目录 · Contents</div>
+</nav>
+
+<main>
+
+<!-- ======================= 01 心智模型 ======================= -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">心智模型：扩展到底是什么</h2></div>
+  <p class="lede">pi 的扩展就是一个 <strong>TypeScript 文件</strong>，导出一个默认函数，pi 把 <code>ExtensionAPI</code> 对象递给你——你用它订阅事件、注册工具、注册命令、操作 UI。没有框架、没有构建步骤，写完就能跑。</p>
+
+  <p>三条最重要的底层事实：</p>
+  <ul class="plain">
+    <li><strong>加载器是 jiti</strong> —— TypeScript 直接加载，<span class="kbd">npm install</span> 的依赖和 Node 内置模块（<code>node:fs</code> 等）都能用，无需编译。</li>
+    <li><strong>工厂函数可以 async</strong> —— 返回 Promise 时 pi 会等它完成再继续启动（适合启动时拉远端配置、动态发现模型）。</li>
+    <li><strong>扩展拥有你的全部系统权限</strong> —— 只装可信来源的扩展。</li>
+  </ul>
+
+  <div class="note warn"><b>⚠ 别在工厂函数里起后台资源</b>
+    工厂可能在「永远不开会话」的调用里运行。进程、socket、文件监视器、定时器统统延迟到 <code>session_start</code> 再启动，并注册幂等的 <code>session_shutdown</code> 来清理。
+  </div>
+
+  <h3>架构总览：一个扩展够得着哪些内脏</h3>
+  <figure class="diagram">
+  <svg viewBox="0 0 880 480" role="img" aria-label="pi 扩展架构总览">
+    <defs>
+      <marker id="arA1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+      <marker id="arA2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+    </defs>
+    <rect x="250" y="24" width="380" height="372" rx="12" fill="none" stroke="#c2491d" stroke-width="1.5" stroke-dasharray="8 4"/>
+    <text x="268" y="42" class="dg-lbl" letter-spacing="2">PI RUNTIME</text>
+
+    <rect x="20" y="36" width="170" height="52" rx="6" class="dg-box"/>
+    <text x="105" y="58" text-anchor="middle" class="dg-title">用户</text>
+    <text x="105" y="75" text-anchor="middle" class="dg-sub">键入 prompt · 看 TUI</text>
+
+    <rect x="310" y="44" width="260" height="48" rx="6" class="dg-box"/>
+    <text x="440" y="63" text-anchor="middle" class="dg-title">编辑器 / TUI</text>
+    <text x="440" y="81" text-anchor="middle" class="dg-sub">ctx.ui 对话框 · widget · footer</text>
+
+    <rect x="310" y="128" width="260" height="52" rx="6" class="dg-box"/>
+    <text x="440" y="148" text-anchor="middle" class="dg-title">Agent Loop</text>
+    <text x="440" y="166" text-anchor="middle" class="dg-sub">turn · context · systemPrompt</text>
+
+    <rect x="310" y="216" width="260" height="52" rx="6" class="dg-box"/>
+    <text x="440" y="236" text-anchor="middle" class="dg-title">Tool Executor</text>
+    <text x="440" y="254" text-anchor="middle" class="dg-sub">默认并行 · mutation queue</text>
+
+    <rect x="310" y="304" width="260" height="52" rx="6" class="dg-box"/>
+    <text x="440" y="324" text-anchor="middle" class="dg-title">Session Manager</text>
+    <text x="440" y="342" text-anchor="middle" class="dg-sub">session.jsonl · 分支树</text>
+
+    <text x="440" y="382" text-anchor="middle" class="dg-tiny">扩展抛错只记日志，agent 继续 · 但 tool_call 出错 = fail-safe 阻断该次调用</text>
+
+    <rect x="20" y="206" width="170" height="108" rx="6" class="dg-accent"/>
+    <text x="105" y="230" text-anchor="middle" class="dg-title" fill="#8f3512">你的扩展 .ts</text>
+    <text x="105" y="249" text-anchor="middle" class="dg-sub">export default (pi) ⇒ {}</text>
+    <text x="105" y="266" text-anchor="middle" class="dg-sub">jiti 直跑 · 无需编译</text>
+    <text x="105" y="296" text-anchor="middle" class="dg-tiny">⚠ 拥有完整系统权限</text>
+
+    <line x1="270" y1="68" x2="270" y2="330" stroke="#c2491d" stroke-width="2.5"/>
+    <line x1="190" y1="260" x2="264" y2="260" class="dg-flow" marker-end="url(#arA2)"/>
+    <text x="227" y="249" text-anchor="middle" class="dg-lbl">ExtensionAPI</text>
+    <line x1="270" y1="68"  x2="304" y2="68"  class="dg-flow" marker-end="url(#arA2)"/>
+    <line x1="270" y1="154" x2="304" y2="154" class="dg-flow" marker-end="url(#arA2)"/>
+    <line x1="270" y1="242" x2="304" y2="242" class="dg-flow" marker-end="url(#arA2)"/>
+    <line x1="270" y1="330" x2="304" y2="330" class="dg-flow" marker-end="url(#arA2)"/>
+
+    <path d="M190,60 C245,60 258,58 304,58" class="dg-line" marker-end="url(#arA1)"/>
+
+    <line x1="440" y1="92"  x2="440" y2="122" class="dg-dim" marker-end="url(#arA1)"/>
+    <line x1="440" y1="180" x2="440" y2="210" class="dg-dim" marker-end="url(#arA1)"/>
+    <line x1="440" y1="268" x2="440" y2="298" class="dg-dim" marker-end="url(#arA1)"/>
+
+    <rect x="700" y="120" width="160" height="92" rx="6" class="dg-box"/>
+    <text x="780" y="142" text-anchor="middle" class="dg-title">LLM Providers</text>
+    <text x="780" y="162" text-anchor="middle" class="dg-sub">Anthropic / OpenAI</text>
+    <text x="780" y="179" text-anchor="middle" class="dg-sub">ollama / llama.cpp</text>
+    <text x="780" y="199" text-anchor="middle" class="dg-tiny">registerProvider 接入</text>
+
+    <path d="M570,146 C640,146 640,152 694,152" class="dg-line" marker-end="url(#arA1)" marker-start="url(#arA1)"/>
+    <text x="632" y="136" text-anchor="middle" class="dg-lbl-ink">请求 ⇄ 流式响应</text>
+
+    <line x1="30" y1="432" x2="70" y2="432" class="dg-flow"/>
+    <text x="78" y="435" class="dg-lbl">扩展触点</text>
+    <line x1="185" y1="432" x2="225" y2="432" class="dg-line" marker-end="url(#arA1)"/>
+    <text x="233" y="435" class="dg-lbl-ink">数据流</text>
+    <line x1="305" y1="432" x2="345" y2="432" class="dg-dim"/>
+    <text x="353" y="435" class="dg-lbl-ink">内部流转</text>
+    <rect x="425" y="426" width="40" height="12" rx="6" fill="none" stroke="#c2491d" stroke-width="1.2" stroke-dasharray="6 3"/>
+    <text x="473" y="435" class="dg-lbl-ink">进程边界</text>
+  </svg>
+  <figcaption>fig.01 — ExtensionAPI 是唯一入口：事件订阅打进去，工具/命令/Provider 注册送进来</figcaption>
+  </figure>
+
+  <h3>最小可用扩展（能跑的全部要素）</h3>
+  <div class="codewrap"><span class="filetab">~/.pi/agent/extensions/my-extension.ts</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">import</span> <span class="ty">type</span> { ExtensionAPI } <span class="kw">from</span> <span class="st">"@earendil-works/pi-coding-agent"</span>;
+<span class="kw">import</span> { Type } <span class="kw">from</span> <span class="st">"typebox"</span>;
+
+<span class="kw">export default function</span> (pi: <span class="ty">ExtensionAPI</span>) {
+  <span class="cm">// ① 订阅事件</span>
+  pi.<span class="fn">on</span>(<span class="st">"session_start"</span>, <span class="kw">async</span> (_event, ctx) =&gt; {
+    ctx.ui.<span class="fn">notify</span>(<span class="st">"Extension loaded!"</span>, <span class="st">"info"</span>);
+  });
+
+  <span class="cm">// ② 拦截工具调用（危险命令闸门）</span>
+  pi.<span class="fn">on</span>(<span class="st">"tool_call"</span>, <span class="kw">async</span> (event, ctx) =&gt; {
+    <span class="kw">if</span> (event.toolName === <span class="st">"bash"</span> &amp;&amp; event.input.command?.<span class="fn">includes</span>(<span class="st">"rm -rf"</span>)) {
+      <span class="kw">const</span> ok = <span class="kw">await</span> ctx.ui.<span class="fn">confirm</span>(<span class="st">"Dangerous!"</span>, <span class="st">"Allow rm -rf?"</span>);
+      <span class="kw">if</span> (!ok) <span class="kw">return</span> { block: <span class="kw">true</span>, reason: <span class="st">"Blocked by user"</span> };
+    }
+  });
+
+  <span class="cm">// ③ 注册 LLM 可调用的自定义工具</span>
+  pi.<span class="fn">registerTool</span>({
+    name: <span class="st">"greet"</span>,
+    label: <span class="st">"Greet"</span>,
+    description: <span class="st">"Greet someone by name"</span>,
+    parameters: Type.<span class="fn">Object</span>({ name: Type.<span class="fn">String</span>({ description: <span class="st">"Name to greet"</span> }) }),
+    <span class="kw">async</span> <span class="fn">execute</span>(toolCallId, params, signal, onUpdate, ctx) {
+      <span class="kw">return</span> { content: [{ type: <span class="st">"text"</span>, text: <span class="st">`Hello, ${params.name}!`</span> }], details: {} };
+    },
+  });
+
+  <span class="cm">// ④ 注册斜杠命令</span>
+  pi.<span class="fn">registerCommand</span>(<span class="st">"hello"</span>, {
+    description: <span class="st">"Say hello"</span>,
+    handler: <span class="kw">async</span> (args, ctx) =&gt; ctx.ui.<span class="fn">notify</span>(<span class="st">`Hello ${args || "world"}!`</span>, <span class="st">"info"</span>),
+  });
+}</code></pre></div>
+
+  <details class="quiz"><summary>自测：工厂函数里 await fetch 拉模型列表，pi 会等吗？等完之后发生了什么？</summary>
+    <div class="ans">会。<strong>如果工厂返回 Promise，pi 会 await 它才继续启动</strong>——所以异步初始化会在 <code>session_start</code>、<code>resources_discover</code> 之前完成，通过 <code>pi.registerProvider()</code> 注册的模型也能在正常启动和 <code>pi --list-models</code> 里看到。这也是文档推荐的「启动时拉远端配置」模式。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="1">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件（点击打卡）</div>
+    <div class="ckpt-item" data-key="c1a"><div class="ckpt-box">✓</div><div class="ckpt-text">亲手把最小扩展示例放到 <code>~/.pi/agent/extensions/</code> 并看到 notify 弹出</div></div>
+    <div class="ckpt-item" data-key="c1b"><div class="ckpt-box">✓</div><div class="ckpt-text">理解：扩展 = 默认导出函数 + ExtensionAPI，无编译直接跑</div></div>
+  </div>
+</section>
+
+<!-- ======================= 02 放置与加载 ======================= -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">放哪里、怎么加载</h2></div>
+  <p class="lede">两条路径：<code>-e</code> 旗标做快速试验；放进自动发现目录才能用 <span class="kbd">/reload</span> 热重载。项目本地的扩展要等项目被信任后才会加载。</p>
+
+  <table>
+    <tr><th>位置</th><th>作用域</th></tr>
+    <tr><td><code>~/.pi/agent/extensions/*.ts</code></td><td>全局（所有项目）</td></tr>
+    <tr><td><code>~/.pi/agent/extensions/&lt;dir&gt;/index.ts</code></td><td>全局（子目录形态）</td></tr>
+    <tr><td><code>.pi/extensions/*.ts</code></td><td>项目本地</td></tr>
+    <tr><td><code>.pi/extensions/&lt;dir&gt;/index.ts</code></td><td>项目本地（子目录形态）</td></tr>
+  </table>
+
+  <h3>三种组织形态</h3>
+  <ul class="plain">
+    <li><strong>单文件</strong> —— 一个 <code>.ts</code>，小扩展首选。</li>
+    <li><strong>目录 + index.ts</strong> —— 多文件拆分，入口仍是默认导出函数。</li>
+    <li><strong>带依赖的包</strong> —— 目录里有 <code>package.json</code>，声明 <code>"pi": {"extensions": ["./src/index.ts"]}</code>，<code>npm install</code> 后 node_modules 自动解析。注意分发时依赖必须放 <code>dependencies</code>（安装用 <code>--omit=dev</code>）。</li>
+  </ul>
+
+  <div class="codewrap"><span class="filetab">settings.json · 追加路径 / 分发包</span>
+    <button class="copybtn">copy</button>
+<pre><code>{
+  <span class="st">"packages"</span>: [<span class="st">"npm:@foo/bar@1.0.0"</span>, <span class="st">"git:github.com/user/repo@v1"</span>],
+  <span class="st">"extensions"</span>: [<span class="st">"/path/to/local/extension.ts"</span>, <span class="st">"/path/to/dir"</span>]
+}</code></pre></div>
+
+  <table>
+    <tr><th>命令</th><th>用途</th></tr>
+    <tr><td><code>pi -e ./my-extension.ts</code></td><td>临时挂载单个扩展测试（不进自动发现目录）</td></tr>
+    <tr><td><code>/reload</code></td><td>热重载自动发现目录里的扩展（所以开发时放对地方）</td></tr>
+    <tr><td><code>pi --no-builtin-tools -e ./x.ts</code></td><td>禁用全部内置工具，只用扩展工具</td></tr>
+  </table>
+
+  <h3>加载流水线：从磁盘到生效</h3>
+  <figure class="diagram">
+  <svg viewBox="0 0 880 330" role="img" aria-label="扩展加载流水线">
+    <defs>
+      <marker id="arB1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+      <marker id="arB2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+    </defs>
+
+    <rect x="24" y="64" width="116" height="64" rx="6" class="dg-box"/>
+    <text x="82" y="90" text-anchor="middle" class="dg-title">pi 启动</text>
+    <text x="82" y="110" text-anchor="middle" class="dg-sub">读 settings.json</text>
+
+    <rect x="178" y="64" width="196" height="64" rx="6" class="dg-box"/>
+    <text x="276" y="86" text-anchor="middle" class="dg-title">收集扩展</text>
+    <text x="276" y="104" text-anchor="middle" class="dg-sub">-e 旗标 + 全局目录</text>
+    <text x="276" y="119" text-anchor="middle" class="dg-tiny">项目本地的先押后</text>
+
+    <rect x="414" y="64" width="192" height="64" rx="6" class="dg-box"/>
+    <text x="510" y="86" text-anchor="middle" class="dg-title">project_trust</text>
+    <text x="510" y="104" text-anchor="middle" class="dg-sub">未信任 → 本地扩展不载</text>
+    <text x="510" y="119" text-anchor="middle" class="dg-tiny">仅全局/-e 扩展可参与决策</text>
+
+    <rect x="646" y="64" width="170" height="64" rx="6" class="dg-accent"/>
+    <text x="731" y="86" text-anchor="middle" class="dg-title" fill="#8f3512">jiti 执行工厂</text>
+    <text x="731" y="104" text-anchor="middle" class="dg-sub">TS 直跑 · 无编译</text>
+    <text x="731" y="119" text-anchor="middle" class="dg-tiny">async 工厂被 await</text>
+
+    <rect x="646" y="196" width="170" height="64" rx="6" class="dg-box"/>
+    <text x="731" y="218" text-anchor="middle" class="dg-title">注册生效</text>
+    <text x="731" y="236" text-anchor="middle" class="dg-sub">tools · cmds</text>
+    <text x="731" y="251" text-anchor="middle" class="dg-sub">providers</text>
+
+    <rect x="414" y="196" width="192" height="64" rx="6" class="dg-box"/>
+    <text x="510" y="218" text-anchor="middle" class="dg-title">session_start</text>
+    <text x="510" y="236" text-anchor="middle" class="dg-sub">watcher / timer</text>
+    <text x="510" y="251" text-anchor="middle" class="dg-tiny">后台资源此刻才许启动</text>
+
+    <rect x="178" y="196" width="196" height="64" rx="6" class="dg-box"/>
+    <text x="276" y="218" text-anchor="middle" class="dg-title">运行中</text>
+    <text x="276" y="236" text-anchor="middle" class="dg-sub">/reload 热重载</text>
+    <text x="276" y="251" text-anchor="middle" class="dg-tiny">仅限自动发现目录的扩展</text>
+
+    <line x1="140" y1="96" x2="172" y2="96" class="dg-line" marker-end="url(#arB1)"/>
+    <line x1="374" y1="96" x2="408" y2="96" class="dg-line" marker-end="url(#arB1)"/>
+    <line x1="606" y1="96" x2="640" y2="96" class="dg-line" marker-end="url(#arB1)"/>
+    <line x1="731" y1="128" x2="731" y2="190" class="dg-line" marker-end="url(#arB1)"/>
+    <line x1="640" y1="228" x2="612" y2="228" class="dg-line" marker-end="url(#arB1)"/>
+    <line x1="408" y1="228" x2="380" y2="228" class="dg-line" marker-end="url(#arB1)"/>
+
+    <path d="M276,260 V300 H856 V96 H824" class="dg-flow dg-dash" marker-end="url(#arB2)"/>
+    <text x="566" y="292" text-anchor="middle" class="dg-lbl">/reload ：重新收集 + 重跑一遍工厂</text>
+  </svg>
+  <figcaption>fig.02 — 想用 /reload 就别用 -e：只有自动发现位置支持热重载</figcaption>
+  </figure>
+
+  <div class="note danger"><b>⛔ 安全红线</b>
+    扩展以你的完整系统权限执行任意代码。npm/git 分发的扩展同理——装之前看源码。
+  </div>
+
+  <details class="quiz"><summary>自测：为什么开发时建议放 ~/.pi/agent/extensions/ 而不是一直用 -e？</summary>
+    <div class="ans">因为只有自动发现位置的扩展支持 <span class="kbd">/reload</span> 热重载。用 <code>-e</code> 每次改代码都得重启整个 pi；放进目录后改完敲 <code>/reload</code> 即可，还触发 <code>resources_discover {reason:"reload"}</code> 让资源一起刷新。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="2">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c2a"><div class="ckpt-box">✓</div><div class="ckpt-text">分得清全局 / 项目本地 / -e 三种挂载方式和各自适用场景</div></div>
+    <div class="ckpt-item" data-key="c2b"><div class="ckpt-box">✓</div><div class="ckpt-text">体验过一次 /reload 热重载</div></div>
+  </div>
+</section>
+
+<!-- ======================= 03 事件系统 ======================= -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">事件系统：一次对话的完整旅程</h2></div>
+  <p class="lede">扩展的骨架是事件。下面的模拟器演示用户发送一条消息后，事件按什么顺序触发、哪些能拦截修改。先玩一遍模拟器，再对照下方总表。</p>
+
+  <div class="sim">
+    <div class="sim-log" id="simLog"><div style="color:var(--ink-faint)">← 选一个场景，点「播放」，观察事件流…</div></div>
+    <div class="sim-ctrl">
+      <button class="sim-btn" id="simPlay">▶ 播放</button>
+      <button class="sim-btn ghost" id="simReset">重置</button>
+      <span class="sim-scenario">场景：
+        <select id="simScenario" style="font-family:var(--mono);font-size:13px;padding:4px 8px;border:1px solid var(--ink-soft);border-radius:5px;background:#fffdf8">
+          <option value="normal">普通消息（完整回合）</option>
+          <option value="block">tool_call 拦截 rm -rf</option>
+          <option value="input">input 事件改写输入 ?quick → 简短回答</option>
+        </select>
+      </span>
+    </div>
+  </div>
+
+  <h3>事件总表（含能力标注）</h3>
+  <table>
+    <tr><th>事件</th><th>时机</th><th>能力</th></tr>
+    <tr><td><code>project_trust</code></td><td>决定是否信任项目前（仅全局/CLI 扩展参与）</td><td><span class="badge block">决定 trust</span></td></tr>
+    <tr><td><code>resources_discover</code></td><td>session_start 后，贡献 skill/prompt/theme 路径</td><td><span class="badge mod">返回路径</span></td></tr>
+    <tr><td><code>session_start</code> / <code>session_shutdown</code></td><td>会话开始 / 销毁（reason: startup·new·resume·fork·reload）</td><td><span class="badge info">通知</span></td></tr>
+    <tr><td><code>session_before_switch</code> / <code>_before_fork</code></td><td>/new /resume /fork 前</td><td><span class="badge block">可 cancel</span></td></tr>
+    <tr><td><code>session_before_compact</code></td><td>压缩前（手动/阈值/溢出）</td><td><span class="badge block">可 cancel</span> <span class="badge mod">自定义摘要</span></td></tr>
+    <tr><td><code>input</code></td><td>收到输入后、skill/template 展开前</td><td><span class="badge mod">continue / transform / handled</span></td></tr>
+    <tr><td><code>before_agent_start</code></td><td>进入 agent 循环前</td><td><span class="badge mod">注入 message、改 systemPrompt</span></td></tr>
+    <tr><td><code>context</code></td><td>每次 LLM 调用前</td><td><span class="badge mod">增删消息（深拷贝安全）</span></td></tr>
+    <tr><td><code>before_provider_headers</code> / <code>_request</code></td><td>HTTP 头组装后 / payload 构建后</td><td><span class="badge mod">原地 mutate / 替换 payload</span></td></tr>
+    <tr><td><code>after_provider_response</code></td><td>收到 HTTP 响应、消费流之前</td><td><span class="badge info">读 status/headers</span></td></tr>
+    <tr><td><code>message_start/_update/_end</code></td><td>消息生命周期（update 为流式 token）</td><td><span class="badge mod">end 可替换同 role 消息</span></td></tr>
+    <tr><td><code>turn_start</code> / <code>turn_end</code></td><td>每个回合（一次 LLM 响应+工具调用）</td><td><span class="badge info">通知</span></td></tr>
+    <tr><td><code>tool_execution_start/_update/_end</code></td><td>工具执行生命周期</td><td><span class="badge info">通知（并行模式交错）</span></td></tr>
+    <tr><td><code>tool_call</code></td><td>工具执行前</td><td><span class="badge block">可 block</span> <span class="badge mod">可原地改 input</span></td></tr>
+    <tr><td><code>tool_result</code></td><td>工具执行完成后</td><td><span class="badge mod">链式修改结果（中间件）</span></td></tr>
+    <tr><td><code>user_bash</code></td><td>用户执行 <code>!</code>/<code>!!</code> 命令</td><td><span class="badge block">可接管 operations / 直接给 result</span></td></tr>
+    <tr><td><code>model_select</code> / <code>thinking_level_select</code></td><td>模型 / 思考级别切换</td><td><span class="badge ui">更新 UI</span></td></tr>
+    <tr><td><code>agent_settled</code></td><td>agent 彻底停稳（无 retry/compaction/follow-up）</td><td><span class="badge info">状态集成用这个</span></td></tr>
+  </table>
+
+  <h3>tool_call 拦截：一次工具调用的生死判定</h3>
+  <figure class="diagram">
+  <svg viewBox="0 0 880 366" role="img" aria-label="tool_call 拦截决策流程">
+    <defs>
+      <marker id="arC1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+      <marker id="arC3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#a83232"/></marker>
+    </defs>
+
+    <rect x="340" y="16" width="200" height="48" rx="6" class="dg-box"/>
+    <text x="440" y="36" text-anchor="middle" class="dg-title">LLM 发起工具调用</text>
+    <text x="440" y="54" text-anchor="middle" class="dg-sub">bash · edit · 你的自定义工具</text>
+
+    <rect x="340" y="92" width="200" height="44" rx="6" class="dg-box"/>
+    <text x="440" y="118" text-anchor="middle" class="dg-sub">tool_execution_start 先广播</text>
+
+    <polygon points="440,164 610,224 440,284 270,224" class="dg-accent"/>
+    <text x="440" y="216" text-anchor="middle" class="dg-title" fill="#8f3512">tool_call</text>
+    <text x="440" y="238" text-anchor="middle" class="dg-sub">handler 链依次执行</text>
+
+    <text x="618" y="182" class="dg-lbl">⚡ event.input 可原地改写</text>
+    <text x="618" y="198" class="dg-tiny">后续 handler 能看到你的修改</text>
+    <text x="618" y="214" class="dg-tiny">改完不做重新校验</text>
+
+    <line x1="440" y1="64"  x2="440" y2="86"  class="dg-line" marker-end="url(#arC1)"/>
+    <line x1="440" y1="136" x2="440" y2="158" class="dg-line" marker-end="url(#arC1)"/>
+
+    <path d="M270,224 H152 V294" class="dg-line" marker-end="url(#arC3)"/>
+    <text x="150" y="212" text-anchor="middle" class="dg-lbl-ink">return {block:true}</text>
+
+    <line x1="440" y1="284" x2="440" y2="294" class="dg-line" marker-end="url(#arC1)"/>
+    <text x="452" y="294" class="dg-lbl-ink">放行 / 改参后放行</text>
+
+    <rect x="55" y="300" width="195" height="56" rx="6" class="dg-red"/>
+    <text x="152" y="320" text-anchor="middle" class="dg-title">⛔ 工具不执行</text>
+    <text x="152" y="337" text-anchor="middle" class="dg-sub">{block:true, reason} → LLM</text>
+    <text x="152" y="350" text-anchor="middle" class="dg-tiny">terminate:true 整批提前结束</text>
+
+    <rect x="340" y="300" width="200" height="52" rx="6" class="dg-green"/>
+    <text x="440" y="320" text-anchor="middle" class="dg-title">▶ 执行工具</text>
+    <text x="440" y="338" text-anchor="middle" class="dg-sub">参数可能已被你改写</text>
+
+    <line x1="540" y1="326" x2="598" y2="326" class="dg-line" marker-end="url(#arC1)"/>
+
+    <rect x="604" y="300" width="240" height="52" rx="6" class="dg-box"/>
+    <text x="724" y="320" text-anchor="middle" class="dg-title">tool_result 链</text>
+    <text x="724" y="338" text-anchor="middle" class="dg-sub">结果可再修改 → 进 LLM 上下文</text>
+  </svg>
+  <figcaption>fig.03 — handler 抛异常也算 block：权限系统的失败模式是拒绝</figcaption>
+  </figure>
+
+  <div class="codewrap"><span class="filetab">tool_call · 类型收窄 + 原地改参 + 拦截</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">import</span> { isToolCallEventType } <span class="kw">from</span> <span class="st">"@earendil-works/pi-coding-agent"</span>;
+
+pi.<span class="fn">on</span>(<span class="st">"tool_call"</span>, <span class="kw">async</span> (event, ctx) =&gt; {
+  <span class="cm">// isToolCallEventType 收窄类型，拿到 typed input</span>
+  <span class="kw">if</span> (<span class="fn">isToolCallEventType</span>(<span class="st">"bash"</span>, event)) {
+    <span class="cm">// input 可变！原地修改会真实影响执行，且后续 handler 能看到</span>
+    event.input.command = <span class="st">`source ~/.profile\n${event.input.command}`</span>;
+
+    <span class="kw">if</span> (event.input.command.<span class="fn">includes</span>(<span class="st">"rm -rf"</span>)) {
+      <span class="kw">return</span> { block: <span class="kw">true</span>, reason: <span class="st">"Dangerous command"</span>, terminate: <span class="kw">true</span> };
+    }
+  }
+});</code></pre></div>
+
+  <div class="note"><b>ℹ 并行工具模式的顺序保证</b>
+    默认并行执行下：<code>tool_execution_start</code> 按助手消息里的源顺序发出；<code>tool_result</code> 和 <code>tool_execution_end</code> 按<strong>完成顺序</strong>交错；最终 toolResult 消息仍按源顺序。<code>tool_call</code> 不保证能看到同一批兄弟工具的结果。
+  </div>
+
+  <details class="quiz"><summary>自测：想在发给 LLM 前偷偷删掉某些旧消息，应该挂在哪个事件上？为什么不能在 before_agent_start 里干这事？</summary>
+    <div class="ans">挂在 <code>context</code> 上——它在<strong>每次 LLM 调用前</strong>触发，event.messages 是深拷贝、随便改，返回 <code>{ messages: filtered }</code> 即可，非破坏性（不影响 session 存储）。before_agent_start 每轮只触发一次且职责是注入消息/改 system prompt，逐次请求级别的上下文裁剪是 context 的活。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="3">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c3a"><div class="ckpt-box">✓</div><div class="ckpt-text">三个场景的模拟器都看过，能口述一轮对话的事件顺序</div></div>
+    <div class="ckpt-item" data-key="c3b"><div class="ckpt-box">✓</div><div class="ckpt-text">记住三大可拦截点：tool_call（block）、input（transform/handled）、context（改消息）</div></div>
+  </div>
+</section>
+
+<!-- ======================= 04 自定义工具 ======================= -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">自定义工具：registerTool 全解</h2></div>
+  <p class="lede">这是扩展最核心的能力——给 LLM 新的手。<code>execute</code> 返回的 <code>content</code> 发给 LLM，<code>details</code> 留给你自己渲染和恢复状态。</p>
+
+  <h3>完整定义（每个字段都有用）</h3>
+  <div class="codewrap"><span class="filetab">registerTool · 生产级写法</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">import</span> { Type } <span class="kw">from</span> <span class="st">"typebox"</span>;
+<span class="kw">import</span> { StringEnum } <span class="kw">from</span> <span class="st">"@earendil-works/pi-ai"</span>;
+
+pi.<span class="fn">registerTool</span>({
+  name: <span class="st">"todo"</span>,
+  label: <span class="st">"Todo"</span>,
+  description: <span class="st">"List or add items in the project todo list"</span>,
+  <span class="cm">// 进系统提示词 Available tools 区的一行简介（不加就不出现）</span>
+  promptSnippet: <span class="st">"Manage the shared todo list"</span>,
+  <span class="cm">// 进 Guidelines 区的子弹。注意：必须自带工具名！</span>
+  promptGuidelines: [
+    <span class="st">"Use todo for task planning instead of direct file edits when the user asks for a task list."</span>
+  ],
+  parameters: Type.<span class="fn">Object</span>({
+    action: <span class="fn">StringEnum</span>([<span class="st">"list"</span>, <span class="st">"add"</span>] <span class="kw">as const</span>),
+    text: Type.<span class="fn">Optional</span>(Type.<span class="fn">String</span>()),
+  }),
+  prepareArguments(args) { <span class="kw">return</span> args; }, <span class="cm">// 校验前的兼容垫片</span>
+
+  <span class="kw">async</span> <span class="fn">execute</span>(toolCallId, params, signal, onUpdate, ctx) {
+    <span class="kw">if</span> (signal?.aborted) <span class="kw">return</span> { content: [{ type: <span class="st">"text"</span>, text: <span class="st">"Cancelled"</span> }] };
+
+    <span class="cm">// 流式进度（TUI 实时可见）</span>
+    onUpdate?.({ content: [{ type: <span class="st">"text"</span>, text: <span class="st">"Working..."</span> }], details: { progress: 50 } });
+
+    <span class="kw">const</span> result = <span class="kw">await</span> pi.<span class="fn">exec</span>(<span class="st">"some-command"</span>, [], { signal });
+
+    <span class="kw">return</span> {
+      content: [{ type: <span class="st">"text"</span>, text: <span class="st">"Done"</span> }],  <span class="cm">// → 给 LLM</span>
+      details: { data: result },                    <span class="cm">// → 给渲染/状态恢复</span>
+      <span class="cm">// terminate: true,  // 本批全是 terminate 则跳过后续 LLM 调用</span>
+    };
+  },
+
+  renderCall(args, theme, context) { <span class="cm">/* TUI 里怎么画调用行 */</span> },
+  renderResult(result, options, theme, context) { <span class="cm">/* TUI 里怎么画结果 */</span> },
+});</code></pre></div>
+
+  <h3>四条保命规矩</h3>
+  <ul class="plain">
+    <li><strong>枚举用 <code>StringEnum</code></strong>（来自 pi-ai）。<code>Type.Union/Type.Literal</code> 在 Google 的 API 上不工作。</li>
+    <li><strong>报错靠 throw</strong>。从 <code>execute</code> 抛错 → 结果标记 <code>isError:true</code> 报告给 LLM，流程继续；<strong>return 永远不会设置错误标志</strong>，返回什么对象都没用。</li>
+    <li><strong>必须截断输出</strong>。内置限制 50KB / 2000 行先到为准。用现成的 <code>truncateHead</code>（搜索/读文件留头部）/ <code>truncateTail</code>（日志留尾部），截断后要把全文落盘并把路径告诉 LLM。</li>
+    <li><strong>改文件的工具要进 <code>withFileMutationQueue()</code></strong>。工具默认并行跑——不排队的话你的 edit 和内置 edit 同时读旧内容各改各的，后写的覆盖先写的，改动丢失。传<strong>解析后的绝对路径</strong>，read-modify-write 全程包进去。</li>
+  </ul>
+
+  <div class="codewrap"><span class="filetab">截断 + 文件变更队列</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">import</span> { truncateHead, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES,
+         withFileMutationQueue } <span class="kw">from</span> <span class="st">"@earendil-works/pi-coding-agent"</span>;
+
+<span class="kw">async</span> <span class="fn">execute</span>(_id, params, _signal, _onUpdate, ctx) {
+  <span class="kw">const</span> abs = <span class="fn">resolve</span>(ctx.cwd, params.path);
+  <span class="kw">return</span> <span class="fn">withFileMutationQueue</span>(abs, <span class="kw">async</span> () =&gt; {
+    <span class="kw">const</span> output = <span class="kw">await</span> runCommand();
+    <span class="kw">const</span> t = <span class="fn">truncateHead</span>(output, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
+    <span class="kw">let</span> text = t.content;
+    <span class="kw">if</span> (t.truncated) text += <span class="st">`\n\n[Truncated. Full output saved to ${tempFile}]`</span>;
+    <span class="kw">return</span> { content: [{ type: <span class="st">"text"</span>, text }] };
+  });
+}</code></pre></div>
+
+  <h3>覆盖内置工具 & 动态装卸</h3>
+  <ul class="plain">
+    <li><strong>同名即覆盖</strong>：注册一个叫 <code>read</code> 的工具就替换内置 read（TUI 会警告）。渲染器按槽位独立继承——你不写 renderCall/renderResult 就沿用内置的（语法高亮、diff 都还在），适合只加日志/权限控制的包装。<code>promptSnippet/guidelines</code> 不继承，需要就显式写。</li>
+    <li><strong>动态加载</strong>：注册很多工具但只激活少部分，loader 工具执行中调 <code>pi.setActiveTools([...current, ...matches])</code>（必须纯增量），下一个请求前新定义就会暴露给模型。Anthropic 4.5+/新版 OpenAI 走原生 deferred loading 保住 prompt 缓存前缀，其他模型自动回退为全量列表。</li>
+    <li><strong>随时可注册</strong>：<code>registerTool</code> 在启动后任何时刻调用都行，新工具立即生效，不需要 /reload。配套 <code>getActiveTools()/getAllTools()/setActiveTools()</code> 管理开关。</li>
+  </ul>
+
+  <details class="quiz"><summary>自测：promptGuidelines 里写「Use this tool when…」为什么是错的？</summary>
+    <div class="ans">因为 guidelines 子弹是<strong>平铺追加到系统提示词 Guidelines 区的，没有工具名前缀</strong>——LLM 看到「this tool」根本不知道指谁。必须写成「Use my_tool when…」，让每个子弹自带工具名。这是文档特意加粗强调的坑。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="4">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c4a"><div class="ckpt-box">✓</div><div class="ckpt-text">写过一个带 StringEnum 参数 + promptSnippet 的工具并被 LLM 成功调用</div></div>
+    <div class="ckpt-item" data-key="c4b"><div class="ckpt-box">✓</div><div class="ckpt-text">背下四条保命规矩：StringEnum、throw 报错、截断、mutation queue</div></div>
+  </div>
+</section>
+
+<!-- ======================= 05 用户交互 UI ======================= -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">ctx.ui：跟用户对话</h2></div>
+  <p class="lede">从一行 notify 到完整的自定义 TUI 组件都在 <code>ctx.ui</code> 上。但先记住模式问题：<code>print -p</code> 和 json 模式下没有 UI，弹窗方法要用 <code>ctx.hasUI</code> 守门。</p>
+
+  <table>
+    <tr><th>模式</th><th>ctx.mode</th><th>ctx.hasUI</th><th>说明</th></tr>
+    <tr><td>交互 TUI</td><td><code>"tui"</code></td><td>✅</td><td>完整终端 UI</td></tr>
+    <tr><td>RPC</td><td><code>"rpc"</code></td><td>✅</td><td>对话框走 JSON 协议；<code>custom()</code> 返回 undefined</td></tr>
+    <tr><td>JSON</td><td><code>"json"</code></td><td>❌</td><td>UI 方法全是 no-op</td></tr>
+    <tr><td>Print（-p）</td><td><code>"print"</code></td><td>❌</td><td>扩展照常运行，但不能提问</td></tr>
+  </table>
+
+  <h3>对话框与常驻元素</h3>
+  <div class="codewrap"><span class="filetab">ui 工具箱</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="cm">// 阻塞式对话框</span>
+<span class="kw">const</span> choice = <span class="kw">await</span> ctx.ui.<span class="fn">select</span>(<span class="st">"Pick one:"</span>, [<span class="st">"A"</span>, <span class="st">"B"</span>, <span class="st">"C"</span>]);
+<span class="kw">const</span> ok     = <span class="kw">await</span> ctx.ui.<span class="fn">confirm</span>(<span class="st">"Delete?"</span>, <span class="st">"This cannot be undone"</span>);
+<span class="kw">const</span> name   = <span class="kw">await</span> ctx.ui.<span class="fn">input</span>(<span class="st">"Name:"</span>, <span class="st">"placeholder"</span>);
+<span class="kw">const</span> text   = <span class="kw">await</span> ctx.ui.<span class="fn">editor</span>(<span class="st">"Edit:"</span>, <span class="st">"prefilled"</span>);
+
+<span class="cm">// 非阻塞</span>
+ctx.ui.<span class="fn">notify</span>(<span class="st">"Done!"</span>, <span class="st">"info"</span>);  <span class="cm">// "info" | "warning" | "error"</span>
+
+<span class="cm">// 倒计时自动关闭：confirm 超时返回 false，其余返回 undefined</span>
+<span class="kw">const</span> sure = <span class="kw">await</span> ctx.ui.<span class="fn">confirm</span>(<span class="st">"Timed"</span>, <span class="st">"Auto-cancel in 5s. Sure?"</span>, { timeout: 5000 });
+
+<span class="cm">// 常驻元素</span>
+ctx.ui.<span class="fn">setStatus</span>(<span class="st">"my-ext"</span>, <span class="st">"Processing..."</span>);            <span class="cm">// footer 状态</span>
+ctx.ui.<span class="fn">setWidget</span>(<span class="st">"my-widget"</span>, [<span class="st">"Line 1"</span>, <span class="st">"Line 2"</span>]);      <span class="cm">// 编辑器上方小部件</span>
+ctx.ui.<span class="fn">setWidget</span>(<span class="st">"w"</span>, [...], { placement: <span class="st">"belowEditor"</span> }); <span class="cm">// 或编辑器下方</span>
+ctx.ui.<span class="fn">setTitle</span>(<span class="st">"pi - my-project"</span>);
+ctx.ui.<span class="fn">setWorkingMessage</span>(<span class="st">"Thinking deeply..."</span>);           <span class="cm">// 流式时的 loader 文案</span>
+
+<span class="cm">// 完整自定义组件：临时替换编辑器，done() 收场</span>
+<span class="kw">const</span> result = <span class="kw">await</span> ctx.ui.<span class="fn">custom</span>&lt;<span class="ty">boolean</span>&gt;((tui, theme, keybindings, done) =&gt; {
+  <span class="kw">const</span> text = <span class="kw">new</span> <span class="fn">Text</span>(<span class="st">"Enter=确认 Esc=取消"</span>, 1, 1);
+  text.onKey = (key) =&gt; {
+    <span class="kw">if</span> (key === <span class="st">"return"</span>) <span class="fn">done</span>(<span class="kw">true</span>);
+    <span class="kw">if</span> (key === <span class="st">"escape"</span>) <span class="fn">done</span>(<span class="kw">false</span>);
+    <span class="kw">return</span> <span class="kw">true</span>;
+  };
+  <span class="kw">return</span> text;
+});
+<span class="cm">// 加 { overlay: true } 变悬浮 modal，不清屏</span></code></pre></div>
+
+  <div class="note ok"><b>✓ 守卫写法</b>
+    弹窗类方法（select/confirm/input/editor）和 fire-and-forget 类（notify/setStatus/setWidget）在 TUI 与 RPC 下都可用 → 用 <code>ctx.hasUI</code> 判断；terminal 输入、custom()、组件工厂这类 TUI 专属 → 用 <code>ctx.mode === "tui"</code> 判断。
+  </div>
+
+  <details class="quiz"><summary>自测：扩展要在 -p 打印模式下也正常工作，哪类调用必须包在 hasUI 判断里？哪类不用管？</summary>
+    <div class="ans">所有需要<strong>用户应答</strong>的对话框（select/confirm/input/editor/custom）必须包在 <code>if (ctx.hasUI)</code> 里——print 模式下没人能回答你，会卡死或拿到空值。notify 这类虽然也是 no-op 但无害；纯逻辑、exec、事件处理完全不受影响。设计上应该做到：无 UI 时选择安全的默认行为而不是停下来问。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="5">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c5a"><div class="ckpt-box">✓</div><div class="ckpt-text">用过 confirm/select 至少一次真实交互流程</div></div>
+    <div class="ckpt-item" data-key="c5b"><div class="ckpt-box">✓</div><div class="ckpt-text">分清 hasUI 与 mode==="tui" 各守哪类方法</div></div>
+  </div>
+</section>
+
+<!-- ======================= 06 消息与状态 ======================= -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">消息注入与会话状态持久化</h2></div>
+  <p class="lede">两条注入通道方向相反：想让 <strong>LLM 看到</strong>用 <code>sendMessage/sendUserMessage</code>；只想<strong>人看到 + 存档</strong>用 <code>appendEntry</code>。搞反了要么污染上下文，要么 LLM 根本不知道。</p>
+
+  <table>
+    <tr><th>API</th><th>进 LLM 上下文?</th><th>TUI 显示?</th><th>典型用途</th></tr>
+    <tr><td><code>sendMessage({customType,...})</code></td><td>✅</td><td>配 registerMessageRenderer</td><td>注入额外上下文/状态更新</td></tr>
+    <tr><td><code>sendUserMessage(text)</code></td><td>✅（作为用户消息）</td><td>像用户手打一样</td><td>程序化触发回合、排队指令</td></tr>
+    <tr><td><code>appendEntry(customType,data)</code></td><td>❌</td><td>配 registerEntryRenderer</td><td>持久化扩展状态、纯展示卡片</td></tr>
+  </table>
+
+  <h3>三条注入通道的去向</h3>
+  <figure class="diagram">
+  <svg viewBox="0 0 880 330" role="img" aria-label="消息注入通道去向">
+    <defs>
+      <marker id="arD1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+      <marker id="arD2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#b3ab99"/></marker>
+    </defs>
+
+    <rect x="28" y="28" width="250" height="62" rx="6" class="dg-accent"/>
+    <text x="153" y="50" text-anchor="middle" class="dg-title" fill="#8f3512">① sendMessage({customType,…})</text>
+    <text x="153" y="70" text-anchor="middle" class="dg-sub">自定义消息 · deliverAs / triggerTurn</text>
+
+    <rect x="28" y="128" width="250" height="62" rx="6" class="dg-accent"/>
+    <text x="153" y="150" text-anchor="middle" class="dg-title" fill="#8f3512">② sendUserMessage(text,…)</text>
+    <text x="153" y="170" text-anchor="middle" class="dg-sub">作为用户消息 · 总是触发回合</text>
+
+    <rect x="28" y="228" width="250" height="62" rx="6" class="dg-accent"/>
+    <text x="153" y="250" text-anchor="middle" class="dg-title" fill="#8f3512">③ appendEntry(type,data)</text>
+    <text x="153" y="270" text-anchor="middle" class="dg-sub">纯持久化 · 状态存档</text>
+
+    <rect x="540" y="20" width="300" height="80" rx="6" class="dg-box"/>
+    <text x="690" y="48" text-anchor="middle" class="dg-title">LLM 上下文</text>
+    <text x="690" y="70" text-anchor="middle" class="dg-sub">发给模型的 messages 列表</text>
+
+    <rect x="540" y="124" width="300" height="80" rx="6" class="dg-box"/>
+    <text x="690" y="152" text-anchor="middle" class="dg-title">会话文件 session.jsonl</text>
+    <text x="690" y="174" text-anchor="middle" class="dg-sub">持久化 · /tree 分支回溯一致</text>
+
+    <rect x="540" y="228" width="300" height="80" rx="6" class="dg-box"/>
+    <text x="690" y="256" text-anchor="middle" class="dg-title">TUI 显示</text>
+    <text x="690" y="278" text-anchor="middle" class="dg-sub">渲染需配 registerMessageRenderer / EntryRenderer</text>
+
+    <path d="M278,50 C430,50 430,52 534,52"  class="dg-flow" marker-end="url(#arD1)"/>
+    <path d="M278,66 C440,66 440,158 534,158" class="dg-flow" marker-end="url(#arD1)"/>
+    <path d="M278,82 C450,82 450,258 534,258" class="dg-flow dg-dash" marker-end="url(#arD1)"/>
+
+    <path d="M278,144 C440,144 440,76 534,76" class="dg-flow" marker-end="url(#arD1)"/>
+    <path d="M278,160 H534" class="dg-flow" marker-end="url(#arD1)"/>
+    <path d="M278,176 C440,176 440,252 534,252" class="dg-flow dg-dash" marker-end="url(#arD1)"/>
+
+    <path d="M278,246 C460,246 460,96 534,96" class="dg-dim dg-dash" marker-end="url(#arD2)"/>
+    <text x="405" y="196" class="dg-lbl-ink">✗ 永远不给模型看</text>
+    <text x="392" y="112" class="dg-lbl-ink">虚线 = 显示时需要配对 Renderer</text>
+  </svg>
+  <figcaption>fig.04 — 记忆口诀：① 给模型递纸条 ② 替用户说话 ③ 自己记账</figcaption>
+  </figure>
+
+  <h3>投递时机（deliverAs）</h3>
+  <ul class="plain">
+    <li><code>"steer"</code>（默认）—— 流式中排队，当前助手回合的工具执行完后、下次 LLM 调用前送达。<strong>插话转向</strong>。</li>
+    <li><code>"followUp"</code> —— 等 agent 完全收工再送。</li>
+    <li><code>"nextTurn"</code> —— 排到下一次用户输入，不打断任何东西。</li>
+    <li><code>triggerTurn: true</code> —— agent 空闲时立刻触发响应（仅 steer/followUp 有效）。</li>
+    <li>流式中调 <code>sendUserMessage</code> 不带 deliverAs 会<strong>直接抛错</strong>。</li>
+  </ul>
+
+  <div class="codewrap"><span class="filetab">状态的正确存法</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">export default function</span> (pi: <span class="ty">ExtensionAPI</span>) {
+  <span class="kw">let</span> items: <span class="ty">string</span>[] = [];
+
+  <span class="cm">// 重启/reload 后从会话重建状态</span>
+  pi.<span class="fn">on</span>(<span class="st">"session_start"</span>, <span class="kw">async</span> (_e, ctx) =&gt; {
+    items = [];
+    <span class="kw">for</span> (<span class="kw">const</span> entry <span class="kw">of</span> ctx.sessionManager.<span class="fn">getBranch</span>()) {
+      <span class="kw">if</span> (entry.type === <span class="st">"message"</span> &amp;&amp; entry.message.role === <span class="st">"toolResult"</span>
+          &amp;&amp; entry.message.toolName === <span class="st">"my_tool"</span>) {
+        items = entry.message.details?.items ?? [];  <span class="cm">// 从 details 恢复</span>
+      }
+    }
+  });
+
+  pi.<span class="fn">registerTool</span>({
+    name: <span class="st">"my_tool"</span>, <span class="cm">/* ... */</span>
+    <span class="kw">async</span> <span class="fn">execute</span>(_id, params) {
+      items.<span class="fn">push</span>(params.text);
+      <span class="kw">return</span> {
+        content: [{ type: <span class="st">"text"</span>, text: <span class="st">"Added"</span> }],
+        details: { items: [...items] },  <span class="cm">// 存快照 → 天然支持 /tree 分支回溯</span>
+      };
+    },
+  });
+
+  <span class="cm">// 纯展示卡片（LLM 看不到）</span>
+  pi.<span class="fn">appendEntry</span>(<span class="st">"status-card"</span>, { title: <span class="st">"Indexed files"</span>, count: 17 });
+}</code></pre></div>
+
+  <div class="note"><b>ℹ 为什么状态要放在工具结果的 details 里？</b>
+    会话是一棵树（/fork、/tree 回溯会切分支）。状态存在工具结果的 details 里，重建时沿着当前分支扫一遍即可——分支切到哪状态就跟到哪。存在闭包变量或 appendEntry 里的全局状态则做不到这种「时间旅行一致性」。另有 <code>pi.setLabel(entryId,label)</code> 做书签、<code>pi.appendEntry</code> 做跨重启持久数据。
+  </div>
+
+  <details class="quiz"><summary>自测：想做一个「任务跑完自动总结」的功能，agent 忙时提交、闲时触发——用什么组合拳？</summary>
+    <div class="ans"><code>pi.sendUserMessage("请总结以上工作", { deliverAs: "followUp" })</code>——followUp 保证 agent 干完所有工具后才送达，且总是触发新回合。若只是补充上下文不想打断，用 <code>sendMessage(..., {deliverAs:"nextTurn"})</code>。注意流式中裸调 sendUserMessage 会抛错，deliverAs 不是可选项而是必选项。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="6">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c6a"><div class="ckpt-box">✓</div><div class="ckpt-text">说清 sendMessage / sendUserMessage / appendEntry 三者的去向差异</div></div>
+    <div class="ckpt-item" data-key="c6b"><div class="ckpt-box">✓</div><div class="ckpt-text">理解「状态存 details」与分支树的关系</div></div>
+  </div>
+</section>
+
+<!-- ======================= 07 Provider ======================= -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">动态 Provider：接入任意模型源</h2></div>
+  <p class="lede"><code>pi.registerProvider()</code> 能新增代理、接本地 llama.cpp/Ollama、甚至覆盖 anthropic 的 baseUrl。启动期调用会排队，启动后的调用（比如命令处理器里）<strong>立即生效，不用 reload</strong>。</p>
+
+  <div class="codewrap"><span class="filetab">四个典型姿势</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="cm">// ① 简单注册：本地 OpenAI 兼容端点</span>
+pi.<span class="fn">registerProvider</span>(<span class="st">"local-openai"</span>, {
+  baseUrl: <span class="st">"http://localhost:1234/v1"</span>,
+  apiKey: <span class="st">"$LOCAL_API_KEY"</span>,              <span class="cm">// 支持 $ENV / ${ENV} / !command</span>
+  api: <span class="st">"openai-completions"</span>,             <span class="cm">// 或 anthropic-messages / openai-responses …</span>
+  models: [{ id: <span class="st">"qwen3-32b"</span>, name: <span class="st">"Qwen3 32B"</span>, reasoning: <span class="kw">false</span>,
+             input: [<span class="st">"text"</span>], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+             contextWindow: 128000, maxTokens: 16384 }],
+});
+
+<span class="cm">// ② 动态发现：live llama.cpp，刷新时拉 /v1/models</span>
+pi.<span class="fn">registerProvider</span>(<span class="st">"llama.cpp"</span>, {
+  baseUrl: <span class="st">"http://localhost:8080/v1"</span>,
+  apiKey: <span class="st">"$LLAMA_API_KEY"</span>,
+  api: <span class="st">"openai-completions"</span>,
+  <span class="kw">async</span> <span class="fn">refreshModels</span>({ signal }) {
+    <span class="kw">const</span> r = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="st">"http://localhost:8080/v1/models"</span>, { signal });
+    <span class="kw">const</span> { data } = <span class="kw">await</span> r.<span class="fn">json</span>();
+    <span class="kw">return</span> data.<span class="fn">map</span>(({ id }) =&gt; ({ id, name: id, reasoning: <span class="kw">false</span>,
+      input: [<span class="st">"text"</span>], cost: { input:0, output:0, cacheRead:0, cacheWrite:0 },
+      contextWindow: 128000, maxTokens: 16384 }));
+  },
+});
+
+<span class="cm">// ③ 只覆盖 baseUrl，模型全保留</span>
+pi.<span class="fn">registerProvider</span>(<span class="st">"anthropic"</span>, { baseUrl: <span class="st">"https://proxy.example.com"</span> });
+
+<span class="cm">// ④ 带 OAuth 登录流（出现在 /login 菜单）</span>
+pi.<span class="fn">registerProvider</span>(<span class="st">"corporate-ai"</span>, {
+  baseUrl: <span class="st">"https://ai.corp.com"</span>, api: <span class="st">"openai-responses"</span>, models: [/*…*/],
+  oauth: {
+    name: <span class="st">"Corporate AI (SSO)"</span>,
+    <span class="kw">async</span> <span class="fn">login</span>(callbacks) {
+      callbacks.<span class="fn">onAuth</span>({ url: <span class="st">"https://sso.corp.com/..."</span> });
+      <span class="kw">const</span> code = <span class="kw">await</span> callbacks.<span class="fn">onPrompt</span>({ message: <span class="st">"Enter code:"</span> });
+      <span class="kw">return</span> { refresh: code, access: code, expires: Date.<span class="fn">now</span>() + 3600000 };
+    },
+    <span class="kw">async</span> <span class="fn">refreshToken</span>(credentials, signal) { signal.<span class="fn">throwIfAborted</span>(); <span class="kw">return</span> credentials; },
+    <span class="fn">getApiKey</span>(credentials) { <span class="kw">return</span> credentials.access; },
+  },
+});
+
+pi.<span class="fn">unregisterProvider</span>(<span class="st">"my-proxy"</span>);  <span class="cm">// 移除；被覆盖的内置模型恢复原样</span></code></pre></div>
+
+  <div class="note"><b>ℹ 相关上下文</b>
+    读取侧：<code>ctx.modelRegistry</code>（找 provider/model、解析 auth）、<code>ctx.model</code> 当前模型、<code>ctx.scopedModels</code> 会话内限定模型集（做自定义 picker 用它而不是全量枚举）。控制侧：<code>pi.setModel(model)</code>（没 key 返回 false）、<code>pi.getThinkingLevel()/setThinkingLevel(level)</code>。
+  </div>
+
+  <details class="quiz"><summary>自测：朋哥想把 ollama(127.0.0.1:11434/v1) 挂进 pi，该用哪个 api 类型？key 怎么填最省事？</summary>
+    <div class="ans">Ollama 提供 OpenAI 兼容端点，用 <code>api: "openai-completions"</code> + <code>baseUrl: "http://127.0.0.1:11434/v1"</code>。本地不需要真 key，但 apiKey 字段必填——可以用环境变量引用形式塞个占位（如 <code>$OLLAMA_DUMMY</code>），或者干脆用 refreshModels 动态拉 <code>/v1/models</code> 免去手写模型表。这正好复用他 M4 Pro 上已有的 ollama 环境。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="7">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c7a"><div class="ckpt-box">✓</div><div class="ckpt-text">把 ollama 或任一 OpenAI 兼容端点用 registerProvider 挂进 pi 并切换成功</div></div>
+  </div>
+</section>
+
+<!-- ======================= 08 坑点清单 ======================= -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">坑点清单：文档里加粗的部分都在这</h2></div>
+  <p class="lede">这些是官方文档特意强调、或者语义反直觉的地方。写扩展前过一遍，省掉半夜 debug。</p>
+
+  <table id="pitfallTable">
+    <tr><th>#</th><th>坑</th><th>正解</th></tr>
+    <tr><td>1</td><td>promptGuidelines 写「Use this tool when…」</td><td>子弹平铺进 Guidelines 无前缀，LLM 不知道 this 是谁。每个子弹自带工具名：「Use my_tool when…」</td></tr>
+    <tr><td>2</td><td>execute 返回 {error:…} 期望标记失败</td><td>没用。<strong>只有 throw 才置 isError:true</strong>；return 什么都不标</td></tr>
+    <tr><td>3</td><td>工具输出不截断</td><td>50KB/2000 行硬约束，超了撑爆上下文+压缩失败。truncateHead/Tail + 全文落盘告知路径</td></tr>
+    <tr><td>4</td><td>改文件的工具不排队</td><td>默认并行执行，会和内置 edit/write 竞争丢改动。withFileMutationQueue(绝对路径, fn) 包住整个 read-modify-write</td></tr>
+    <tr><td>5</td><td>工厂函数里起 watcher/timer/socket</td><td>工厂可能在不开会话的调用里跑。延迟到 session_start 启动，session_shutdown 幂等清理</td></tr>
+    <tr><td>6</td><td>流式中裸调 sendUserMessage</td><td>直接抛错。必须带 <code>deliverAs: "steer" | "followUp"</code></td></tr>
+    <tr><td>7</td><td>session 切换后复用旧的 ctx.sessionManager / pi</td><td>替换后旧对象已 stale 会 throw。withSession 回调里只用传进来的那个 ctx；只捕获字符串/id/序列化配置这类干净数据</td></tr>
+    <tr><td>8</td><td>await ctx.reload() 后继续干活</td><td>reload 后当前 handler 还跑在旧版本帧里，旧内存状态不可信。规范写法：<code>await ctx.reload(); return;</code> 当终结语句</td></tr>
+    <tr><td>9</td><td>print/json 模式下调对话框</td><td>hasUI 为 false，没人能回答。先判断再问，无 UI 时走安全默认值</td></tr>
+    <tr><td>10</td><td>Google 模型上枚举参数失效</td><td>Type.Union/Literal 不兼容 Google API。统一用 pi-ai 的 StringEnum</td></tr>
+    <tr><td>11</td><td>以为 registerTool 要 reload 才生效</td><td>不用。运行中随时注册立即生效；setActiveTools 同样即时</td></tr>
+    <tr><td>12</td><td>自定义工具接受 path 却不处理 @ 前缀</td><td>有些模型会带上 @ 前缀（内置工具都剥掉了）。自己的 path 参数也要 normalize 掉开头的 @</td></tr>
+    <tr><td>13</td><td>ctx.signal 在 idle 时当必然存在用</td><td>signal 通常只在活跃回合事件（tool_call/tool_result/message_update/turn_end）里有定义，session 事件和空闲命令里多为 undefined</td></tr>
+    <tr><td>14</td><td>extension 抛异常导致整个 agent 崩溃</td><td>不会。扩展错误只记日志，agent 继续。但 tool_call handler 抛错 = fail-safe 阻断该工具调用</td></tr>
+  </table>
+
+  <details class="quiz"><summary>自测：为什么「tool_call 里抛异常」反而是安全行为？什么场景会利用它？</summary>
+    <div class="ans">扩展错误默认只记日志不阻断主流程，但 <strong>tool_call 的错误被特殊处理为 fail-safe 阻断</strong>——拿不准是否该放行时，宁可挡下来也不让危险操作执行。典型用法：权限闸门扩展在确认逻辑本身出错时抛异常，工具就被拦住，符合「权限系统的失败模式应该是拒绝」的设计原则。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="8">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="c8a"><div class="ckpt-box">✓</div><div class="ckpt-text">通读全部 14 条，把自己最容易踩的 3 条记在心里</div></div>
+  </div>
+</section>
+
+<!-- ======================= 09 示例地图 ======================= -->
+<section class="chapter" id="c9">
+  <div class="chapter-head"><span class="chapter-no">09</span><h2 class="ch">官方示例地图：照着抄就完了</h2></div>
+  <p class="lede">全部在仓库 <code>packages/coding-agent/examples/extensions/</code>。学每个主题前先找对应示例读一遍——下面按学习路径排序，可搜索。</p>
+
+  <input class="api-search" id="exSearch" type="search" placeholder="⌕ 过滤示例… 试试 permission / ui / git">
+
+  <table id="exampleTable">
+    <tr><th>示例</th><th>学什么</th><th>关键 API</th></tr>
+    <tr><td><code>hello.ts</code></td><td>最小工具注册（第一站）</td><td>registerTool</td></tr>
+    <tr><td><code>permission-gate.ts</code></td><td>危险命令确认闸门</td><td>on("tool_call"), ui.confirm</td></tr>
+    <tr><td><code>protected-paths.ts</code></td><td>保护 .env/node_modules 写入</td><td>on("tool_call") block</td></tr>
+    <tr><td><code>question.ts</code> / <code>questionnaire.ts</code></td><td>工具里问用户 / 多步向导</td><td>ui.select, ui.custom</td></tr>
+    <tr><td><code>todo.ts</code></td><td>有状态工具 + 持久化 + 渲染（第二站）</td><td>registerTool, appendEntry, renderResult</td></tr>
+    <tr><td><code>dynamic-tools.ts</code></td><td>启动后/命令中动态加工具</td><td>registerTool, setActiveTools</td></tr>
+    <tr><td><code>truncated-tool.ts</code></td><td>包装 rg + 正确截断</td><td>truncateHead</td></tr>
+    <tr><td><code>tool-override.ts</code></td><td>覆盖内置 read 加日志和访问控制</td><td>同名 registerTool</td></tr>
+    <tr><td><code>pirate.ts</code></td><td>逐回合改 system prompt</td><td>registerCommand, before_agent_start</td></tr>
+    <tr><td><code>input-transform.ts</code></td><td>改写用户输入</td><td>on("input")</td></tr>
+    <tr><td><code>claude-rules.ts</code></td><td>从文件加载规则进 prompt</td><td>session_start, before_agent_start</td></tr>
+    <tr><td><code>git-checkpoint.ts</code></td><td>每回合 stash 快照</td><td>turn_start, exec</td></tr>
+    <tr><td><code>auto-commit-on-exit.ts</code></td><td>退出时自动 commit</td><td>session_shutdown, exec</td></tr>
+    <tr><td><code>custom-compaction.ts</code></td><td>用自己的方式压上下文</td><td>session_before_compact</td></tr>
+    <tr><td><code>status-line.ts</code> / <code>widget-placement.ts</code></td><td>footer 状态 / 编辑器上下 widget</td><td>setStatus, setWidget</td></tr>
+    <tr><td><code>github-issue-autocomplete.ts</code></td><td>#issue 自动补全叠加内置补全</td><td>addAutocompleteProvider</td></tr>
+    <tr><td><code>modal-editor.ts</code></td><td>vim 模式编辑器</td><td>setEditorComponent, CustomEditor</td></tr>
+    <tr><td><code>plan-mode/</code></td><td>完整计划模式（综合大例，第三站）</td><td>几乎全部 API</td></tr>
+    <tr><td><code>preset.ts</code></td><td>可保存预设（模型/工具/thinking）</td><td>registerCommand/Flag, setModel…</td></tr>
+    <tr><td><code>ssh.ts</code> / <code>sandbox/</code> / <code>gondolin/</code></td><td>远程执行 / 沙箱 / micro-VM</td><td>tool operations, user_bash</td></tr>
+    <tr><td><code>subagent/</code></td><td>生成子 agent</td><td>registerTool, exec</td></tr>
+    <tr><td><code>snake.ts</code> / <code>doom-overlay/</code></td><td>游戏（验证 custom UI 极限）</td><td>ui.custom</td></tr>
+    <tr><td><code>event-bus.ts</code></td><td>扩展间通信</td><td>pi.events on/emit</td></tr>
+  </table>
+
+
+  <footer class="colophon">
+    source: badlogic/pi-mono · packages/coding-agent/docs/extensions.md (main) · 整理于 2026-08-24<br>
+    配套阅读：examples/extensions/README.md · docs/tui.md（自定义组件）· docs/packages.md（分发）
+  </footer>
+
+  <div class="checkpoint" data-ch="9">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 全手册通关</div>
+    <div class="ckpt-item" data-key="c9a"><div class="ckpt-box">✓</div><div class="ckpt-text">完成一个真实的自定义扩展开跑起来 🎉</div></div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ---------- TOC 构建 ---------- */
+const chapters = [...document.querySelectorAll("section.chapter")];
+const toc = document.getElementById("toc");
+const names = ["心智模型","放置与加载","事件系统","自定义工具","用户交互 UI","消息与状态","动态 Provider","坑点清单","示例地图"];
+chapters.forEach((sec,i)=>{
+  const a=document.createElement("a");
+  a.href="#"+sec.id;
+  a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;
+  toc.appendChild(a);
+});
+
+/* ---------- Scrollspy + 进度条 ---------- */
+const links=[...toc.querySelectorAll("a")];
+const fill=document.getElementById("progFill");
+const label=document.getElementById("progLabel");
+function updateSpy(){
+  const y=scrollY+120;
+  let cur=0;
+  chapters.forEach((sec,i)=>{ if(sec.offsetTop<=y) cur=i; });
+  links.forEach((l,i)=>l.classList.toggle("active",i===cur));
+  const total=chapters.length;
+  const last=chapters[total-1];
+  const passed=Math.min(cur+1,total);
+  fill.style.width=(passed/total*100)+"%";
+  label.textContent=`${passed} / ${total} 章`;
+}
+addEventListener("scroll",updateSpy,{passive:true});
+addEventListener("resize",updateSpy);
+updateSpy();
+
+/* ---------- 代码复制 ---------- */
+document.querySelectorAll(".copybtn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const code=btn.parentElement.querySelector("pre").innerText;
+    navigator.clipboard.writeText(code).then(()=>{
+      btn.textContent="copied ✓";btn.classList.add("done");
+      setTimeout(()=>{btn.textContent="copy";btn.classList.remove("done");},1400);
+    });
+  });
+});
+
+/* ---------- 打卡（localStorage） ---------- */
+const CKPT_KEY="pi-ext-handbook-checkpoints";
+let ckpt={};
+try{ ckpt=JSON.parse(localStorage.getItem(CKPT_KEY)||"{}"); }catch(e){}
+function saveCkpt(){ localStorage.setItem(CKPT_KEY,JSON.stringify(ckpt)); }
+document.querySelectorAll(".ckpt-item").forEach(item=>{
+  if(ckpt[item.dataset.key]) item.classList.add("done");
+  item.addEventListener("click",()=>{
+    item.classList.toggle("done");
+    ckpt[item.dataset.key]=item.classList.contains("done");
+    saveCkpt();
+  });
+});
+
+/* ---------- 示例表过滤 ---------- */
+document.getElementById("exSearch").addEventListener("input",e=>{
+  const q=e.target.value.toLowerCase();
+  document.querySelectorAll("#exampleTable tr").forEach((tr,i)=>{
+    if(i===0)return;
+    tr.classList.toggle("hidden-row", q && !tr.innerText.toLowerCase().includes(q));
+  });
+});
+document.querySelectorAll("#pitfallTable tr").forEach(()=>{});
+
+/* ---------- 生命周期模拟器 ---------- */
+const simLog=document.getElementById("simLog");
+const scenarios={
+  normal:[
+    ["evt","▶ session_start {reason:\"startup\"}"],
+    ["act","  扩展工厂已执行，工具/命令注册完毕"],
+    ["evt","▶ resources_discover {reason:\"startup\"}"],
+    ["act","  ── 用户输入：帮我看看这个 repo 的结构 ──"],
+    ["evt","▶ input"],
+    ["act","  无 handler 处理 → skill/template 展开 → 放行"],
+    ["evt","▶ before_agent_start"],
+    ["act","  可注入 message / 追加 systemPrompt"],
+    ["evt","▶ agent_start"],
+    ["evt","▶ turn_start  (turnIndex: 0)"],
+    ["evt","▶ message_start / message_update × N / message_end"],
+    ["act","  LLM 决定调用工具 bash ls"],
+    ["evt","▶ tool_execution_start  {toolName:\"bash\"}"],
+    ["evt","▶ tool_call",],
+    ["act","  ⚡ 这里可以改 input / return {block:true}"],
+    ["act","  ……工具实际执行……"],
+    ["evt","▶ tool_result"],
+    ["act","  ⚡ 可以链式修改返回给 LLM 的结果"],
+    ["evt","▶ tool_execution_end"],
+    ["evt","▶ turn_end"],
+    ["act","  LLM 拿到工具结果，组织最终回答"],
+    ["evt","▶ agent_end"],
+    ["evt","▶ agent_settled   ← 没有 retry/compaction/follow-up 了，彻底停稳"]
+  ],
+  block:[
+    ["evt","▶ （接续某回合中）LLM 发起 bash rm -rf ./node_modules"],
+    ["evt","▶ tool_execution_start {toolName:\"bash\"}"],
+    ["evt","▶ tool_call"],
+    ["act","  你的 handler: isToolCallEventType(\"bash\", event) ✓"],
+    ["act","  检测到 rm -rf → ctx.ui.confirm(\"Dangerous!\", \"Allow?\")"],
+    ["act","  用户选 No"],
+    ["hl ","  ↳ return { block:true, reason:\"Blocked by user\", terminate:true }"],
+    ["act","  工具不执行，block 原因作为结果报告给 LLM"],
+    ["act","  terminate:true 且整批都是 terminating → 跳过后续 LLM 调用"],
+    ["evt","▶ turn_end → agent_end → agent_settled"]
+  ],
+  input:[
+    ["act","── 用户输入：?quick 这个 bug 怎么修 ──"],
+    ["evt","▶ input  {source:\"interactive\"}"],
+    ["act","  handler 检测 ?quick 前缀"],
+    ["hl ","  ↳ return { action:\"transform\", text:\"Respond briefly: 这个bug怎么修\" }"],
+    ["act","  transform 链式传递 → 继续 skill/template 展开"],
+    ["evt","▶ before_agent_start"],
+    ["act","  LLM 收到改写后的提示词，给出简短回答"],
+    ["act","  对照：action:\"handled\" 则完全跳过 LLM，扩展自行反馈"],
+    ["act","  对照：action:\"continue\"（或不返回）原样放行"]
+  ]
+};
+let simTimers=[];
+function playSim(){
+  resetSim();
+  const key=document.getElementById("simScenario").value;
+  const steps=scenarios[key];
+  steps.forEach((s,i)=>{
+    simTimers.push(setTimeout(()=>{
+      if(i===0) simLog.innerHTML="";
+      const div=document.createElement("div");
+      div.className="sim-line "+s[0];
+      div.textContent=s[1];
+      simLog.appendChild(div);
+      simLog.scrollTop=simLog.scrollHeight;
+    }, i*520));
+  });
+}
+function resetSim(){
+  simTimers.forEach(clearTimeout);simTimers=[];
+  simLog.innerHTML='<div style="color:var(--ink-faint)">已重置。</div>';
+}
+document.getElementById("simPlay").addEventListener("click",playSim);
+document.getElementById("simReset").addEventListener("click",resetSim);
+</script>
+</body>
+</html>
