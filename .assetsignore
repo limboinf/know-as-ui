@@ -1,0 +1,10 @@
+.git
+node_modules
+.gitignore
+.assetsignore
+.dev.vars
+package.json
+package-lock.json
+wrangler.jsonc
+README.md
+.DS_Store

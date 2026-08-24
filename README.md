@@ -8,6 +8,8 @@
 know-as-ui/
 ├── index.html                 # 总索引，所有知识点从这里进入
 ├── README.md                  # 项目约定
+├── wrangler.jsonc             # Cloudflare Workers Static Assets 配置
+├── .assetsignore              # 发布时排除开发文件
 └── <topic-slug>/              # 一个知识点一个目录
     ├── a.html                 # 第一个可视化 / 交互页面
     ├── b.html                 # 可选：同一主题的第二个页面
@@ -44,6 +46,12 @@ pi-extensions/
 
 ```bash
 open ~/work/github/know-as-ui/index.html
+```
+
+Cloudflare Worker 部署：
+
+```bash
+npx wrangler deploy --domains dev.limbo101.win
 ```
 
 也可以用任意静态文件服务器：
