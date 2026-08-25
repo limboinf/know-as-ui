@@ -24,6 +24,9 @@ pi-extensions/
 
 pi-agent-loop/
 └── a.html                     # pi agent loop 可视化
+
+subagent-vs-multi-agent/
+└── a.html                     # subagent vs 多 agent 架构对照手册
 ```
 
 ## 新增知识点

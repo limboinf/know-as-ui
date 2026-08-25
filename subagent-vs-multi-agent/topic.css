@@ -1,0 +1,110 @@
+/* subagent-vs-multi-agent 专属样式：谱系轴 + 拓扑图 + 路由模拟 + 决策向导（公共部分见 /assets/handbook.css） */
+
+/* ===== 01 控制权谱系 ===== */
+  .spectrum{width:100%;max-width:var(--content-rail);margin:20px 0 26px}
+  .spec-track{position:relative;display:flex;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .spec-line{position:absolute;left:4%;right:4%;top:50%;height:2px;background:var(--line);z-index:-1}
+  .spec-node{
+    flex:1;background:#fffdf8;border:1.5px solid var(--ink);border-radius:9px;
+    padding:12px 10px;cursor:pointer;text-align:center;transition:.15s;font-family:inherit;
+  }
+  .spec-node b{display:block;font-family:var(--serif);font-size:16px;margin-bottom:3px}
+  .spec-node i{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+  .spec-node:hover{transform:translateY(-2px)}
+  .spec-node.active{background:var(--ink);color:var(--paper)}
+  .spec-node.active i{color:#cfc6b0}
+  .spec-detail{border-left:3px solid var(--accent);background:color-mix(in oklch, var(--paper-deep) 60%, transparent);padding:14px 18px;border-radius:0 8px 8px 0}
+  .spec-detail b{font-family:var(--serif);font-size:16.5px}
+  .spec-detail p{margin:6px 0 8px;font-size:14.5px;line-height:1.7}
+  .spec-fit{font-family:var(--mono);font-size:12px;color:var(--accent-deep)}
+
+/* ===== SVG 拓扑图（02/03 共用） ===== */
+  .topo-box{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0;background:#fffdf8}
+  .topo-head{padding:10px 16px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep);font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+  .topo-tag{display:inline-block;background:var(--ink);color:var(--paper);border-radius:4px;padding:1px 8px;margin-right:8px;font-size:11px}
+  .topo-box svg{display:block;width:100%;height:auto;background:
+    radial-gradient(var(--line) .6px, transparent .6px);background-size:20px 20px}
+  .edge{stroke:var(--ink-faint);stroke-width:1.6;stroke-dasharray:5 4;opacity:.55}
+  .edge.p2p{stroke:var(--accent);stroke-width:2;stroke-dasharray:none;opacity:.8}
+  .tnode{cursor:pointer}
+  .tnode rect{fill:#fffdf8;stroke:var(--ink);stroke-width:1.8;transition:.15s}
+  .tnode:hover rect{fill:var(--paper-deep)}
+  .tnode.sel rect{fill:var(--ink);stroke:var(--accent);stroke-width:2.5}
+  .tnode.sel text{fill:var(--paper)!important}
+  .tnode.hub rect{fill:var(--paper-deep);stroke-width:2.5}
+  .hub rect.hub-rect{fill:var(--ink);stroke:none}
+  .mate-rect,.hub-rect{transition:.15s}
+  svg .tt{font-family:var(--serif);font-weight:700;font-size:17px;text-anchor:middle;fill:var(--ink)}
+  svg .ts{font-family:var(--mono);font-size:12px;text-anchor:middle;fill:var(--ink-faint)}
+  svg .tm{font-family:var(--mono);font-size:11.5px;text-anchor:middle;fill:var(--ink-soft)}
+  .topo-info{padding:12px 18px;border-top:1px dashed var(--line);font-size:13.5px;line-height:1.7;color:var(--ink-soft);background:var(--paper)}
+  .topo-info b{color:var(--ink)}
+
+/* ===== 04 Handoff 路由模拟 ===== */
+  .route-sim{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0;background:#fffdf8}
+  .route-head{padding:10px 16px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep);font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+  .route-msgs{display:flex;flex-direction:column;gap:8px;padding:16px 18px 6px}
+  .rmsg{
+    text-align:left;font-family:inherit;font-size:14.5px;color:var(--ink);
+    background:var(--paper);border:1.5px solid var(--line);border-radius:8px;
+    padding:10px 15px;cursor:pointer;transition:.13s;
+  }
+  .rmsg::before{content:"👤 ";opacity:.65}
+  .rmsg:hover{border-color:var(--accent);box-shadow:2px 2px 0 var(--accent);transform:translateX(3px)}
+  .route-stage{display:flex;align-items:center;gap:14px;padding:16px 18px}
+  .route-lane{
+    flex:1;border:1.5px dashed var(--line);border-radius:9px;padding:12px 15px;
+    transition:.25s;background:var(--paper);
+  }
+  .route-lane b{display:block;font-family:var(--serif);font-size:15px}
+  .route-lane span{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
+  .route-lane.active{border:1.5px solid var(--ok);background:#eef4ec}
+  .route-lane.active b{color:var(--ok)}
+  .route-arrow{font-family:var(--mono);font-size:13px;color:var(--accent);white-space:nowrap;min-width:52px;text-align:center}
+  .route-note{padding:0 18px 16px;font-size:13.5px;line-height:1.7;color:var(--ink-soft)}
+
+/* ===== 05 数据卡 ===== */
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0 24px;width:100%}
+  .stat-card{border:1.5px solid var(--ink);border-radius:9px;background:#fffdf8;padding:16px 16px 13px}
+  .stat-num{font-family:var(--serif);font-weight:800;font-size:34px;line-height:1.1;margin-bottom:7px}
+  .stat-num.accent{color:var(--accent)}
+  .stat-num.warn{color:var(--warn)}
+  .stat-num.ok{color:var(--ok)}
+  .stat-cap{font-size:12.5px;line-height:1.6;color:var(--ink-soft)}
+  .callout{width:100%;max-width:var(--content-rail);border-radius:9px;padding:14px 18px;margin:16px 0;font-size:14px;line-height:1.75}
+  .bad-callout{background:#f6e9e4;border:1.5px solid #d8a58f}
+  .bad-callout b{color:var(--bad)}
+
+/* ===== 06 决策向导 ===== */
+  .wizard{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:18px 0;overflow:hidden}
+  .wiz-progress{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep)}
+  .wiz-progress span{font-family:var(--mono);font-size:12px;color:var(--ink-soft);white-space:nowrap}
+  .wiz-bar{flex:1;height:5px;background:var(--line);border-radius:99px;overflow:hidden}
+  .wiz-bar div{height:100%;width:0;background:var(--accent);transition:width .3s}
+  .wiz-q{padding:22px 22px 6px;font-size:17px;font-weight:650;max-width:64ch}
+  .wiz-opts{display:flex;flex-direction:column;gap:9px;padding:14px 22px 22px}
+  .wiz-opt{
+    text-align:left;font-family:inherit;font-size:15px;color:var(--ink);
+    background:var(--paper);border:1.5px solid var(--line);border-radius:8px;
+    padding:11px 16px;cursor:pointer;transition:.13s;
+  }
+  .wiz-opt:hover{border-color:var(--accent);box-shadow:2px 2px 0 var(--accent);transform:translateX(3px)}
+  .wiz-result{padding:22px}
+  .wiz-verdict{font-family:var(--serif);font-weight:800;font-size:21px;color:var(--accent-deep);margin-bottom:10px}
+  .wiz-explain{font-size:14.5px;line-height:1.8;margin-bottom:18px}
+
+/* ===== 测验补充（复用 handbook 的 quiz 类，这里只补动作行） ===== */
+  .q-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+
+/* ===== 参考资料 ===== */
+  .refs{margin-top:40px;padding-top:18px;border-top:1.5px solid var(--ink)}
+  .refs li{font-size:13.5px;color:var(--ink-soft)}
+
+  @media(max-width:700px){
+    main{padding:36px 20px 90px}
+    .route-stage{flex-direction:column}
+    .route-arrow{transform:rotate(90deg)}
+    .spec-track{flex-direction:column}
+    .spec-line{display:none}
+    .stat-row{grid-template-columns:repeat(2,1fr)}
+  }

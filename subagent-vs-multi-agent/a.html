@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>Subagent vs 多 Agent · 架构对照手册</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">subagent <em>vs</em> multi-agent · 架构对照手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 7 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc">
+  <div class="toc-title">目录 · Contents</div>
+</nav>
+
+<main>
+
+<!-- ======================= 01 谱系 ======================= -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">一句话分清：这不是二选一，是一条控制权谱系</h2></div>
+  <p class="lede">「Subagent 和多 Agent 有什么区别」这个问题本身就问偏了——它们不是竞争方案，而是同一根轴上的三个刻度。轴的两端是：<strong>控制权在谁手里，信息怎么流动。</strong></p>
+
+  <p>剥掉营销词汇，所有多 agent 架构只回答两个问题：</p>
+
+  <ul class="plain">
+    <li><strong>谁持有最终答案的所有权？</strong>——主管始终持有（subagent）、移交给专家（handoff）、还是分散给团队（agent teams）</li>
+    <li><strong>信息走什么拓扑？</strong>——星型（一切经主管中转）、链式（对话整体移交）、网状（成员点对点直连）</li>
+  </ul>
+
+  <div class="spectrum" id="spectrum">
+    <div class="spec-track">
+      <button class="spec-node active" data-spec="0"><b>Subagent</b><i>星型 · 主管全控</i></button>
+      <button class="spec-node" data-spec="1"><b>Handoff</b><i>链式 · 控制权移交</i></button>
+      <button class="spec-node" data-spec="2"><b>Agent Teams</b><i>网状 · 自组织</i></button>
+      <div class="spec-line"></div>
+    </div>
+    <div class="spec-detail" id="specDetail"></div>
+  </div>
+
+  <p>OpenAI 在 Agents SDK 文档里把前两种说得很直白：agents-as-tools 模式下「主管保留答复所有权」，handoff 模式下「控制权转移给专家 agent」。而 Claude Code 2026 年推出的实验特性 Agent Teams 则补上了第三格——teammate 是完全独立的实例，互相直接发消息，甚至可以绕过 lead 私下协商。</p>
+
+  <p>本手册以三家一手资料为底：Anthropic 工程博客《How we built our multi-agent research system》（2025-06）、《When and how to use multi-agent systems》（2026）、Claude Code 官方文档 Agent Teams 章节、OpenAI 官方 Orchestration 文档。所有数字都来自官方原文。</p>
+</section>
+
+<!-- ======================= 02 Subagent ======================= -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">Subagent：主从星型，用完即毁的压缩器</h2></div>
+  <p class="lede">Subagent 是 orchestrator-worker 模式的基本单元：主 Agent 把任务派出去，子代理在<strong>自己的独立上下文窗口</strong>里干活，跑完只有最终结论被传回——中间过程随销毁一起消失。</p>
+
+  <p>Anthropic 对它的价值有个精辟概括：<strong>搜索的本质是压缩</strong>。子代理并行探索海量信息，各自完成蒸馏，只把最重要的 token 送回主管。这就是 context isolation 的全部意义。</p>
+
+  <div class="topo-box">
+    <div class="topo-head"><span class="topo-tag">图 2-1</span>点击任意节点查看该角色的上下文状态</div>
+    <svg id="starSvg" viewBox="0 0 720 340" role="img" aria-label="Subagent 星型架构图">
+      <!-- edges -->
+      <line class="edge" x1="360" y1="170" x2="130" y2="70"/>
+      <line class="edge" x1="360" y1="170" x2="590" y2="70"/>
+      <line class="edge" x1="360" y1="170" x2="130" y2="280"/>
+      <line class="edge" x1="360" y1="170" x2="590" y2="280"/>
+      <!-- no edge between subagents: that's the point -->
+      <g class="tnode" data-node="user" transform="translate(30,20)"></g>
+      <g class="tnode hub" data-node="lead" transform="translate(270,120)">
+        <rect x="0" y="0" width="180" height="100" rx="10"/>
+        <text x="90" y="38" class="tt">主 Agent</text>
+        <text x="90" y="60" class="ts">(Orchestrator)</text>
+        <text x="90" y="82" class="tm">全局上下文 · 最终答案</text>
+      </g>
+      <g class="tnode leaf" data-node="s1" transform="translate(50,40)">
+        <rect x="0" y="0" width="160" height="62" rx="9"/>
+        <text x="80" y="27" class="tt">Subagent A</text>
+        <text x="80" y="47" class="tm">独立上下文 → 销毁</text>
+      </g>
+      <g class="tnode leaf" data-node="s2" transform="translate(510,40)">
+        <rect x="0" y="0" width="160" height="62" rx="9"/>
+        <text x="80" y="27" class="tt">Subagent B</text>
+        <text x="80" y="47" class="tm">独立上下文 → 销毁</text>
+      </g>
+      <g class="tnode leaf" data-node="s3" transform="translate(50,250)">
+        <rect x="0" y="0" width="160" height="62" rx="9"/>
+        <text x="80" y="27" class="tt">Subagent C</text>
+        <text x="80" y="47" class="tm">独立上下文 → 销毁</text>
+      </g>
+      <g class="tnode leaf" data-node="s4" transform="translate(510,250)">
+        <rect x="0" y="0" width="160" height="62" rx="9"/>
+        <text x="80" y="27" class="tt">Subagent D</text>
+        <text x="80" y="47" class="tm">独立上下文 → 销毁</text>
+      </g>
+    </svg>
+    <div class="topo-info" id="starInfo">👆 注意：四个 Subagent 之间<strong>没有连线</strong>——它们互相不知道对方的存在。这是星型结构可预测、易调试的根本原因。</div>
+  </div>
+
+  <h3>一次派发的完整生命周期</h3>
+  <div class="codewrap"><span class="filetab">lifecycle.ts · 以 Claude Code Agent tool 为例</span><button class="copybtn">copy</button>
+<pre><span class="cm">// ① 主 Agent 决定拆解：目标 + 输出格式 + 工具白名单 + 任务边界</span>
+<span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">Agent</span>({
+  <span class="ty">subagent_type</span>: <span class="st">"Explore"</span>,          <span class="cm">// 预定义角色（受限工具集）</span>
+  <span class="ty">prompt</span>: <span class="st">"调查 auth 模块的登录流程，输出 ≤500 字结论"</span>,
+});
+<span class="cm">// ② 子代理启动：全新空上下文，只有这段 prompt + 角色的工具集</span>
+<span class="cm">// ③ 子代理自主循环调工具 N 轮 —— 中间结果全部留在它自己的上下文里</span>
+<span class="cm">// ④ 子代理结束：只有 final message 作为 tool result 返回主 Agent</span>
+<span class="cm">// ⑤ 子代理销毁，上下文释放；主 Agent 上下文只增加了一段结论</span></pre>
+  </div>
+
+  <p>OpenAI Agents SDK 里的等价物叫 <code>as_tool()</code>：把一个专家 agent 包装成主管手里的一个普通工具调用。<strong>发起调用、拿到返回值、继续掌控对话</strong>——子代理从头到尾只是主管的「有界能力」（bounded capability），而不是对话的接管者。</p>
+</section>
+
+<!-- ======================= 03 Multi-Agent ======================= -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">多 Agent：网状协作，会互相聊天的持久团队</h2></div>
+  <p class="lede">真正的多 Agent 系统里，每个成员都是<strong>独立的长生命周期实例</strong>。关键差异不在「有几个 agent」，而在成员之间能不能<strong>点对点直接通信</strong>。</p>
+
+  <p>Claude Code 的 Agent Teams 是最好的官方标本。它由四个组件构成：</p>
+
+  <table>
+    <thead><tr><th>组件</th><th>职责</th><th>实现</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Team lead</strong></td><td>创建队友、分配初始工作</td><td>主 Claude Code 会话</td></tr>
+      <tr><td><strong>Teammates</strong></td><td>认领任务、独立干活</td><td>各自独立的 Claude 实例</td></tr>
+      <tr><td><strong>Task list</strong></td><td>共享任务列表，自行 claim</td><td><code>~/.claude/tasks/{team}/</code></td></tr>
+      <tr><td><strong>Mailbox</strong></td><td>任意两点间发消息</td><td><code>~/.claude/teams/{team}/inboxes/*.json</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>实现上非常「工程师味儿」：<strong>发送消息 = 成功写入对方的 JSON inbox 文件</strong>。任务依赖自动管理——某队友完成任务后，依赖它的任务自动解锁。没有消息总线，没有中间件，就是文件读写。</p>
+
+  <div class="topo-box">
+    <div class="topo-head"><span class="topo-tag">图 3-1</span>点击连线开关，对比星型 vs 网状的消息路径</div>
+    <svg id="meshSvg" viewBox="0 0 720 340" role="img" aria-label="Agent Teams 网状架构图">
+      <line class="edge mesh" x1="360" y1="170" x2="150" y2="80"/>
+      <line class="edge mesh" x1="360" y1="170" x2="570" y2="80"/>
+      <line class="edge mesh" x1="360" y1="170" x2="150" y2="270"/>
+      <line class="edge mesh" x1="360" y1="170" x2="570" y2="270"/>
+      <line class="edge p2p hot-edge" x1="150" y1="80" x2="570" y2="80"/>
+      <line class="edge p2p hot-edge" x1="150" y1="80" x2="150" y2="270"/>
+      <line class="edge p2p hot-edge" x1="570" y1="80" x2="570" y2="270"/>
+      <line class="edge p2p hot-edge" x1="150" y1="270" x2="570" y2="270"/>
+      <line class="edge p2p hot-edge" x1="150" y1="80" x2="570" y2="270"/>
+      <line class="edge p2p hot-edge" x1="570" y1="80" x2="150" y2="270"/>
+      <g transform="translate(270,125)">
+        <rect x="0" y="0" width="180" height="90" rx="10" class="hub-rect"/>
+        <text x="90" y="36" class="tt">Team Lead</text>
+        <text x="90" y="58" class="tm">创建队友 · 协调</text>
+        <text x="90" y="78" class="tm">不再垄断通信</text>
+      </g>
+      <g transform="translate(75,48)">
+        <rect x="0" y="0" width="150" height="62" rx="9" class="mate-rect"/>
+        <text x="75" y="27" class="tt">Teammate 前端</text><text x="75" y="47" class="tm">持久实例</text>
+      </g>
+      <g transform="translate(495,48)">
+        <rect x="0" y="0" width="150" height="62" rx="9" class="mate-rect"/>
+        <text x="75" y="27" class="tt">Teammate 后端</text><text x="75" y="47" class="tm">持久实例</text>
+      </g>
+      <g transform="translate(75,238)">
+        <rect x="0" y="0" width="150" height="62" rx="9" class="mate-rect"/>
+        <text x="75" y="27" class="tt">Teammate 测试</text><text x="75" y="47" class="tm">持久实例</text>
+      </g>
+      <g transform="translate(495,238)">
+        <rect x="0" y="0" width="150" height="62" rx="9" class="mate-rect"/>
+        <text x="75" y="27" class="tt">共享 Task List</text><text x="75" y="47" class="tm">claim / 完成</text>
+      </g>
+    </svg>
+    <div class="topo-info">橙色线 = 点对点直达通道。前端 teammate 可以直接@后端：「我改了 API 契约，你跟一下」——<strong>不需要经过 lead 转述</strong>。用户甚至可以直接跟单个 teammate 对话。</div>
+  </div>
+
+  <h3>官方对照表（Claude Code Docs 原文翻译）</h3>
+  <table>
+    <thead><tr><th>维度</th><th>Subagents</th><th>Agent Teams</th></tr></thead>
+    <tbody>
+      <tr><td><strong>上下文</strong></td><td>独立窗口；结果回传给调用者</td><td>独立窗口；完全独立</td></tr>
+      <tr><td><strong>通信</strong></td><td>只向调用者回传结果</td><td>队友之间直接互发消息</td></tr>
+      <tr><td><strong>协调</strong></td><td>主 Agent 管理全部工作</td><td>自行协调 + 共享任务列表</td></tr>
+      <tr><td><strong>最适合</strong></td><td>只要结果的聚焦型任务</td><td>需要讨论、质疑、协作的工作</td></tr>
+      <tr><td><strong>Token 成本</strong></td><td>较低（摘要回传）</td><td>显著更高（每人都是完整实例）</td></tr>
+    </tbody>
+  </table>
+  <p>官方立场一句话：<strong>要快速专注的打工仔，用 subagent；要能互相讨论、互相挑战的真团队，用 agent teams。</strong></p>
+</section>
+
+<!-- ======================= 04 Handoff ======================= -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">Handoff：常被认错亲戚的第三种模式</h2></div>
+  <p class="lede">聊多 Agent 绕不开 OpenAI 的 <strong>handoff（交接）</strong>。它经常被误归进上面两类，但其实都不算：控制权交出去了（不是主从），但同一时刻只有一个活跃 agent（也不是团队）。</p>
+
+  <p>典型形态是客服分流：triage agent 判断意图后把整个对话<strong>移交给</strong> billing 或 refund 专家，此后由专家直接面对用户，triage 不再参与。</p>
+
+  <div class="route-sim">
+    <div class="route-head"><span class="topo-tag">模拟 4-1</span>点一条客户消息，看 triage 如何路由控制权</div>
+    <div class="route-msgs" id="routeMsgs">
+      <button class="rmsg" data-route="billing">「我上个月被重复扣了一笔月费」</button>
+      <button class="rmsg" data-route="refund">「我要退掉昨天误买的那个套餐」</button>
+      <button class="rmsg" data-route="tech">「App 一直转圈登不上去」</button>
+    </div>
+    <div class="route-stage" id="routeStage">
+      <div class="route-lane" id="laneTriage"><b>Triage Agent</b><span>待命 · 持有对话</span></div>
+      <div class="route-arrow" id="routeArrow">→</div>
+      <div class="route-lane" id="laneSpec"><b>Specialist</b><span>等待交接…</span></div>
+    </div>
+    <div class="route-note" id="routeNote">选择上方一条消息开始演示。注意：交接后 triage 就退场了——这正是 handoff 与 subagent 的本质区别。</div>
+  </div>
+
+  <p>Handoff 的限制也很明显：社区实践中 <strong>handoff 无法并行发生</strong>，一次只能交接一个专家，不适合需要并行跑工具的场景。OpenAI 文档给出的选型口诀：</p>
+
+  <ul class="plain">
+    <li>专家应该<strong>接管对话分支</strong> → handoff（控制权转移）</li>
+    <li>主管要<strong>合成最终答案</strong>、专家只做有界任务 → agents-as-tools（即 subagent）</li>
+    <li>成员需要<strong>互相讨论协商</strong> → agent teams</li>
+  </ul>
+</section>
+
+<!-- ======================= 05 数据 ======================= -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">数据说话：为什么值，代价是什么</h2></div>
+  <p class="lede">Anthropic 公开了他们生产级多 agent 研究系统（Claude Research 功能背后）的核心指标——这是目前最有分量的一手证据。</p>
+
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-num accent">+90.2%</div><div class="stat-cap">Opus 4 lead + Sonnet 4 subagents 的多 agent 系统，在内部研究评测上领先单 agent Opus 4 的幅度</div></div>
+    <div class="stat-card"><div class="stat-num">80%</div><div class="stat-cap">token 用量单独解释 BrowseComp 评测中性能方差的比例（三因素合计解释 95%）</div></div>
+    <div class="stat-card"><div class="stat-num warn">15×</div><div class="stat-cap">多 agent 系统相对普通聊天对话的 token 消耗倍数（普通 agent 约 4×）</div></div>
+    <div class="stat-card"><div class="stat-num ok">−90%</div><div class="stat-cap">并行拉起 3–5 个 subagent + 并行调工具后，复杂查询的研究时间最大缩短幅度</div></div>
+  </div>
+
+  <p>结论很冷静：<strong>多 agent 不是银弹，是用 token 换覆盖面的架构。</strong>Anthropic 明确指出，编码任务比研究任务更少真正可并行的部分，LLM 实时协调委托又还不强，所以多 agent 目前最适合的是：高价值、重并行、信息量超单上下文窗口、需对接大量复杂工具的任务。</p>
+
+  <h3>什么时候该拆，什么时候千万别拆</h3>
+  <p>Anthropic 后续文章给出多 agent <strong>一致优于</strong> 单 agent 的仅有的三种情况：</p>
+  <ol class="plain">
+    <li><strong>Context protection</strong>——子任务产生大量中间信息（&gt;1000 token）但对主任务大部分无用。让 subagent 吃掉脏活，只回传几十 token 摘要。</li>
+    <li><strong>Parallelization</strong>——广度优先的多方向探索。例：「列出标普 500 IT 板块所有公司董事会成员」，串行搜不完，必须分头并行。</li>
+    <li><strong>Specialization</strong>——工具超过 15–20 个模型就选不准；不同任务需要互相冲突的系统提示词（共情客服 vs 严苛审查）；领域知识太深装不进通用 agent。</li>
+  </ol>
+
+  <div class="callout bad-callout">
+    <b>反面教训（Anthropic 原话）：</b>「我们见过团队花几个月搭建精巧的多 agent 架构，最后发现单 agent 把 prompt 写好就能达到同样效果。」按「问题类型」拆分 agent（一个写功能、一个写测试、一个做审查）会导致每次交接丢失上下文，变成传话游戏——实测中 agent 们<strong>协调花的 token 比干活还多</strong>。正确的拆分原则是按<strong>上下文边界</strong>：写功能的人顺带写测试，因为它已有上下文。
+  </div>
+
+  <p>LangChain 的 Harrison Chase 给过一个好记的判断维度：<strong>Read 操作天然可并行适合多 agent；Write 操作耦合度高适合单 agent 收口</strong>。Anthropic 的研究系统就是典型——一堆 subagent 并行搜索阅读，报告由 lead 统一写。</p>
+</section>
+
+<!-- ======================= 06 决策树 ======================= -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">决策向导：你的任务到底该用哪种</h2></div>
+  <p class="lede">综合三家官方口径做成的交互决策器。回答三道题，拿到架构建议。</p>
+
+  <div class="wizard" id="wizard">
+    <div class="wiz-progress"><span id="wizStep">问题 1 / 3</span><div class="wiz-bar"><div id="wizFill"></div></div></div>
+    <div class="wiz-q" id="wizQ"></div>
+    <div class="wiz-opts" id="wizOpts"></div>
+    <div class="wiz-result" id="wizResult" style="display:none">
+      <div class="wiz-verdict" id="wizVerdict"></div>
+      <div class="wiz-explain" id="wizExplain"></div>
+      <button class="sim-btn ghost" id="wizRestart">重新回答</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 07 测验 ======================= -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">终极测验：五题出师</h2></div>
+  <p class="lede">全部出自上文与官方文档原文。答完看你是「架构明白人」还是「该回去复习」。</p>
+
+  <div class="quizbox">
+    <div class="quiz-head"><span class="qt">FINAL QUIZ · SUBAGENT VS MULTI-AGENT</span><span class="quiz-score" id="quizScore">0 / 5</span></div>
+    <div class="quiz-body">
+      <div class="q-no" id="qNo">QUESTION 1 / 5</div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div class="q-exp" id="qExp"></div>
+      <div class="q-actions">
+        <button class="sim-btn" id="qSubmit" disabled>提交答案</button>
+        <button class="sim-btn" id="qNext" style="display:none">下一题 →</button>
+        <button class="sim-btn ghost" id="qRestart" style="display:none">重来</button>
+        <span class="q-verdict" id="qVerdict"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="refs">
+    <div class="toc-title">参考资料 · 全部一手来源</div>
+    <ul class="plain">
+      <li>Anthropic Engineering — <em>How we built our multi-agent research system</em>（2025-06）anthropic.com/engineering/multi-agent-research-system</li>
+      <li>Anthropic — <em>Building multi-agent systems: When and how to use them</em>（2026）claude.com/blog</li>
+      <li>Claude Code Docs — <em>Orchestrate teams of Claude Code sessions</em> code.claude.com/docs/en/agent-teams</li>
+      <li>OpenAI API Docs — <em>Orchestration and handoffs</em> developers.openai.com/api/docs/guides/agents/orchestration</li>
+      <li>OpenAI Agents SDK — <em>Multi-agent orchestration</em> openai.github.io/openai-agents-python/multi_agent</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ---------- TOC 构建 ---------- */
+const chapters=[...document.querySelectorAll("section.chapter")];
+const toc=document.getElementById("toc");
+const names=["控制权谱系","Subagent 星型","Multi-Agent 网状","Handoff 交接","数据说话","决策向导","终极测验"];
+chapters.forEach((sec,i)=>{
+  const a=document.createElement("a");
+  a.href="#"+sec.id;
+  a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;
+  toc.appendChild(a);
+});
+
+/* ---------- Scrollspy + 进度条 ---------- */
+const links=[...toc.querySelectorAll("a")];
+const fill=document.getElementById("progFill");
+const label=document.getElementById("progLabel");
+function updateSpy(){
+  const y=scrollY+120;
+  let cur=0;
+  chapters.forEach((sec,i)=>{ if(sec.offsetTop<=y) cur=i; });
+  links.forEach((l,i)=>l.classList.toggle("active",i===cur));
+  const total=chapters.length;
+  const passed=Math.min(cur+1,total);
+  fill.style.width=(passed/total*100)+"%";
+  label.textContent=`${passed} / ${total} 章`;
+}
+addEventListener("scroll",updateSpy,{passive:true});
+addEventListener("resize",updateSpy);
+updateSpy();
+
+/* ---------- 代码复制 ---------- */
+document.querySelectorAll(".copybtn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const code=btn.parentElement.querySelector("pre").innerText;
+    navigator.clipboard.writeText(code).then(()=>{
+      btn.textContent="copied ✓";btn.classList.add("done");
+      setTimeout(()=>{btn.textContent="copy";btn.classList.remove("done");},1400);
+    });
+  });
+});
+
+/* ---------- 01 谱系切换 ---------- */
+const SPEC=[
+ {t:"Subagent · 主从星型",d:"主 Agent 创建子代理并在整个过程中保持控制权。子代理只回传最终结论，彼此互不可见。代表：Claude Code 的 Agent tool、OpenAI 的 as_tool()。成本中等（约 4× 聊天对话），行为最可预测。",k:"适合：可并行的调研、批量分析、上下文隔离"},
+ {t:"Handoff · 控制权移交",d:"当前 agent 通过 handoff 把整段对话移交给专家，此后专家直接面对用户，原 agent 退出该分支。代表：OpenAI Agents SDK 的 handoffs。限制：一次只能交接一个，无法并行。",k:"适合：分流型业务（客服路由、多轮专业咨询）"},
+ {t:"Agent Teams · 网状自组织",d:"每个成员是持久独立的实例，通过邮箱系统点对点通信，配合共享任务列表自行认领工作。lead 只负责组建和初始分工。成本最高（约 15× 聊天对话），灵活度也最高。代表：Claude Code Agent Teams（实验性）。",k:"适合：需要讨论、质疑、协商的复杂协作"}
+];
+const specDetail=document.getElementById("specDetail");
+function renderSpec(i){
+  document.querySelectorAll(".spec-node").forEach((n,j)=>n.classList.toggle("active",j===i));
+  specDetail.innerHTML=`<b>${SPEC[i].t}</b><p>${SPEC[i].d}</p><span class="spec-fit">${SPEC[i].k}</span>`;
+}
+document.querySelectorAll(".spec-node").forEach(n=>n.onclick=()=>renderSpec(+n.dataset.spec));
+renderSpec(0);
+
+/* ---------- 02 星型图节点点击 ---------- */
+const STAR={
+ user:{t:"用户",d:"只和主 Agent 对话。子代理对用户完全透明——你甚至不知道自己被几个临时工服务过。"},
+ lead:{t:"主 Agent（Orchestrator）",d:"唯一持有全局上下文的节点。它决定拆几份、每份给什么工具和边界、最后怎么合成答案。上下文里只积累各路结论，永远不被中间过程污染。"},
+ s1:{t:"Subagent A",d:"收到一份自包含的任务书（目标+格式+工具白名单）。在自己的空上下文里自主调工具 N 轮，结束后只回传一段结论摘要，然后销毁。"},
+ s2:{t:"Subagent B",d:"和 A 同时开工，但互相不知道对方存在。如果任务书写得含糊，A 和 B 可能干重复活——这正是 Anthropic 早期踩过的坑：两个子代理都在查 2025 供应链，第三个却跑去查 2021 芯片危机。"},
+ s3:{t:"Subagent C",d:"注意图中 C 和 D 之间没有连线。想交换信息？只能回传给 lead，再由 lead 决定要不要派新任务——一切经过中心。"},
+ s4:{t:"Subagent D",d:"生命周期 = 一次派发。用完即毁的设计让它的上下文成本是 O(任务)，而不是 O(会话)。"}
+};
+const starInfo=document.getElementById("starInfo");
+document.querySelectorAll("#starSvg .tnode").forEach(n=>{
+  n.addEventListener("click",()=>{
+    document.querySelectorAll("#starSvg .tnode").forEach(m=>m.classList.remove("sel"));
+    n.classList.add("sel");
+    const s=STAR[n.dataset.node];
+    starInfo.innerHTML=`<b>${s.t}</b> — ${s.d}`;
+  });
+});
+
+/* ---------- 04 路由模拟 ---------- */
+const ROUTES={
+ billing:{name:"Billing Agent",note:"triage 判断这是账单纠纷 → handoff(billing_agent)。从此 Billing 直接面对用户，拥有完整对话历史。Triage 退场——它不会再看到这个对话的任何后续。"},
+ refund:{name:"Refund Agent",note:"退款诉求命中 Refund 专家。注意 OpenAI 的规则：handoffs 是显式白名单——triage 只能移交给声明过的专家，防止 agent 之间乱窜。"},
+ tech:{name:"Tech Support Agent",note:"登录故障路由给技术支持。如果这条消息其实需要先查账单再修 bug？那就得两次 handoff 接力——链式结构的天然短板，星型的 subagent 或网状的 team 处理会更从容。"}
+};
+document.querySelectorAll(".rmsg").forEach(btn=>{
+  btn.onclick=()=>{
+    const r=ROUTES[btn.dataset.route];
+    document.getElementById("laneSpec").innerHTML=`<b>${r.name}</b><span>已接管 · 正在答复用户</span>`;
+    document.getElementById("laneSpec").classList.add("active");
+    document.getElementById("laneTriage").classList.remove("active");
+    document.getElementById("laneTriage").querySelector("span").textContent="已退场";
+    document.getElementById("routeArrow").textContent="⇢ 交权";
+    document.getElementById("routeNote").textContent=r.note;
+  };
+});
+
+/* ---------- 06 决策向导 ---------- */
+const WIZ=[
+ {q:"你的任务会产生大量中间信息吗？（搜索结果、文件内容、日志……）",
+  o:["会，而且大部分对最终答案没用","不会，或都很有用"],
+  map:[1,-1]},
+ {q:"这些子任务可以互相独立地并行执行吗？（不需要彼此的产出作为输入）",
+  o:["完全可以独立并行","强依赖，必须串行或频繁同步"],
+  map:[1,-1]},
+ {q:"干活的成员需要互相讨论、质疑对方的结论吗？",
+  o:["需要真讨论","不用，各自交结果就行"],
+  map:[{next:2},-1]}
+];
+let wStep=0,wPath=[];
+const $wQ=document.getElementById("wizQ"),$wO=document.getElementById("wizOpts"),
+      $wR=document.getElementById("wizResult"),$wV=document.getElementById("wizVerdict"),
+      $wE=document.getElementById("wizExplain"),$wStep=document.getElementById("wizStep"),
+      $wFill=document.getElementById("wizFill"),$wRestart=document.getElementById("wizRestart");
+function wizRender(){
+  $wR.style.display="none";$wQ.parentElement.querySelector(".wiz-q").style.display="";
+  const Q=WIZ[wStep];
+  $wStep.textContent=`问题 ${wStep+1} / ${WIZ.length}`;
+  $wFill.style.width=((wStep)/WIZ.length*100)+"%";
+  $wQ.textContent=Q.q;
+  $wO.innerHTML="";
+  Q.o.forEach((opt,i)=>{
+    const b=document.createElement("button");b.className="wiz-opt";b.textContent=opt;
+    b.onclick=()=>wizAnswer(i);$wO.appendChild(b);
+  });
+}
+function wizAnswer(i){
+  const m=WIZ[wStep].map[i];
+  if(typeof m==="object"){ wPath.push(wStep*2+i); wStep=m.next; wizRender(); return; }
+  wPath.push(wStep*2+i);
+  $wFill.style.width="100%";
+  $wQ.parentElement.querySelector(".wiz-q").style.display="none";
+  $wO.innerHTML="";
+  $wR.style.display="block";
+  if(m===1){
+    $wV.innerHTML="建议：Subagent 编排（orchestrator-worker）";
+    $wE.innerHTML="高并行 + 可隔离的上下文 = fan-out subagent 的教科书场景。参考 Anthropic 研究系统的做法：lead 并行拉起 3–5 个子代理，每个只回传压缩后的结论。预算按约 4× 聊天 token 估。如果第 3 题你选了『不需要讨论』，就停在这一层——别为用不上的协作能力付 15× 的账单。";
+  }else{
+    $wV.innerHTML="建议：先别上多 Agent";
+    $wE.innerHTML="强依赖 + 强同步 = 拆了只会更贵更乱。Anthropic 见过太多团队按角色拆分后协调开销超过干活的案例。回去把 prompt 写好，或者只在真正出现上下文污染的那一小块用单个 verification subagent 黑盒验收。等模型实时协作能力更强了再回来重评。";
+  }
+}
+$wRestart.onclick=()=>{wStep=0;wPath=[];wizRender();};
+wizRender();
+
+/* ---------- 07 终极测验 ---------- */
+const QUESTIONS=[
+ {q:"Subagent 模式下，子代理之间的信息如何流动？",
+  o:["直接点对点互发消息","只能回传给主 Agent，由它决定是否转发","通过共享文件系统自动同步","广播给所有兄弟节点"],
+  a:1,ex:"星型拓扑是一切的关键：所有箭头都经过中心节点。子代理互相不知道对方的存在——这既是可预测性的来源，也是『重复劳动』事故的原因。"},
+ {q:"Claude Code Agent Teams 里，『发送消息』的实现机制是什么？",
+  o:["HTTP 调用中央消息总线","WebSocket 长连接","成功写入接收方的 JSON inbox 文件","共享内存队列"],
+  a:2,ex:"每个 agent 的 mailbox 就是 ~/.claude/teams/{team}/inboxes/{name}.json，发送 = 写入成功才确认。没有中间件，纯文件读写。"},
+ {q:"OpenAI Agents SDK 中，主管需要保持对最终答案的控制权时，应该用？",
+  o:["handoffs","as_tool() 把专家包装成工具","两者等价","都不能，必须用 Swarm"],
+  a:1,ex:"官方选型表原文：Agents as tools → 『The manager keeps ownership of the reply』；handoffs → 『Control moves to the specialist agent』。控制权归属是两者的本质区别。"},
+ {q:"Anthropic 实测中，对多 agent 研究系统性能方差贡献最大的单一因素是？",
+  o:["模型选择","工具调用次数","token 用量","提示词长度"],
+  a:2,ex:"token 用量单独解释 BrowseComp 评测 80% 的方差（三因素合计 95%）。这验证了多 agent 的本质：用分布式上下文换更多并行推理容量。"},
+ {q:"团队按『一个写功能、一个写测试、一个做审查』拆分 agent，Anthropic 观察到的结果是？",
+  o:["质量显著提升","协调花的 token 比实际工作还多","没有任何差别","测试覆盖率下降"],
+  a:1,ex:"这是 problem-centric 拆分的经典失败：每次交接都丢上下文，变成传话游戏。正确原则是 context-centric——按上下文边界拆，能隔离才拆。"}
+];
+let qi=0,qScore=0,qPicked=-1,qDone=false;
+const $qNo=document.getElementById("qNo"),$qText=document.getElementById("qText"),$qOpts=document.getElementById("qOpts"),
+      $qExp=document.getElementById("qExp"),$qSub=document.getElementById("qSubmit"),$qNxt=document.getElementById("qNext"),
+      $qRst=document.getElementById("qRestart"),$qVer=document.getElementById("qVerdict"),$qScoreEl=document.getElementById("quizScore");
+function loadQ(){
+  qPicked=-1;qDone=false;
+  const Q=QUESTIONS[qi];
+  $qNo.textContent=`QUESTION ${qi+1} / ${QUESTIONS.length}`;
+  $qText.textContent=Q.q;
+  $qExp.classList.remove("show");$qExp.innerHTML="";
+  $qVer.textContent="";$qVer.className="q-verdict";
+  $qSub.disabled=true;$qSub.style.display="";$qNxt.style.display="none";$qRst.style.display="none";
+  $qOpts.innerHTML="";
+  Q.o.forEach((opt,i)=>{
+    const b=document.createElement("div");
+    b.className="q-opt";b.textContent=String.fromCharCode(65+i)+". "+opt;
+    b.onclick=()=>{
+      if(qDone)return;
+      qPicked=i;
+      [...$qOpts.children].forEach((c,j)=>c.classList.toggle("picked",j===i));
+      $qSub.disabled=false;
+    };
+    $qOpts.appendChild(b);
+  });
+}
+$qSub.onclick=()=>{
+  if(qPicked<0||qDone)return;
+  qDone=true;
+  const Q=QUESTIONS[qi],right=qPicked===Q.a;
+  [...$qOpts.children].forEach((c,j)=>{
+    c.classList.remove("picked");c.classList.add("locked");
+    if(j===Q.a)c.classList.add("right");
+    else if(j===qPicked)c.classList.add("wrong");
+  });
+  $qExp.innerHTML=(right?"✓ 答对了。":"✗ 正确答案是 "+String.fromCharCode(65+Q.a)+"。")+Q.ex;
+  $qExp.classList.add("show");
+  if(right)qScore++;
+  $qScoreEl.textContent=`${qScore} / ${QUESTIONS.length}`;
+  $qVer.textContent=right?"正确 ✓":"再想想 ✗";
+  $qVer.className="q-verdict "+(right?"ok":"bad");
+  $qSub.style.display="none";
+  if(qi<QUESTIONS.length-1)$qNxt.style.display="";
+  else{$qRst.style.display="";$qVer.textContent+= qi===QUESTIONS.length-1?(qScore>=4?" · 出师！🎉":" · 建议回去复习 01/05 章"):"";}
+};
+$qNxt.onclick=()=>{qi++;loadQ();};
+$qRst.onclick=()=>{qi=0;qScore=0;$qScoreEl.textContent="0 / 5";loadQ();};
+loadQ();
+</script>
+</body>
+</html>
