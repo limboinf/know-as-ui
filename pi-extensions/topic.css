@@ -1,0 +1,41 @@
+/* pi-extensions 专属样式：生命周期模拟器 + 示例搜索（公共部分见 /assets/handbook.css） */
+/* ===== 生命周期模拟器 ===== */
+.sim{
+    max-width:900px;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0 10px;
+    background:color-mix(in oklch, var(--paper) 92%, white);
+  }
+  .sim-log{height:330px;overflow-y:auto;padding:18px 20px;font-family:var(--mono);font-size:13px;line-height:1.9}
+  .sim-line{opacity:0;transform:translateY(6px);animation:simIn .35s ease-out forwards}
+  @keyframes simIn{to{opacity:1;transform:none}}
+  .sim-line .t{color:var(--ink-faint)}
+  .sim-line.evt{color:var(--accent-deep);font-weight:600}
+  .sim-line.act{color:var(--ink)}
+  .sim-line.hl{background:var(--paper-deep);border-radius:4px;padding:0 6px}
+  .sim-ctrl{display:flex;gap:10px;align-items:center;border-top:1.5px solid var(--ink);padding:13px 18px;background:var(--paper-deep);flex-wrap:wrap}
+  .sim-btn{
+    font-family:var(--mono);font-size:13px;font-weight:600;cursor:pointer;
+    background:var(--ink);color:var(--paper);border:none;border-radius:6px;padding:8px 18px;
+    transition:.15s;
+  }
+  .sim-btn:hover{background:var(--accent-deep)}
+  .sim-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--ink-soft)}
+  .sim-btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
+  .sim-scenario{font-size:13px;color:var(--ink-soft)}
+
+/* ===== 搜索 ===== */
+.api-search{
+    width:min(420px,100%);font-family:var(--mono);font-size:14px;
+    padding:10px 14px;border:1.5px solid var(--ink);border-radius:8px;background:#fffdf8;
+    outline:none;margin:10px 0 4px;
+  }
+  .api-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklch,var(--accent) 18%, transparent)}
+  .hidden-row{display:none!important}
+
+  footer.colophon{border-top:1.5px solid var(--ink);margin-top:40px;padding-top:18px;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+
+  @media (max-width:920px){
+    .wrap{grid-template-columns:1fr}
+    nav.toc{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);padding:16px 12px}
+    main{padding:36px 20px 100px}
+    .progress-label{display:none}
+  }

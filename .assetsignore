@@ -1,4 +1,5 @@
 .git
+.wrangler
 node_modules
 .gitignore
 .assetsignore

@@ -1,0 +1,55 @@
+/* pi-agent-loop 专属样式：循环步进器 + 终极测验（公共部分见 /assets/handbook.css） */
+/* ===== 循环步进器 ===== */
+  .sim{
+    max-width:900px;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0 10px;
+    background:color-mix(in oklch, var(--paper) 92%, white);
+    display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
+  }
+  .sim-code{border-right:1px solid var(--line);padding:14px 0;background:var(--code-bg);min-height:380px}
+  .sim-code pre{background:none;border:none;padding:12px 18px;font-size:12.6px;line-height:1.75}
+  .sim-code .cl{display:block;padding:0 8px;border-left:3px solid transparent;border-radius:2px;white-space:pre}
+  .sim-code .cl.hot{background:#3a3324;border-left-color:var(--accent);color:#ffe9d6}
+  .sim-state{padding:16px 20px;display:flex;flex-direction:column;min-height:380px}
+  .sim-phase{font-family:var(--mono);font-size:12px;color:var(--accent-deep);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;min-height:18px}
+  .sim-desc{font-size:14.5px;line-height:1.7;color:var(--ink);flex:0 0 auto;margin-bottom:14px;min-height:72px}
+  .sim-msgs{flex:1;overflow-y:auto;border:1px dashed var(--line);border-radius:8px;padding:10px 12px;background:var(--paper);font-family:var(--mono);font-size:12px;line-height:1.9}
+  .sim-msgs .m{opacity:0;animation:simIn .3s ease-out forwards}
+  .sim-msgs .m.user{color:#26607a}
+  .sim-msgs .m.asst{color:#8f3512;font-weight:600}
+  .sim-msgs .m.tool{color:#3d7a44}
+  @keyframes simIn{to{opacity:1}}
+  .sim-ctrl{grid-column:1/-1;display:flex;gap:10px;align-items:center;border-top:1.5px solid var(--ink);padding:13px 18px;background:var(--paper-deep);flex-wrap:wrap}
+  .sim-btn{
+    font-family:var(--mono);font-size:13px;font-weight:600;cursor:pointer;
+    background:var(--ink);color:var(--paper);border:none;border-radius:6px;padding:8px 18px;
+    transition:.15s;
+  }
+  .sim-btn:hover{background:var(--accent-deep)}
+  .sim-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--ink-soft)}
+  .sim-btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
+  .sim-count{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-left:auto}
+
+/* ===== 终极测验 ===== */
+  .quizbox{max-width:860px;border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:20px 0;overflow:hidden}
+  .quiz-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep)}
+  .quiz-head .qt{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+  .quiz-score{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent-deep)}
+  .quiz-body{padding:20px 24px}
+  .q-no{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.1em;margin-bottom:6px}
+  .q-text{font-size:17px;font-weight:650;margin-bottom:16px;max-width:64ch}
+  .q-opt{display:block;border:1.5px solid var(--line);border-radius:8px;padding:11px 16px;margin-bottom:9px;cursor:pointer;transition:.13s;font-size:15px;max-width:100%}
+  .q-opt:hover{border-color:var(--ink);background:var(--paper-deep)}
+  .q-opt.picked{border-color:var(--accent);background:#f7e3d8}
+  .q-opt.right{border-color:var(--ok);background:#e2ecdd}
+  .q-opt.wrong{border-color:var(--bad);background:#f6dede}
+  .q-opt.locked{pointer-events:none}
+  .q-exp{display:none;border-top:1px dashed var(--line);margin-top:12px;padding-top:12px;font-size:14.5px;color:var(--ink-soft)}
+  .q-exp.show{display:block}
+  .quiz-foot{display:flex;gap:10px;padding:14px 24px;border-top:1.5px solid var(--ink);background:var(--paper-deep)}
+  .q-verdict{font-size:14.5px;font-weight:700;margin-left:6px;align-self:center}
+  .q-verdict.ok{color:var(--ok)} .q-verdict.bad{color:var(--bad)}
+
+@media (max-width:920px){
+  .sim{grid-template-columns:1fr}
+  .sim-code{border-right:none;border-bottom:1px solid var(--line)}
+}

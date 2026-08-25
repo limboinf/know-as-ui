@@ -21,6 +21,9 @@ know-as-ui/
 ```text
 pi-extensions/
 └── a.html                     # pi 自定义扩展开发交互手册
+
+pi-agent-loop/
+└── a.html                     # pi agent loop 可视化
 ```
 
 ## 新增知识点
@@ -35,6 +38,7 @@ pi-extensions/
 
 - 页面应该是可用的知识界面，不只是静态文章。
 - 适合加入流程图、架构图、时间线、模拟器、折叠代码、自测题、搜索、进度记录等交互。
+- 每个页面的 `<head>` 顶部带上 GA4 统计代码（衡量 ID `G-ZX3SDXK5B3`），可直接从 `index.html` 复制 `<!-- Google tag (gtag.js) -->` 整段。
 - 不依赖构建工具时，直接用浏览器打开即可；如果确实需要依赖，再单独说明运行方式。
 - 中文内容使用 `UTF-8`，文件和目录命名使用 ASCII。
 - 知识内容要标注来源；涉及会变化的 API，记录来源 URL 或仓库路径。
