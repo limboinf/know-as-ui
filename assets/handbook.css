@@ -16,6 +16,7 @@
     --serif:"Songti SC","Noto Serif SC",Georgia,serif;
     --sans:"PingFang SC",-apple-system,"Helvetica Neue",sans-serif;
     --mono:"SF Mono",Menlo,"JetBrains Mono",monospace;
+    --content-rail:900px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth;scroll-padding-top:76px}
@@ -90,14 +91,14 @@
   .kbd{font-family:var(--mono);font-size:.82em;border:1px solid var(--ink-soft);border-bottom-width:2.5px;border-radius:5px;padding:1px 7px;background:#fffdf8}
 
   /* ===== 提示框 ===== */
-  .note{border-left:3px solid var(--accent);background:var(--paper-deep);padding:13px 18px;margin:18px 0;max-width:72ch;font-size:15px}
+  .note{width:100%;max-width:var(--content-rail);border-left:3px solid var(--accent);background:var(--paper-deep);padding:13px 18px;margin:18px 0;font-size:15px}
   .note.danger{border-color:var(--bad)}
   .note.warn{border-color:var(--warn)}
   .note.ok{border-color:var(--ok)}
   .note b:first-child{display:block;margin-bottom:3px}
 
   /* ===== 代码块 ===== */
-  .codewrap{position:relative;margin:16px 0 22px;max-width:860px}
+  .codewrap{position:relative;width:100%;max-width:var(--content-rail);margin:16px 0 22px}
   .codewrap .filetab{
     display:inline-block;font-family:var(--mono);font-size:11.5px;
     background:var(--ink);color:var(--paper);padding:3px 12px;border-radius:6px 6px 0 0;
@@ -123,7 +124,7 @@
   .copybtn.done{color:#b5c98a;border-color:#5a6a45}
 
   /* ===== 表格 ===== */
-  table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;max-width:900px}
+  table{width:100%;max-width:var(--content-rail);border-collapse:collapse;margin:16px 0 24px;font-size:14px}
   th{
     text-align:left;font-family:var(--mono);font-size:11.5px;text-transform:uppercase;
     letter-spacing:.1em;color:var(--paper);background:var(--ink);padding:8px 12px;
@@ -140,7 +141,7 @@
   .badge.info{background:var(--paper-deep);color:var(--ink-soft);border:1px solid var(--line)}
 
   /* ===== 图表 ===== */
-  .diagram{max-width:900px;margin:20px 0 26px;border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:16px 16px 8px;overflow-x:auto}
+  .diagram{width:100%;max-width:var(--content-rail);margin:20px 0 26px;border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:16px 16px 8px;overflow-x:auto}
   .diagram svg{display:block;width:100%;min-width:640px;height:auto}
   .diagram figcaption{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.12em;text-transform:uppercase;padding:10px 2px 6px;border-top:1px dashed var(--line);margin-top:10px}
   .dg-box{fill:#fffdf8;stroke:#26221b;stroke-width:1.5}
@@ -158,7 +159,7 @@
   .dg-lbl-ink{font:10.5px "SF Mono",Menlo,monospace;fill:#5d564a}
 
   /* ===== 自测题 ===== */
-  details.quiz{max-width:860px;border:1.5px solid var(--ink);border-radius:9px;margin:14px 0;overflow:hidden;background:#fffdf8}
+  details.quiz{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:9px;margin:14px 0;overflow:hidden;background:#fffdf8}
   details.quiz summary{
     cursor:pointer;padding:13px 18px;font-weight:600;list-style:none;
     display:flex;align-items:center;gap:12px;user-select:none;
@@ -169,7 +170,7 @@
   details.quiz .ans{padding:4px 18px 16px 54px;color:var(--ink-soft);font-size:15px;border-top:1px dashed var(--line)}
 
   /* ===== 打卡清单 / 页脚 ===== */
-  .checkpoint{max-width:860px;margin:6px 0 26px}
+  .checkpoint{width:100%;max-width:var(--content-rail);margin:6px 0 26px}
   .ckpt-item{
     display:flex;gap:12px;align-items:flex-start;padding:9px 12px;border-radius:7px;cursor:pointer;
     transition:background .15s;

@@ -1,7 +1,7 @@
 /* pi-agent-loop 专属样式：循环步进器 + 终极测验（公共部分见 /assets/handbook.css） */
 /* ===== 循环步进器 ===== */
   .sim{
-    max-width:900px;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0 10px;
+    width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;overflow:hidden;margin:20px 0 10px;
     background:color-mix(in oklch, var(--paper) 92%, white);
     display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
   }
@@ -30,7 +30,7 @@
   .sim-count{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-left:auto}
 
 /* ===== 终极测验 ===== */
-  .quizbox{max-width:860px;border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:20px 0;overflow:hidden}
+  .quizbox{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:20px 0;overflow:hidden}
   .quiz-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep)}
   .quiz-head .qt{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
   .quiz-score{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent-deep)}
