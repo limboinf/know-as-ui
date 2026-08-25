@@ -27,6 +27,9 @@ pi-agent-loop/
 
 subagent-vs-multi-agent/
 └── a.html                     # subagent vs 多 agent 架构对照手册
+
+pi-context-management/
+└── a.html                     # pi 上下文管理与压缩插件生态交互手册
 ```
 
 ## 新增知识点

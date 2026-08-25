@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>pi 上下文管理 · 压缩生态手册</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">pi <em>上下文管理</em> · 压缩生态手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc">
+  <div class="toc-title">目录 · Contents</div>
+</nav>
+
+<main>
+
+<!-- ======================= 01 原生压缩 ======================= -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">原生：pi 自带的压缩，其实只有一条规则</h2></div>
+  <p class="lede">Context 快满了 → 总结旧消息 → 保留最近一段 → 继续干活。pi 的原生 compaction 朴素到可以用一句话讲完，但它把每个细节都做对了——这也是整个插件生态得以生长的地基。</p>
+
+  <h3>触发条件：一行不等式</h3>
+  <div class="codewrap"><span class="filetab">compaction.js · 触发判定</span>
+<pre><code><span class="cm">// contextTokens > contextWindow - reserveTokens 时触发</span>
+<span class="kw">return</span> contextTokens &gt; contextWindow - settings.<span class="fn">reserveTokens</span>;
+<span class="cm">// 默认 reserveTokens = 16384（给模型回复留的座位）</span>
+<span class="cm">// 默认 keepRecentTokens = 20000（最近这段永远不总结）</span></code></pre></div>
+
+  <p>两个默认值都在 <code>~/.pi/agent/settings.json</code> 里可调。除了阈值自动触发，还有两种手动路径：<code>/compact [指令]</code> 直接压，以及请求撞上 provider 硬上限时的 overflow 自愈（reason 为 <code>"overflow"</code>，压缩后重试被中断的那一轮）。</p>
+
+  <figure class="diagram">
+  <svg viewBox="0 0 880 320" role="img" aria-label="压缩前后切分示意">
+    <defs>
+      <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+      <marker id="ar1o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+    </defs>
+    <text x="30" y="30" class="dg-lbl-ink">BEFORE · 会话条目流</text>
+    <g font-family="SF Mono,Menlo,monospace" font-size="11">
+      <rect x="30" y="44" width="70" height="34" rx="4" fill="#efe9dd" stroke="#d8cfbd"/><text x="65" y="65" text-anchor="middle" class="dg-sub">hdr</text>
+      <rect x="104" y="44" width="90" height="34" rx="4" fill="#f6dede" stroke="#a83232"/><text x="149" y="65" text-anchor="middle" class="dg-sub">user</text>
+      <rect x="198" y="44" width="110" height="34" rx="4" fill="#f6dede" stroke="#a83232"/><text x="253" y="65" text-anchor="middle" class="dg-sub">asst+tool</text>
+      <rect x="312" y="44" width="110" height="34" rx="4" fill="#f6dede" stroke="#a83232"/><text x="367" y="65" text-anchor="middle" class="dg-sub">user+asst</text>
+      <rect x="426" y="44" width="130" height="34" rx="4" fill="#e2ecdd" stroke="#3d7a44"/><text x="491" y="65" text-anchor="middle" class="dg-sub">kept…</text>
+      <rect x="560" y="44" width="130" height="34" rx="4" fill="#e2ecdd" stroke="#3d7a44"/><text x="625" y="65" text-anchor="middle" class="dg-sub">kept…</text>
+      <rect x="694" y="44" width="120" height="34" rx="4" fill="#e2ecdd" stroke="#3d7a44"/><text x="754" y="65" text-anchor="middle" class="dg-sub">kept(最新)</text>
+    </g>
+    <line x1="426" y1="40" x2="426" y2="86" stroke="#c2491d" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="426" y="100" text-anchor="middle" class="dg-lbl">firstKeptEntryId · 切点</text>
+    <path d="M150,120 H360" class="dg-flow" marker-end="url(#ar1o)"/>
+    <text x="255" y="140" text-anchor="middle" class="dg-lbl-ink">红区：交给 LLM 生成结构化摘要</text>
+
+    <text x="30" y="180" class="dg-lbl-ink">AFTER · 追加一条 CompactionEntry，原条目一个都不删</text>
+    <g font-family="SF Mono,Menlo,monospace" font-size="11">
+      <rect x="30" y="194" width="200" height="34" rx="4" fill="#efe9dd" stroke="#d8cfbd"/><text x="130" y="215" text-anchor="middle" class="dg-sub">不再发给 LLM（仍在文件里）</text>
+      <rect x="234" y="194" width="150" height="34" rx="4" fill="#f3dede" stroke="#a83232"/><text x="309" y="215" text-anchor="middle" class="dg-sub">cmp 摘要条目</text>
+      <rect x="388" y="194" width="426" height="34" rx="4" fill="#e2ecdd" stroke="#3d7a44"/><text x="601" y="215" text-anchor="middle" class="dg-sub">从 firstKeptEntryId 起原样保留</text>
+    </g>
+
+    <text x="30" y="266" class="dg-lbl-ink">下一轮 LLM 实际看到的：</text>
+    <g font-family="SF Mono,Menlo,monospace" font-size="11">
+      <rect x="30" y="276" width="90" height="30" rx="4" fill="#fffdf8" stroke="#26221b"/><text x="75" y="295" text-anchor="middle" class="dg-sub">system</text>
+      <rect x="124" y="276" width="130" height="30" rx="4" fill="#f3dede" stroke="#a83232"/><text x="189" y="295" text-anchor="middle" class="dg-sub">summary</text>
+      <rect x="258" y="276" width="300" height="30" rx="4" fill="#e2ecdd" stroke="#3d7a44"/><text x="408" y="295" text-anchor="middle" class="dg-sub">保留的近期消息（≥20k tokens）</text>
+    </g>
+  </svg>
+  <figcaption>fig.01 — 压缩 = 在会话树里追加一条摘要条目；旧数据永不删除，只是「不再发出去」</figcaption>
+  </figure>
+
+  <h3>切点的三条铁律</h3>
+  <ul class="plain">
+    <li><strong>从最新往回数</strong>：累积 token 到 ≥20k（keepRecentTokens）停下，这里就是切点。</li>
+    <li><strong>只在合法边界下刀</strong>：user / assistant / bash 执行 / custom 消息可以切；<strong>toolResult 永远不能和它的 toolCall 分家</strong>。</li>
+    <li><strong>巨型 turn 允许腰斩</strong>（split turn）：单个 turn 超 20k 时，在 assistant 消息处硬切，历史摘要 + turn 前缀摘要两段合并。</li>
+  </ul>
+
+  <div class="codewrap"><span class="filetab">CompactionEntry · 摘要条目结构（session-manager.ts）</span>
+<pre><code><span class="kw">interface</span> <span class="ty">CompactionEntry</span>&lt;T = unknown&gt; {
+  type: <span class="st">"compaction"</span>;
+  summary: string;            <span class="cm">// 结构化摘要正文</span>
+  firstKeptEntryId: string;   <span class="cm">// 从哪条起原样保留</span>
+  tokensBefore: number;       <span class="cm">// 压缩前的真实上下文水位</span>
+  details?: T;                <span class="cm">// 扩展可塞任意 JSON —— 插件生态的钥匙</span>
+}
+<span class="cm">// 默认实现用它记录：{ readFiles: string[], modifiedFiles: string[] }</span>
+<span class="cm">// 且文件清单跨多次压缩累积，不会因为二次压缩而丢失</span></code></pre></div>
+
+  <div class="note ok"><b>✦ 摘要不是自由发挥</b>
+    无论压缩还是分支切换，摘要都套同一个结构化模板：<code>Goal / Constraints / Progress(Done·In·Blocked) / Key Decisions / Next Steps / Critical Context</code>，外加 <code>&lt;read-files&gt;</code> 和 <code>&lt;modified-files&gt;</code> 清单。序列化时 toolResult 截断到 2000 字符——read 和 bash 输出才是上下文的大头。
+  </div>
+
+  <details class="quiz"><summary>自测：为什么切点永远不能落在 toolResult 上？</summary>
+    <div class="ans">Provider API 要求每条 assistant 消息里的 toolCall 必须有配对的 toolResult。把结果切掉、调用留下，下一轮请求直接 schema 报错。所以 pi 只允许在 user / assistant / bash / custom 这几种消息边界下刀，成对的工具消息永远同生共死。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="1">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件（点击打卡）</div>
+    <div class="ckpt-item" data-key="cm1a"><div class="ckpt-box">✓</div><div class="ckpt-text">能默写触发不等式和两个默认值（16384 / 20000）</div></div>
+    <div class="ckpt-item" data-key="cm1b"><div class="ckpt-box">✓</div><div class="ckpt-text">能说清 CompactionEntry 是追加而非改写，以及 details 字段的用途</div></div>
+  </div>
+</section>
+
+<!-- ======================= 02 水位模拟器 ======================= -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">模拟器：亲手推一次压缩水位线</h2></div>
+  <p class="lede">按「继续工作」让对话增长，观察什么时候越过阈值、切在哪里、模型下一轮看到什么。这就是原生 compaction 的全部动态行为。</p>
+
+  <div class="tank" id="tank">
+    <div class="tank-vis">
+      <div class="tank-body">
+        <div class="tank-fill" id="tankFill"></div>
+        <div class="tank-thresh" id="tankThresh"><span>window − reserve</span></div>
+      </div>
+      <div class="tank-scale"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0</span></div>
+      <div class="tank-readout">
+        <div>contextWindow<br><b id="tWin">128,000</b></div>
+        <div>当前 contextTokens<br><b id="tCur">0</b></div>
+        <div>keepRecentTokens<br><b>20,000</b></div>
+        <div>已压缩次数<br><b id="tCmp">0</b></div>
+        <div style="color:var(--accent-deep)" id="tState">待命</div>
+      </div>
+    </div>
+    <div class="tank-log" id="tankLog"><div class="lg cm"># 新会话 · settings: reserve=16k, keepRecent=20k</div></div>
+    <div class="tank-ctrl">
+      <button class="sim-btn" id="tankWork">继续工作 +18k tok</button>
+      <button class="sim-btn ghost" id="tankReset">↺ 重置</button>
+      <span class="sim-count" id="tankCount">turn 0</span>
+    </div>
+  </div>
+
+  <div class="note warn"><b>⚠ 注意看第一次压缩之后的第二次压缩</b>
+    二次压缩的总结范围<strong>不是从上一条 cmp 条目开始</strong>，而是回退到上次压缩的 firstKeptEntryId——上次幸存的消息会再次进入这次摘要。这样「幸存区」永远完整地被重新评估，代价是摘要输入略大。
+  </div>
+
+  <div class="checkpoint" data-ch="2">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="cm2a"><div class="ckpt-box">✓</div><div class="ckpt-text">在模拟器里至少跑出一次压缩，并说出切点两侧各是什么</div></div>
+  </div>
+</section>
+
+<!-- ======================= 03 扩展钩子 ======================= -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">地基：三个事件，把压缩的控制权交了出去</h2></div>
+  <p class="lede">原生逻辑之所以敢写得简单，是因为 pi 把「策略」全部外挂给了扩展系统。五个社区插件，全都是从这三扇门进来的。</p>
+
+  <table>
+    <tr><th>扩展事件</th><th>触发时机</th><th>能做什么</th></tr>
+    <tr>
+      <td><code>session_before_compact</code></td>
+      <td>自动压缩或 <code>/compact</code> 执行前</td>
+      <td>拿到 preparation 全量参数（messagesToSummarize / previousSummary / firstKeptEntryId / reason），<strong>返回 cancel 取消压缩</strong>，或返回自己的 <code>{ summary, firstKeptEntryId, details }</code> 整个替换掉官方摘要</td>
+    </tr>
+    <tr>
+      <td><code>session_compact_failed</code></td>
+      <td>压缩失败 / 被取消后</td>
+      <td>遥测与善后：区分 manual / threshold / overflow 三种 reason，感知 willRetry 与 fromExtension</td>
+    </tr>
+    <tr>
+      <td><code>session_before_tree</code></td>
+      <td><code>/tree</code> 切分支前（必发）</td>
+      <td>取消导航，或在用户同意时提供自定义 BranchSummary</td>
+    </tr>
+  </table>
+
+  <div class="codewrap"><span class="filetab">扩展侧 · 接管压缩的最小骨架</span>
+<pre><code>pi.<span class="fn">on</span>(<span class="st">"session_before_compact"</span>, <span class="kw">async</span> (event, ctx) =&gt; {
+  <span class="kw">const</span> { preparation, reason } = event;
+
+  <span class="cm">// serializeConversation 把消息转成纯文本，喂给自己的模型</span>
+  <span class="kw">const</span> text = <span class="fn">serializeConversation</span>(
+    <span class="fn">convertToLlm</span>(preparation.messagesToSummarize));
+
+  <span class="kw">const</span> { summary, usage } = <span class="kw">await</span> myModel.<span class="fn">summarize</span>(text);
+
+  <span class="kw">return</span> { compaction: {
+    summary,
+    firstKeptEntryId: preparation.firstKeptEntryId,
+    tokensBefore: preparation.tokensBefore,
+    usage,                       <span class="cm">// 计入 session 总消耗</span>
+    details: { mine: <span class="st">"任意 JSON"</span> }
+  }};
+});</code></pre></div>
+
+  <div class="note"><b>✦ 设计启示</b>
+    「机制下沉、策略上浮」在压缩这件事上体现得最彻底：内核只负责<em>何时</em>触发和<em>如何安全落盘</em>，<em>总结什么</em>完全留给扩展。后面五个插件，本质上是五种不同的内容选择策略。
+  </div>
+
+  <details class="quiz"><summary>自测：扩展返回自定义摘要时，为什么必须带上 firstKeptEntryId？</summary>
+    <div class="ans">摘要只回答「过去发生了什么」，但「接下来还看得见什么」由 firstKeptEntryId 定义。落盘时会话重建上下文依赖它找到保留区的起点。不带这个字段，内核无法保证你的摘要和保留消息无缝拼在一起。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="3">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="cm3a"><div class="ckpt-box">✓</div><div class="ckpt-text">能画出扩展接管压缩的数据流：事件 → preparation → 自定义 summary → 落盘</div></div>
+  </div>
+</section>
+
+<!-- ======================= 04 五派插件 ======================= -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">江湖：五个插件，五种内容哲学</h2></div>
+  <p class="lede">同一个「上下文要满了」的问题，社区给出了五份截然不同的答卷。先看总表，再逐个拆。</p>
+
+  <table>
+    <tr><th>插件</th><th>流派</th><th>一句话主张</th><th>接管方式</th></tr>
+    <tr><td><strong>pai-acp</strong></td><td>遗忘流派</td><td>让模型自己决定忘什么，忘掉的还能搜回来</td><td>拦 context 事件，<strong>取消</strong>原生压缩，自己当唯一管理者</td></tr>
+    <tr><td><strong>alpertarhan/pi-smart-compact</strong></td><td>备忘录流派</td><td>保住目标、改动文件、错误、决策、未完成事项</td><td>参与 session_before_compact，验证式四段管线</td></tr>
+    <tr><td><strong>ttttmr/pi-context</strong></td><td>版本管理流派</td><td>上下文当 Git 管：checkpoint / timeline / 选择性 compact</td><td>不发钩子，给模型三件工具让它主动经营历史</td></tr>
+    <tr><td><strong>@hypabolic/pi-hypa (Hypa)</strong></td><td>源头拦截流派</td><td>最好的压缩是从一开始就不让垃圾进来</td><td>改写 shell/file 工具，输出进门之前先瘦</td></tr>
+    <tr><td><strong>@sunnyx11/pi-press</strong></td><td>预热流派</td><td>提前在后台算好摘要，压缩瞬间完成切换</td><td>不改摘要内容，只把「等待时间」搬走</td></tr>
+  </table>
+
+  <h3>pai-acp — 遗忘是模型的工作，不是代码的工作</h3>
+  <p>别的方案都在替模型做决定，pai-acp 把 <code>compress</code> 工具直接发给模型：每条消息带一个隐形 <code>&lt;acp&gt;</code> 引用标号，模型自己挑范围压缩、自己决定何时压。<strong>Pi 内置自动压缩会被它取消</strong>——它是唯一的上下文管理者。</p>
+  <ul class="plain">
+    <li><strong>多级蒸馏</strong>：摘要还能再被压缩（T1→T2→T3），上下文长期稳定在十几万 token 以内，单会话可连续干几个月。</li>
+    <li><strong>可逆</strong>：<code>decompress</code> 解开某个块；<code>search_context</code> 不解包就能搜已压缩内容——忘了 ≠ 丢了。</li>
+    <li><strong>保护区</strong>：compress 调用本身、最后 N 条近期消息、最后一条用户消息永不被压缩。</li>
+    <li>附带 <code>acp_delegate</code>：任务派给干净上下文的子进程，父上下文只收「标题 + 结果文件路径」。</li>
+  </ul>
+
+  <h3>pi-smart-compact — 先提炼意图，再逐个审判工具调用</h3>
+  <p>默认压缩「一视同仁地有损」。这个插件用两阶段 LLM 流程做定向取舍：</p>
+  <div class="codewrap"><span class="filetab">两阶段管线</span>
+<pre><code>Phase 1 · 意图提取
+  只取 user + assistant 文字（滤掉工具噪音）
+    → LLM：「用户在重构 auth 模块，JWT 迁移到 session cookie，
+       5 个文件已完成 3 个」
+
+Phase 2 · 工具判决（batch=20/次）
+  [read  src/auth/jwt.ts]   → ✗ 丢弃   <span class="cm">// 已消费的探索</span>
+  [edit  src/auth/cookie.ts] → ✓ 保留   <span class="cm">// 改动即证据</span>
+  [bash  npm test]           → ✓ 保留末次 <span class="cm">// 验证状态</span>
+  [grep  "import auth"]      → ✗ 丢弃
+
+产物 = 意图摘要 + 幸存工具结果 + 文件追踪</code></pre></div>
+  <p>推荐用便宜快模型（glm-4-flash 一类）跑这两个阶段——这是分类/摘要活儿，不是推理活儿。另有 alpertarhan 的同名变体走得更远：确定性抽取 → 探索 → 综合 → <strong>校验</strong>，「tests passed」这类高风险结论必须在源消息里找得到原文，否则整份摘要在落地前就被拒收。</p>
+
+  <h3>pi-context — 给对话历史装上 Git</h3>
+  <p>思路来自 kimi-cli 的 d-mail：与其等压缩，不如让 Agent 主动经营历史。三个工具构成一套「对话版版本控制」：</p>
+  <table>
+    <tr><th>工具</th><th>类比</th><th>作用</th></tr>
+    <tr><td><code>context_checkpoint</code></td><td>git tag</td><td>给有意义的节点打语义锚点名（如 <code>parser-fix-start</code>）</td></tr>
+    <tr><td><code>context_timeline</code></td><td>git log</td><td>查看活动路径的结构地图：检查点、压缩点、分支、当前位置</td></tr>
+    <tr><td><code>context_compact</code></td><td>选择性 rebase</td><td>从某个早期 checkpoint 开出「摘要续接分支」，噪音路径留在原地</td></tr>
+  </table>
+  <p>作者特意改名去 Git 化：<code>context_checkout</code> 改叫 compact，因为这些操作只管<strong>对话历史</strong>，不动仓库、进程和远程状态。配套 <code>/acm</code> 开启、<code>/context</code> 可视化 token 分布。</p>
+
+  <h3>Hypa (@hypabolic/pi-hypa) — 别让垃圾进门</h3>
+  <p>前四种都在讨论「怎么处理已经进来的上下文」，Hypa 把战场前移到<strong>入口</strong>：shell 命令通过 <code>hypa -c</code> 执行，构建/lint/k8s/docker 等几十类工具的输出经过确定性 reducer 和 DSL 过滤器后才回到 agent 手里，全程本地无 LLM：</p>
+  <div class="codewrap"><span class="filetab">hypa 输出 · 自带账单</span>
+<pre><code>$ hypa dotnet build
+<span class="cm">(压缩后的高信号输出……)</span>
+[hypa: 1200→340 tok, -72%, reducer=dotnet-build]
+
+<span class="cm"># 失败/截断时完整原始输出 tee 到 ~/.hypa/artifacts/</span>
+<span class="cm"># 上下文里留小票，证据在地窖 —— 要翻旧账随时读得回来</span></code></pre></div>
+  <p>token 记账用 o200k_base 精确计算存进本地 SQLite。它的赌注是：<strong>压缩是有损的止损，源头减噪才是无损的赚</strong>。</p>
+
+  <h3>pi-press — 压缩不该有停顿</h3>
+  <p>以上方案都在改「压什么」，pi-press 改的是「<strong>什么时候压</strong>」：上下文到 80%（可配 softThresholdPercent）就开始后台预生成摘要，provider 后续请求先用「虚拟上下文」（摘要 + 未压尾部）顶上；agent 停稳后 pi 再写入正式 CompactionEntry。正式压缩那一刻几乎零等待。</p>
+  <ul class="plain">
+    <li>虚拟上下文只影响发给模型的请求，<strong>不改内部消息和 session 文件</strong>——正式压缩、恢复、分支仍全是原生实现。</li>
+    <li>同一压缩周期内可增量刷新检查点，避免长工具调用期间虚拟尾巴越拖越长。</li>
+    <li>代价：额外的 provider 请求和 token 消耗——本质是「花钱买不停机」。</li>
+  </ul>
+
+  <details class="quiz"><summary>自测：五个插件里谁动了原生 CompactionEntry 的内容，谁完全没动？</summary>
+    <div class="ans">pai-acp 和 pi-smart-compact 通过 session_before_compact <strong>替换摘要内容</strong>；pi-context 不碰钩子，靠模型主动调 context_compact 间接产生新分支；pi-press 内容照旧，只改变时机；Hypa 最彻底——它在工具输出入口就把体积降下来，让压缩尽量根本不用发生。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="4">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="cm4a"><div class="ckpt-box">✓</div><div class="ckpt-text">不看表能复述五派的流派名和核心机制</div></div>
+    <div class="ckpt-item" data-key="cm4b"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出 pai-acp 为什么必须取消原生压缩才能工作</div></div>
+  </div>
+</section>
+
+<!-- ======================= 05 光谱图 ======================= -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">全景：干预时机光谱</h2></div>
+  <p class="lede">把五个插件放回同一条时间轴上，分歧立刻清晰：越早介入越省 token，越晚介入信息越全。没有最优解，只有你愿意在哪一站上车。</p>
+
+  <figure class="diagram">
+  <svg viewBox="0 0 880 330" role="img" aria-label="五派干预时机光谱">
+    <defs>
+      <marker id="arS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+    </defs>
+    <line x1="60" y1="270" x2="820" y2="270" class="dg-line" marker-end="url(#arS)"/>
+    <text x="80" y="295" class="dg-sub">早 · 省 token</text>
+    <text x="720" y="295" class="dg-sub">晚 · 信息全</text>
+
+    <line x1="150" y1="255" x2="150" y2="285" stroke="#c2491d" stroke-width="1.5"/>
+    <text x="150" y="308" text-anchor="middle" class="dg-lbl-ink">工具输出诞生时</text>
+    <circle cx="150" cy="270" r="13" fill="#f7e3d8" stroke="#c2491d" stroke-width="2"/>
+    <text x="150" y="275" text-anchor="middle" style="font:700 11px 'SF Mono',monospace" fill="#8f3512">Hy</text>
+    <text x="150" y="235" text-anchor="middle" class="dg-title">Hypa</text>
+    <text x="150" y="218" text-anchor="middle" class="dg-sub">源头减噪 · 确定性</text>
+
+    <line x1="310" y1="255" x2="310" y2="285" stroke="#c2491d" stroke-width="1.5"/>
+    <text x="310" y="308" text-anchor="middle" class="dg-lbl-ink">随时 · 模型主动</text>
+    <circle cx="310" cy="270" r="13" fill="#dde8dd" stroke="#3d7a44" stroke-width="2"/>
+    <text x="310" y="275" text-anchor="middle" style="font:700 11px 'SF Mono',monospace" fill="#3d7a44">Ctx</text>
+    <text x="310" y="235" text-anchor="middle" class="dg-title">pi-context</text>
+    <text x="310" y="218" text-anchor="middle" class="dg-sub">checkpoint + 选择性 compact</text>
+
+    <line x1="470" y1="255" x2="470" y2="285" stroke="#c2491d" stroke-width="1.5"/>
+    <text x="470" y="308" text-anchor="middle" class="dg-lbl-ink">80% 水位</text>
+    <circle cx="470" cy="270" r="13" fill="#eee3cd" stroke="#a8681c" stroke-width="2"/>
+    <text x="470" y="275" text-anchor="middle" style="font:700 11px 'SF Mono',monospace" fill="#a8681c">Pr</text>
+    <text x="470" y="235" text-anchor="middle" class="dg-title">pi-press</text>
+    <text x="470" y="218" text-anchor="middle" class="dg-sub">后台预压 · 切换零停顿</text>
+
+    <line x1="600" y1="255" x2="600" y2="285" stroke="#c2491d" stroke-width="1.5"/>
+    <text x="600" y="308" text-anchor="middle" class="dg-lbl-ink">阈值 / 手动</text>
+    <circle cx="600" cy="270" r="13" fill="#e2ecdd" stroke="#3d7a44" stroke-width="2"/>
+    <text x="600" y="275" text-anchor="middle" style="font:700 11px 'SF Mono',monospace" fill="#3d7a44">Sm</text>
+    <text x="600" y="235" text-anchor="middle" class="dg-title">pi-smart-compact</text>
+    <text x="600" y="218" text-anchor="middle" class="dg-sub">意图 + 工具审判 · 校验兜底</text>
+
+    <line x1="750" y1="255" x2="750" y2="285" stroke="#c2491d" stroke-width="1.5"/>
+    <text x="750" y="308" text-anchor="middle" class="dg-lbl-ink">持续 · 每轮</text>
+    <circle cx="750" cy="270" r="13" fill="#f3dede" stroke="#a83232" stroke-width="2"/>
+    <text x="750" y="275" text-anchor="middle" style="font:700 11px 'SF Mono',monospace" fill="#a83232">ACP</text>
+    <text x="750" y="235" text-anchor="middle" class="dg-title">pai-acp</text>
+    <text x="750" y="218" text-anchor="middle" class="dg-sub">模型自治遗忘 · 多级蒸馏</text>
+
+    <rect x="60" y="40" width="380" height="52" rx="8" class="dg-box"/>
+    <text x="78" y="62" class="dg-title">原生 compaction</text>
+    <text x="78" y="80" class="dg-sub">所有插件的公共地基：触发器 + 安全落盘 + 摘要格式</text>
+    <path d="M250,94 V160" class="dg-dim" marker-end="url(#arS)"/>
+    <rect x="60" y="162" width="380" height="46" rx="8" fill="#efe9dd" stroke="#d8cfbd"/>
+    <text x="78" y="182" class="dg-sub">五个插件全部生长在这层地基之上：</text>
+    <text x="78" y="199" class="dg-sub">或换内容，或换时机，或干脆不让垃圾到达这一步</text>
+  </svg>
+  <figcaption>fig.02 — 干预越早越省 token、越晚信息越全；原生层永远是大家共享的安全网</figcaption>
+  </figure>
+
+  <div class="note ok"><b>✦ 组合拳</b>
+    这些方案并不互斥。一个务实的长会话配置可能是：Hypa 在门口减噪（省 60–90% 工具 token）+ pi-press 消除压缩停顿 + 保留原生压缩做最后兜底。而 pai-acp 用户则相反——它要求独占上下文管理权，装它就别再叠其他压缩插件。
+  </div>
+
+  <div class="checkpoint" data-ch="5">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="cm5a"><div class="ckpt-box">✓</div><div class="ckpt-text">能把五个插件摆到光谱的正确位置，并说出一组可行的组合</div></div>
+  </div>
+</section>
+
+<!-- ======================= 06 判定小游戏 ======================= -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">实操：你来当一次 smart-compact 的法官</h2></div>
+  <p class="lede">场景：用户正在把 auth 模块从 JWT 迁移到 session cookie。下面 6 条历史工具调用，哪些该在压缩中幸存？点击 KEEP 或 DROP，看看和 Phase 2 判决的一致率。</p>
+
+  <div class="verdict">
+    <div class="vd-intent">
+      <div class="lbl">Phase 1 提炼出的意图摘要</div>
+      <p>用户在重构 auth 模块：JWT → session cookie 迁移。已完成 3/5 个文件，下一步改 cookie.ts 的中间件，然后跑测试回归。</p>
+    </div>
+    <div class="vd-cards" id="vdCards"></div>
+    <div class="vd-foot">
+      <button class="sim-btn" id="vdSubmit" disabled>对答案</button>
+      <button class="sim-btn ghost" id="vdRestart" style="display:none">↺ 再来一局</button>
+      <span class="vd-score" id="vdScore"></span>
+      <span class="q-verdict" id="vdVerdict"></span>
+    </div>
+  </div>
+
+  <div class="checkpoint" data-ch="6">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="cm6a"><div class="ckpt-box">✓</div><div class="ckpt-text">6 题全对，并能给每题说出一句理由</div></div>
+  </div>
+</section>
+
+<!-- ======================= 07 选型 ======================= -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">选型：你的会话该请哪位管家</h2></div>
+  <p class="lede">没有银弹。按你最痛的症状对症下单。</p>
+
+  <table>
+    <tr><th>症状</th><th>处方</th><th>代价</th></tr>
+    <tr><td>每次压缩后就「失忆」，反复重读文件、重复犯错</td><td><strong>pi-smart-compact</strong>：意图 + 关键工具结果存活</td><td>每次压缩多几次廉价 LLM 调用</td></tr>
+    <tr><td>超长会话（周级），压缩摘要摞摘要还是爆</td><td><strong>pai-acp</strong>：多级蒸馏保持有界 + 可搜索</td><td>独占上下文管理权，信任模型的取舍</td></tr>
+    <tr><td>想要精确控制「回到哪个时刻重来」</td><td><strong>pi-context</strong>：checkpoint / timeline / 选择性 compact</td><td>依赖模型自觉使用三件工具</td></tr>
+    <tr><td>构建/测试输出巨大且大部分是废话</td><td><strong>Hypa</strong>：源头确定性减噪</td><td>命令经一层包装，需维护过滤器信任</td></tr>
+    <tr><td>压缩瞬间的停顿打断心流 / 自动化流水线</td><td><strong>pi-press</strong>：后台预热摘要</td><td>额外 provider 请求与 token 费用</td></tr>
+    <tr><td>轻度使用，没觉得痛</td><td><strong>什么都不装</strong>：原生 compaction 已经够好</td><td>无</td></tr>
+  </table>
+
+  <div class="note danger"><b>⚠ 互斥提醒</b>
+    pai-acp 会取消 Pi 内置自动压缩、自立为王——它和其他任何接管 session_before_compact 的插件（如 pi-smart-compact auto 模式）同时安装会产生控制权冲突。混搭前先想清楚谁是唯一的上下文管理者。
+  </div>
+
+  <details class="quiz"><summary>自测：如果只能给「每天 8 小时长会话的重度用户」推荐一个，选谁？为什么？</summary>
+    <div class="ans">倾向 <strong>pai-acp</strong>：日级会话的核心痛点是摘要摞摘要后的累积失真和「忘了就永远丢了」，ACP 的多级蒸馏让上下文长期有界，decompress/search_context 又保证了遗忘可逆。若更在意成本可控和可解释性，pi-smart-compact manual 模式是稳妥的第二选择。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="7">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="cm7a"><div class="ckpt-box">✓</div><div class="ckpt-text">能给身边一个真实使用场景开出对应处方并说明代价</div></div>
+  </div>
+</section>
+
+<!-- ======================= 08 终极测验 ======================= -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">终极测验：5 题验收</h2></div>
+  <p class="lede">覆盖全部章节。答完看总分——4 题以上算出师。</p>
+
+  <div class="quizbox">
+    <div class="quiz-head">
+      <span class="qt">final exam · pi context management</span>
+      <span class="quiz-score" id="quizScore">0 / 5</span>
+    </div>
+    <div class="quiz-body">
+      <div class="q-no" id="qNo">QUESTION 1 / 5</div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div class="q-exp" id="qExp"></div>
+    </div>
+    <div class="quiz-foot">
+      <button class="sim-btn" id="qSubmit" disabled>确认答案</button>
+      <button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button>
+      <button class="sim-btn ghost" id="qRestart" style="display:none">↺ 重新考</button>
+      <span class="q-verdict" id="qVerdict"></span>
+    </div>
+  </div>
+
+  <footer class="colophon">
+    pi 上下文管理 · 基于 @earendil-works/pi-coding-agent 0.84.3 源码与 docs/compaction.md，插件资料来自 pai-acp / catlain &amp; alpertarhan pi-smart-compact / ttttmr pi-context / Hypabolic Hypa / sunnyx11 pi-press 各自 README · know-as-ui collection
+  </footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ---------- TOC 构建 ---------- */
+const chapters=[...document.querySelectorAll("section.chapter")];
+const toc=document.getElementById("toc");
+const names=["原生压缩","水位模拟器","扩展钩子","五派插件","干预光谱","压缩法官","选型指南","终极测验"];
+chapters.forEach((sec,i)=>{
+  const a=document.createElement("a");
+  a.href="#"+sec.id;
+  a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;
+  toc.appendChild(a);
+});
+
+/* ---------- Scrollspy + 进度条 ---------- */
+const links=[...toc.querySelectorAll("a")];
+const fill=document.getElementById("progFill");
+const label=document.getElementById("progLabel");
+function updateSpy(){
+  const y=scrollY+120;
+  let cur=0;
+  chapters.forEach((sec,i)=>{ if(sec.offsetTop<=y) cur=i; });
+  links.forEach((l,i)=>l.classList.toggle("active",i===cur));
+  const total=chapters.length;
+  const passed=Math.min(cur+1,total);
+  fill.style.width=(passed/total*100)+"%";
+  label.textContent=`${passed} / ${total} 章`;
+}
+addEventListener("scroll",updateSpy,{passive:true});
+addEventListener("resize",updateSpy);
+updateSpy();
+
+/* ---------- 代码复制 ---------- */
+document.querySelectorAll(".copybtn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const code=btn.parentElement.querySelector("pre").innerText;
+    navigator.clipboard.writeText(code).then(()=>{
+      btn.textContent="copied ✓";btn.classList.add("done");
+      setTimeout(()=>{btn.textContent="copy";btn.classList.remove("done");},1400);
+    });
+  });
+});
+
+/* ---------- 打卡（localStorage） ---------- */
+const CKPT_KEY="pi-context-management-handbook-checkpoints";
+let ckpt={};
+try{ ckpt=JSON.parse(localStorage.getItem(CKPT_KEY)||"{}"); }catch(e){}
+function saveCkpt(){ try{localStorage.setItem(CKPT_KEY,JSON.stringify(ckpt));}catch(e){} }
+document.querySelectorAll(".ckpt-item").forEach(item=>{
+  if(ckpt[item.dataset.key]) item.classList.add("done");
+  item.addEventListener("click",()=>{
+    item.classList.toggle("done");
+    ckpt[item.dataset.key]=item.classList.contains("done");
+    saveCkpt();
+  });
+});
+
+/* ---------- 第02章 · 水位模拟器 ---------- */
+const WINDOW=128000, RESERVE=16384, KEEP_RECENT=20000, TURN=18000;
+let tTok=0,tTurns=0,tCmps=0,lastKeptStart=null; // lastKeptStart: 上次压缩时保留区的起点水位
+const $fill=document.getElementById("tankFill"),$cur=document.getElementById("tCur"),
+      $state=document.getElementById("tState"),$log=document.getElementById("tankLog"),
+      $cnt=document.getElementById("tankCount"),$cmp=document.getElementById("tCmp"),
+      $thresh=document.getElementById("tankThresh");
+$thresh.style.top=((1-(WINDOW-RESERVE)/WINDOW)*100)+"%";
+function logLine(txt,cls){
+  const d=document.createElement("div");
+  d.className="lg"+(cls?" "+cls:"");
+  d.textContent=txt;
+  $log.appendChild(d);$log.scrollTop=$log.scrollHeight;
+}
+function renderTank(){
+  const pct=Math.min(tTok/WINDOW*100,100);
+  $fill.style.height=pct+"%";
+  $fill.classList.toggle("over",tTok>WINDOW-RESERVE);
+  $cur.textContent=tTok.toLocaleString();
+  $cmp.textContent=tCmps;
+  $cnt.textContent=`turn ${tTurns}`;
+  if(tTok>WINDOW-RESERVE)$state.textContent="⚠ 越过阈值";
+  else $state.textContent=`${(tTok/WINDOW*100).toFixed(0)}% 水位`;
+}
+function doCompact(){
+  // 从最新往回累积 keepRecentTokens 找切点
+  tCmps++;
+  const before=tTok;
+  const keptFrom=Math.max(tTok-KEEP_RECENT,0);          // 保留区起点
+  const summarizeEnd=lastKeptStart===null?keptFrom:lastKeptStart; // 二次压缩回退到上次 kept 起点
+  logLine(`[threshold] contextTokens ${before.toLocaleString()} > ${(WINDOW-RESERVE).toLocaleString()}，触发压缩`,"warn");
+  logLine(`findCutPoint: 回退累积至 keepRecent=${(KEEP_RECENT/1000)}k，切点 = ${(keptFrom/1000).toFixed(0)}k 处`,"act");
+  logLine(`serializeConversation(messages ≤ ${(summarizeEnd/1000).toFixed(0)}k)，toolResult 截断 2000 chars`,"act");
+  logLine(`LLM 生成结构化摘要 → 追加 CompactionEntry #${tCmps}（firstKeptEntryId @${(keptFrom/1000).toFixed(0)}k, tokensBefore=${before.toLocaleString()}）`,"act");
+  logLine(`重建上下文：system + summary + [${(keptFrom/1000).toFixed(0)}k …] ≈ ${((before-keptFrom)/1000).toFixed(0)}k tokens`,"cm");
+  logLine(`# 原始条目仍在 session 树里，只是不再发出`,"cm");
+  tTok=before-keptFrom;
+  lastKeptStart=keptFrom;
+}
+document.getElementById("tankWork").onclick=()=>{
+  tTurns++;
+  tTok+=TURN+(Math.floor(Math.random()*4000)-2000);
+  logLine(`turn ${tTurns}: user+assistant+toolResults 写入，contextTokens → ${tTok.toLocaleString()}`);
+  if(tTok>WINDOW-RESERVE){ doCompact(); }
+  renderTank();
+};
+document.getElementById("tankReset").onclick=()=>{
+  tTok=0;tTurns=0;tCmps=0;lastKeptStart=null;
+  $log.innerHTML='<div class="lg cm"># 新会话 · settings: reserve=16k, keepRecent=20k</div>';
+  renderTank();
+};
+renderTank();
+
+/* ---------- 第06章 · 压缩法官 ---------- */
+const CALLS=[
+ {call:'edit src/auth/middleware.ts  (+42 −17)', keep:true,
+  why:"改动过的文件是「外部世界状态」的证据——丢了它，agent 会以为自己还没改过。"},
+ {call:'read src/auth/jwt.ts  (340 行)', keep:false,
+  why:"典型的已消费探索：读完的结论已融进后续动作，原文不再需要。"},
+ {call:'bash npm test  → 3 failed (cookie expiry)', keep:true,
+  why:"最近的验证状态必须存活——「还有 3 个失败」决定了下一步做什么。"},
+ {call:'grep -r "verifyToken(" src/  (11 hits)', keep:false,
+  why:"搜索中间产物，消费完即可弃。真需要时重 grep 的代价很低。"},
+ {call:'user: 「session 过期时间改成 7 天，别用 24h」', keep:true,
+  why:"用户约束永远保留——这其实是最后一条用户消息，连 pai-acp 都硬保护它。"},
+ {call:'read cookie 文档 MDN Set-Cookie  (节选)', keep:false,
+  why:"参考资料类输出，量大、可再生。Phase 2 的典型 DROP 对象。"}
+];
+let vdPicked={}; // idx -> true(K)/false(D)
+const $cards=document.getElementById("vdCards"),$vSub=document.getElementById("vdSubmit"),
+      $vRst=document.getElementById("vdRestart"),$vScore=document.getElementById("vdScore"),
+      $vVer=document.getElementById("vdVerdict");
+CALLS.forEach((c,i)=>{
+  const d=document.createElement("div");
+  d.className="vd-card";d.dataset.i=i;
+  d.innerHTML=`<span class="vd-call">${c.call.replace(/</g,"&lt;")}</span>
+    <span class="vd-btns"><button class="vd-btn k">KEEP</button><button class="vd-btn d">DROP</button></span>
+    <span class="vd-why"></span>`;
+  d.querySelector(".k").onclick=()=>pick(i,true,d);
+  d.querySelector(".d").onclick=()=>pick(i,false,d);
+  $cards.appendChild(d);
+});
+function pick(i,val,card){
+  vdPicked[i]=val;
+  card.classList.toggle("keep",val);
+  card.classList.toggle("drop",!val);
+  $vSub.disabled=Object.keys(vdPicked).length<CALLS.length;
+}
+$vSub.onclick=()=>{
+  let score=0;
+  [...$cards.children].forEach(card=>{
+    const i=+card.dataset.i,c=CALLS[i],right=(vdPicked[i]===c.keep);
+    if(right)score++;
+    card.classList.add(right?"right":"wrong","locked");
+    card.querySelector(".vd-why").textContent=(right?"✓ ":"✗ 应当")+(c.keep?"KEEP · ":"DROP · ")+c.why;
+  });
+  $vScore.textContent=`一致率 ${score} / ${CALLS.length}`;
+  $vVer.textContent=score>=5?"合格法官 ⚖":"回去重读第04章";
+  $vVer.className="q-verdict "+(score>=5?"ok":"bad");
+  $vSub.style.display="none";$vRst.style.display="";
+};
+$vRst.onclick=()=>{
+  vdPicked={};
+  [...$cards.children].forEach(c=>{c.className="vd-card";});
+  $vScore.textContent="";$vVer.textContent="";
+  $vSub.style.display="";$vSub.disabled=true;$vRst.style.display="none";
+};
+
+/* ---------- 第08章 · 终极测验 ---------- */
+const QUESTIONS=[
+ {q:"原生压缩触发条件 contextTokens > contextWindow − reserveTokens 中，reserveTokens 的默认值是？",
+  o:["4,096","16,384","20,000","上下文窗口的一半"],
+  a:1,ex:"16384 是给模型回复预留的座位；20000 是另一个参数 keepRecentTokens（最近多少 token 永不总结）。两个数字经常被记混。"},
+ {q:"压缩的切点（firstKeptEntryId）绝对不能落在哪种消息上？",
+  o:["assistant 消息","custom 消息","toolResult","user 消息"],
+  a:2,ex:"toolResult 必须和发起它的 toolCall 同生共死，否则下一轮请求直接违反 Provider API 配对约束。合法切点是 user / assistant / bash 执行 / custom。"},
+ {q:"pi-context 的 context_compact 和 git checkout 最本质的区别是？",
+  o:["它更快","它只操作对话历史的视图，不回滚文件、进程和远程状态","它可以撤销 git 操作","它把历史永久删除"],
+  a:1,ex:"作者特意把 context_checkout 改名为 compact：上下文导航不修改仓库文件、运行中的进程、浏览器状态或远程服务。它管理的是对话，不是代码版本。"},
+ {q:"pai-acp 让上下文「忘了但不丢」靠的是哪组工具？",
+  o:["undo + redo","snapshot + restore","decompress + search_context","compact + expand"],
+  a:2,ex:"compress 出去的块带标签保存，decompress 可整体解开，search_context 无需解包即可按关键词搜索已压缩内容。遗忘是可逆、可检索的。"},
+ {q:"pi-press 的「虚拟上下文」指的是？",
+  o:["把摘要预写给用户看的草稿","仅作用于发往 provider 的请求：摘要 + 未压尾部，不改动内部消息和 session 文件","清空上下文后的占位数","压缩后腾出的空闲空间"],
+  a:1,ex:"pi-press 从不修改 Pi 内部消息或 session entry——虚拟上下文只是让后续请求提前用上「预生成的摘要 + 当前尾部」。正式压缩、恢复、分支管理仍走原生实现。"}
+];
+let qi=0,qScore=0,qPicked=-1,qDone=false;
+const $qNo=document.getElementById("qNo"),$qText=document.getElementById("qText"),$qOpts=document.getElementById("qOpts"),
+      $qExp=document.getElementById("qExp"),$qSub=document.getElementById("qSubmit"),$qNxt=document.getElementById("qNext"),
+      $qRst=document.getElementById("qRestart"),$qVer=document.getElementById("qVerdict"),$qScoreEl=document.getElementById("quizScore");
+function loadQ(){
+  qPicked=-1;qDone=false;
+  const Q=QUESTIONS[qi];
+  $qNo.textContent=`QUESTION ${qi+1} / ${QUESTIONS.length}`;
+  $qText.textContent=Q.q;
+  $qExp.classList.remove("show");$qExp.innerHTML="";
+  $qVer.textContent="";$qVer.className="q-verdict";
+  $qSub.disabled=true;$qSub.style.display="";$qNxt.style.display="none";$qRst.style.display="none";
+  $qOpts.innerHTML="";
+  Q.o.forEach((opt,i)=>{
+    const b=document.createElement("div");
+    b.className="q-opt";b.textContent=String.fromCharCode(65+i)+". "+opt;
+    b.onclick=()=>{
+      if(qDone)return;
+      qPicked=i;
+      [...$qOpts.children].forEach((c,j)=>c.classList.toggle("picked",j===i));
+      $qSub.disabled=false;
+    };
+    $qOpts.appendChild(b);
+  });
+}
+$qSub.onclick=()=>{
+  if(qPicked<0||qDone)return;
+  qDone=true;
+  const Q=QUESTIONS[qi],right=qPicked===Q.a;
+  [...$qOpts.children].forEach((c,j)=>{
+    c.classList.remove("picked");c.classList.add("locked");
+    if(j===Q.a)c.classList.add("right");
+    else if(j===qPicked)c.classList.add("wrong");
+  });
+  $qExp.innerHTML=(right?"✓ 答对了。":"✗ 正确答案是 "+String.fromCharCode(65+Q.a)+"。")+Q.ex;
+  $qExp.classList.add("show");
+  if(right)qScore++;
+  $qScoreEl.textContent=`${qScore} / ${QUESTIONS.length}`;
+  $qVer.textContent=right?"正确 ✓":"再想想 ✗";
+  $qVer.className="q-verdict "+(right?"ok":"bad");
+  $qSub.style.display="none";
+  if(qi<QUESTIONS.length-1)$qNxt.style.display="";
+  else{$qRst.style.display="";if(right&&qi===QUESTIONS.length-1){$qVer.textContent+=qScore>=4?" · 出师！🎉":" · 建议回去复习 01/04 章";}}
+};
+$qNxt.onclick=()=>{qi++;loadQ();};
+$qRst.onclick=()=>{qi=0;qScore=0;$qScoreEl.textContent="0 / 5";loadQ();};
+loadQ();
+</script>
+</body>
+</html>
