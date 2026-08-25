@@ -423,8 +423,29 @@
 
   <h3>两个容易忽略的防御性设计</h3>
 
-  <div class="note danger"><b>✗ length 截断 → 整批枪毙</b>
-    流式输出的 toolCall 参数是用「尽力抢救的 JSON 解析器」拼出来的。<code>stopReason === "length"</code>（撞到输出 token 上限）意味着参数<strong>可能静默截断却仍然解析合法</strong>——比如 <code>rm</code> 少了个目录。所以 pi 不尝试抢救，而是把本批所有 toolCall 全部判失败，附上「请重新发起完整调用」的错误信息，让模型自己重来。宁可浪费一轮，不赌一次误删。
+  <div class="note danger"><b>✗ length 截断 → 整批枪毙工具调用</b>
+    先把话说准：<code>stopReason === "length"</code> 指的不是「普通文本没说完」，而是<strong>模型在流式输出中途撞上输出 token 上限、被硬性打断</strong>——这次回复不是模型自愿收尾的，而断在哪里，模型自己感知不到也控制不了。最危险的断点，恰恰落在 toolCall 的参数 JSON 中间。
+  </div>
+
+  <p>为什么偏偏是工具调用遭殃？因为一次回复的 content 数组里，文本块和 toolCall 块<strong>都是靠流式 delta 一点点拼出来的</strong>。如果切断发生在参数 JSON 的中间，pi 又用「尽力抢救的 JSON 解析器」去拼接片段，被砍断的参数就<strong>有一定概率凑成一个语法合法、能通过解析的 JSON</strong>——但语法合法 ≠ 语义正确：</p>
+
+  <div class="codewrap"><span class="filetab">同一条 rm 命令，截断前后</span>
+<pre><code>模型想生成的参数    { <span class="st">"command"</span>: <span class="st">"rm -rf ./build/tmp"</span> }
+撞上限后被截成      { <span class="st">"command"</span>: <span class="st">"rm -rf ./"</span> }
+                    ↑ 解析器视角：语法完全合法，一声不吭
+                    实际语义：「删一个子目录」→「删当前目录下所有东西」</code></pre></div>
+
+  <p>而且你没有任何办法事后甄别——无法判断哪个字段是完整的、哪个是「截断后凑巧合法」。所以整批枪毙的推理链是一条直线：</p>
+
+  <table>
+    <tr><th style="width:34px">①</th><td><code>stopReason === "length"</code></td><td>回复是被砍断的，不是模型自愿收尾</td></tr>
+    <tr><th>②</th><td>批内所有 toolCall 参数都不可信</td><td>截断点未知，「完整」与「凑巧合法」无法区分</td></tr>
+    <tr><th>③</th><td>一次回复可带多个 toolCall</td><td>整批里只要有一个有截断风险，就足以造成事故</td></tr>
+    <tr><th>④</th><td><strong>全部判失败</strong>，错误信息喂回模型</td><td>让它重新完整生成一遍，下一轮照常继续</td></tr>
+  </table>
+
+  <div class="note warn"><b>⚠ 为什么只枪毙工具调用，不动文本</b>
+    <code>"length"</code> 本身只是「输出被截断」的通用信号。纯文本被截断顶多是话没说到头；而工具调用参数一旦不完整还照常执行，产生的是真实副作用（误删文件、误写配置）。风险等级完全不同，所以 pi 在这里选择了<strong>防御性悲观</strong>：宁可多浪费一轮 LLM 调用，绝不赌一次静默的参数错误被真实执行。
   </div>
 
   <div class="note ok"><b>✓ 错误是数据，不是异常</b>
@@ -480,6 +501,27 @@
   </svg>
   <figcaption>fig.05 — convertToLlm 是单向阀门：宽类型进窄类型出，且每个 turn 都重新执行</figcaption>
   </figure>
+
+  <h3>两道工序，到底是干什么的</h3>
+  <p><code>transformContext</code> 和 <code>convertToLlm</code> 都是 <code>streamAssistantResponse</code> 在<strong>每个 turn 开场时依次执行</strong>的消息加工钩子——一个可选、一个必需，作用完全不同：</p>
+
+  <div class="note ok"><b>✓ transformContext —— 可选的「最后一道加工」</b>
+    宽类型进、宽类型出。它拿到的是 pi 内部维护、可以包含任意自定义类型（渲染卡片等 custom 消息）的完整 <code>AgentMessage[]</code>，返回的还是同样宽的数组——只是可能被裁剪、重排或改写。典型用途是在正式转成 LLM 消息前做上下文层面的定制处理（如压缩、过滤某些内部消息）。<strong>不提供这个钩子就直接跳过。</strong>
+  </div>
+
+  <div class="note"><b>✦ convertToLlm —— 必需的「收窄阀门」</b>
+    把宽类型消息收窄成 LLM 真正认识的三种角色（user / assistant / toolResult）。这是一道单向阀门：<strong>每个 turn 都重新执行一次</strong>，不是只做一次缓存。默认实现会把非三种角色的消息（比如 custom）直接过滤掉——所以模型看不到它们，但它们仍保留在 session 历史和 UI 里。想让模型「看见」这类自定义消息？要么在业务层把内容并进一条 user 消息，要么自己实现一个把 custom 映射成 user 的 convertToLlm。
+  </div>
+
+  <table>
+    <tr><th>维度</th><th>transformContext</th><th>convertToLlm</th></tr>
+    <tr><td><strong>是否必需</strong></td><td>可选（不注册就跳过）</td><td>必需（没有它 LLM 无消息可吃）</td></tr>
+    <tr><td><strong>输入 / 输出</strong></td><td>宽类型 → 宽类型（AgentMessage[]）</td><td>宽类型 → 窄类型（只剩三种角色）</td></tr>
+    <tr><td><strong>执行顺序</strong></td><td>先执行</td><td>后执行（吃上一步的结果）</td></tr>
+    <tr><td><strong>典型用途</strong></td><td>上下文层面的自定义加工：裁剪、重排、改写内部消息</td><td>收窄成 Provider API 能接受的标准消息格式</td></tr>
+  </table>
+
+  <p>这个设计把「内部语义丰富的消息模型」和「LLM 只认三种角色」两件事解耦：边界清晰、每轮重新收窄，历史里就算塞进了模型看不懂的东西，也不会出现不可预期的行为。</p>
 
   <div class="codewrap"><span class="filetab">streamAssistantResponse · 每个 turn 的固定开场（节选）</span>
 <pre><code><span class="kw">async function</span> <span class="fn">streamAssistantResponse</span>(context, config, …) {

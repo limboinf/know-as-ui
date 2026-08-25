@@ -62,9 +62,19 @@
 <!-- ======================= 02 Subagent ======================= -->
 <section class="chapter" id="c2">
   <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">Subagent：主从星型，用完即毁的压缩器</h2></div>
-  <p class="lede">Subagent 是 orchestrator-worker 模式的基本单元：主 Agent 把任务派出去，子代理在<strong>自己的独立上下文窗口</strong>里干活，跑完只有最终结论被传回——中间过程随销毁一起消失。</p>
+  <p class="lede">Subagent 是 orchestrator-worker 模式的基本单元：主 Agent 把任务派出去，sub agents 在<strong>自己的独立上下文窗口</strong>里干活，跑完只有最终结论被传回——中间过程随销毁一起消失。</p>
 
-  <p>Anthropic 对它的价值有个精辟概括：<strong>搜索的本质是压缩</strong>。子代理并行探索海量信息，各自完成蒸馏，只把最重要的 token 送回主管。这就是 context isolation 的全部意义。</p>
+  <p><strong>Orchestrator-worker（编排者-工人）</strong>是从分布式系统借来的经典架构：一个 orchestrator 拿着完整任务，负责拆解、派发、汇总；多个 worker 各领一块子任务，干完只交结果。MapReduce 的 master-slave、微服务里的任务队列，骨子里都是这个形状。LLM Agent 把它借了过来，只是「工人」从进程换成了上下文窗口：</p>
+
+  <ul class="plain">
+    <li><strong>Orchestrator = 主 Agent</strong>：唯一持有全局上下文的角色，对用户始终保有最终答案的所有权</li>
+    <li><strong>Worker = sub agent</strong>：领到一段 prompt 和受限工具集，在自己的隔离上下文里自主执行，交付结论后即销毁</li>
+  </ul>
+
+  <div class="note"><b>✦ 三家官方文档，同一个模式的不同叫法</b>
+    OpenAI 的 Orchestration 文档称它为 <strong>manager pattern</strong>（管理者模式），与之相对的 decentralized pattern（去中心化模式）正是第 03 章 handoff 和 Agent Teams 的世界；Anthropic 在多 Agent 研究系统的工程博客里把主管叫 <strong>lead agent</strong>；Claude Code 的 Agent tool 则是这套模式最直接的落地——图 2-1 里那个标着 Orchestrator 的中心节点，就是它。</div>
+
+  <p>Anthropic 对它的价值有个精辟概括：<strong>搜索的本质是压缩</strong>。sub agents 并行探索海量信息，各自完成蒸馏，只把最重要的 token 送回主管。这就是 context isolation 的全部意义。</p>
 
   <div class="topo-box">
     <div class="topo-head"><span class="topo-tag">图 2-1</span>点击任意节点查看该角色的上下文状态</div>
@@ -113,13 +123,13 @@
   <span class="ty">subagent_type</span>: <span class="st">"Explore"</span>,          <span class="cm">// 预定义角色（受限工具集）</span>
   <span class="ty">prompt</span>: <span class="st">"调查 auth 模块的登录流程，输出 ≤500 字结论"</span>,
 });
-<span class="cm">// ② 子代理启动：全新空上下文，只有这段 prompt + 角色的工具集</span>
-<span class="cm">// ③ 子代理自主循环调工具 N 轮 —— 中间结果全部留在它自己的上下文里</span>
-<span class="cm">// ④ 子代理结束：只有 final message 作为 tool result 返回主 Agent</span>
-<span class="cm">// ⑤ 子代理销毁，上下文释放；主 Agent 上下文只增加了一段结论</span></pre>
+<span class="cm">// ② sub agents 启动：全新空上下文，只有这段 prompt + 角色的工具集</span>
+<span class="cm">// ③ sub agents 自主循环调工具 N 轮 —— 中间结果全部留在它自己的上下文里</span>
+<span class="cm">// ④ sub agents 结束：只有 final message 作为 tool result 返回主 Agent</span>
+<span class="cm">// ⑤ sub agents 销毁，上下文释放；主 Agent 上下文只增加了一段结论</span></pre>
   </div>
 
-  <p>OpenAI Agents SDK 里的等价物叫 <code>as_tool()</code>：把一个专家 agent 包装成主管手里的一个普通工具调用。<strong>发起调用、拿到返回值、继续掌控对话</strong>——子代理从头到尾只是主管的「有界能力」（bounded capability），而不是对话的接管者。</p>
+  <p>OpenAI Agents SDK 里的等价物叫 <code>as_tool()</code>：把一个专家 agent 包装成主管手里的一个普通工具调用。<strong>发起调用、拿到返回值、继续掌控对话</strong>——sub agents 从头到尾只是主管的「有界能力」（bounded capability），而不是对话的接管者。</p>
 </section>
 
 <!-- ======================= 03 Multi-Agent ======================= -->
@@ -142,19 +152,22 @@
   <p>实现上非常「工程师味儿」：<strong>发送消息 = 成功写入对方的 JSON inbox 文件</strong>。任务依赖自动管理——某队友完成任务后，依赖它的任务自动解锁。没有消息总线，没有中间件，就是文件读写。</p>
 
   <div class="topo-box">
-    <div class="topo-head"><span class="topo-tag">图 3-1</span>点击连线开关，对比星型 vs 网状的消息路径</div>
-    <svg id="meshSvg" viewBox="0 0 720 340" role="img" aria-label="Agent Teams 网状架构图">
-      <line class="edge mesh" x1="360" y1="170" x2="150" y2="80"/>
-      <line class="edge mesh" x1="360" y1="170" x2="570" y2="80"/>
-      <line class="edge mesh" x1="360" y1="170" x2="150" y2="270"/>
-      <line class="edge mesh" x1="360" y1="170" x2="570" y2="270"/>
-      <line class="edge p2p hot-edge" x1="150" y1="80" x2="570" y2="80"/>
-      <line class="edge p2p hot-edge" x1="150" y1="80" x2="150" y2="270"/>
-      <line class="edge p2p hot-edge" x1="570" y1="80" x2="570" y2="270"/>
-      <line class="edge p2p hot-edge" x1="150" y1="270" x2="570" y2="270"/>
-      <line class="edge p2p hot-edge" x1="150" y1="80" x2="570" y2="270"/>
-      <line class="edge p2p hot-edge" x1="570" y1="80" x2="150" y2="270"/>
-      <g transform="translate(270,125)">
+    <div class="topo-head"><span class="topo-tag">图 3-1</span>橙线 = 队友点对点直达 · 灰点线 = 共享文件系统读写</div>
+    <svg id="meshSvg" viewBox="0 0 720 412" role="img" aria-label="Agent Teams 网状架构图">
+      <!-- mesh edges: lead ↔ teammates -->
+      <line class="edge mesh" x1="360" y1="170" x2="150" y2="79"/>
+      <line class="edge mesh" x1="360" y1="170" x2="570" y2="79"/>
+      <line class="edge mesh" x1="360" y1="170" x2="150" y2="269"/>
+      <!-- infra edges: 共享文件系统 -->
+      <line class="edge infra" x1="330" y1="215" x2="200" y2="338"/>
+      <line class="edge infra" x1="150" y1="300" x2="150" y2="338"/>
+      <line class="edge infra" x1="570" y1="110" x2="560" y2="338"/>
+      <line class="edge infra" x1="225" y1="285" x2="440" y2="367"/>
+      <!-- p2p 直达通道 -->
+      <line class="edge p2p hot-edge" x1="150" y1="79" x2="570" y2="79"/>
+      <line class="edge p2p hot-edge" x1="150" y1="79" x2="150" y2="269"/>
+      <line class="edge p2p hot-edge" x1="570" y1="79" x2="150" y2="269"/>
+      <g class="mesh-hub" transform="translate(270,125)">
         <rect x="0" y="0" width="180" height="90" rx="10" class="hub-rect"/>
         <text x="90" y="36" class="tt">Team Lead</text>
         <text x="90" y="58" class="tm">创建队友 · 协调</text>
@@ -172,12 +185,18 @@
         <rect x="0" y="0" width="150" height="62" rx="9" class="mate-rect"/>
         <text x="75" y="27" class="tt">Teammate 测试</text><text x="75" y="47" class="tm">持久实例</text>
       </g>
-      <g transform="translate(495,238)">
-        <rect x="0" y="0" width="150" height="62" rx="9" class="mate-rect"/>
-        <text x="75" y="27" class="tt">共享 Task List</text><text x="75" y="47" class="tm">claim / 完成</text>
+      <g class="infra-node" transform="translate(60,338)">
+        <rect x="0" y="0" width="220" height="58" rx="9"/>
+        <text x="110" y="24" class="tt">共享 Task List</text>
+        <text x="110" y="44" class="tm">自行 claim · 依赖自动解锁</text>
+      </g>
+      <g class="infra-node" transform="translate(440,338)">
+        <rect x="0" y="0" width="220" height="58" rx="9"/>
+        <text x="110" y="24" class="tt">Mailbox 收件箱</text>
+        <text x="110" y="44" class="tm">点对点消息 · JSON 文件</text>
       </g>
     </svg>
-    <div class="topo-info">橙色线 = 点对点直达通道。前端 teammate 可以直接@后端：「我改了 API 契约，你跟一下」——<strong>不需要经过 lead 转述</strong>。用户甚至可以直接跟单个 teammate 对话。</div>
+    <div class="topo-info">橙色线 = 点对点直达通道。前端 teammate 可以直接@后端：「我改了 API 契约，你跟一下」——<strong>不需要经过 lead 转述</strong>。底部两块是跑在共享文件系统上的基础设施：<strong>共享 Task List</strong> 让队友自行 claim 任务，<strong>Mailbox</strong>（<code>~/.claude/teams/{team}/inboxes/</code>）承载任意两点间的私信——发消息 = 写入对方的 JSON 文件。</div>
   </div>
 
   <h3>官方对照表（Claude Code Docs 原文翻译）</h3>
@@ -192,6 +211,144 @@
     </tbody>
   </table>
   <p>官方立场一句话：<strong>要快速专注的打工仔，用 subagent；要能互相讨论、互相挑战的真团队，用 agent teams。</strong></p>
+
+  <div class="lg-section">
+    <h3>框架落地：LangGraph 的 Supervisor 与 Swarm</h3>
+    <p class="lg-intro">除了 Claude 的 Agent Teams，LangChain 生态把同一条谱系做成了两个官方库：<strong>langgraph-supervisor</strong>（星型：主管全控，worker 输出一律流回主管）和 <strong>langgraph-swarm</strong>（网状：没有中心，agent 之间用 <code>Command(goto=...)</code> 直接转交控制权）。对应关系一目了然——supervisor 是第 01 章谱系左端的 LangGraph 版，swarm 是去中心化的落地。</p>
+
+    <div class="lg-tabs">
+      <button class="lg-tab active" data-lg="sup">langgraph-supervisor · 星型</button>
+      <button class="lg-tab" data-lg="swarm">langgraph-swarm · 网状</button>
+    </div>
+
+    <div class="lg-panel active" data-lg="sup">
+      <div class="lg-panel-note"><b>机制：</b><code>create_supervisor</code> 把每个 worker 注册成一个 handoff 工具（默认名 <code>transfer_to_&lt;agent&gt;</code>）挂到主管自己的工具列表里；worker 跑完把输出交回主管，由主管决定下一步或汇总答复。<code>output_mode</code> 控制回传多少上下文——默认 <code>last_message</code>（只回传最后一条，即 subagent 式压缩），<code>full_history</code> 回传全部。主管还可以套主管，组成多级层级。</div>
+      <div class="codewrap"><span class="filetab">supervisor.py · 星型：所有路都经过中心</span><button class="copybtn">copy</button>
+<pre><span class="kw">from</span> langchain.agents <span class="kw">import</span> create_agent
+<span class="kw">from</span> langchain_openai <span class="kw">import</span> ChatOpenAI
+<span class="kw">from</span> langgraph_supervisor <span class="kw">import</span> create_supervisor
+
+model = <span class="fn">ChatOpenAI</span>(model=<span class="st">"gpt-4o"</span>)
+
+<span class="cm"># ① 先造各领域专家：普通 agent，各带各的工具</span>
+research_agent = <span class="fn">create_agent</span>(
+    model, tools=[web_search],
+    name=<span class="st">"research_expert"</span>,
+    prompt=<span class="st">"You are a researcher. Do not do any math."</span>,
+)
+math_agent = <span class="fn">create_agent</span>(
+    model, tools=[add, multiply],
+    name=<span class="st">"math_expert"</span>,
+    prompt=<span class="st">"You are a math expert."</span>,
+)
+
+<span class="cm"># ② supervisor 把每个 worker 注册成一个 handoff 工具，挂到主管自己手里</span>
+workflow = <span class="fn">create_supervisor</span>(
+    [research_agent, math_agent],
+    model=model,
+    prompt=<span class="st">"You are a team supervisor routing work to the right expert."</span>,
+    output_mode=<span class="st">"last_message"</span>,   <span class="cm"># worker 只回传最后一条消息（默认值）</span>
+    parallel_tool_calls=<span class="kw">False</span>,    <span class="cm"># True = 主管可一轮并行派多个 worker</span>
+)
+app = workflow.<span class="fn">compile</span>()
+
+<span class="cm"># ③ 控制权永远在 supervisor：worker 结果全部流回中心，由它答复用户</span>
+app.<span class="fn">invoke</span>({<span class="st">"messages"</span>: [
+    {<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"FAANG 2024 的总人数是多少？"</span>},
+]})</pre>
+      </div>
+    </div>
+
+    <div class="lg-panel" data-lg="swarm">
+      <div class="lg-panel-note"><b>机制：</b>没有主管节点。每个 agent 手里握着通往同伴的 <code>transfer_to_&lt;agent&gt;</code> 工具，调用时返回 <code>Command(goto=目标)</code> 在图上直接跳转；<code>active_agent</code> 状态记住「现在谁活跃」，下一轮请求从 TA 继续——<strong>必须配 checkpointer</strong>，否则每次都失忆。</div>
+      <div class="codewrap"><span class="filetab">swarm.py · 网状：点对点转交，无中心</span><button class="copybtn">copy</button>
+<pre><span class="kw">from</span> langgraph.checkpoint.memory <span class="kw">import</span> InMemorySaver
+<span class="kw">from</span> langchain.agents <span class="kw">import</span> create_agent
+<span class="kw">from</span> langgraph_swarm <span class="kw">import</span> create_handoff_tool, create_swarm
+
+<span class="cm"># ① 转交工具的目标是彼此——没有中心节点</span>
+research = <span class="fn">create_agent</span>(
+    model,
+    tools=[web_search,
+           <span class="fn">create_handoff_tool</span>(agent_name=<span class="st">"math_expert"</span>)],
+    name=<span class="st">"research_expert"</span>,
+)
+math = <span class="fn">create_agent</span>(
+    model,
+    tools=[add,
+           <span class="fn">create_handoff_tool</span>(agent_name=<span class="st">"research_expert"</span>)],
+    name=<span class="st">"math_expert"</span>,
+)
+
+<span class="cm"># ② active_agent 状态记住「现在谁活跃」，下一轮从 TA 继续</span>
+workflow = <span class="fn">create_swarm</span>(
+    [research, math],
+    default_active_agent=<span class="st">"research_expert"</span>,
+)
+app = workflow.<span class="fn">compile</span>(checkpointer=<span class="fn">InMemorySaver</span>())  <span class="cm"># 不带 checkpointer 会失忆</span>
+
+<span class="cm"># ③ 第二轮请求直接命中上次的活跃 agent——省掉一次路由调用</span>
+app.<span class="fn">invoke</span>(
+    {<span class="st">"messages"</span>: [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"what's 5 + 7?"</span>}]},
+    {<span class="st">"configurable"</span>: {<span class="st">"thread_id"</span>: <span class="st">"1"</span>}},
+)</pre>
+      </div>
+      <div class="codewrap"><span class="filetab">handoff.py · swarm 的全部魔法（简化自源码）</span><button class="copybtn">copy</button>
+<pre><span class="cm"># langgraph_swarm/handoff.py —— 整个 swarm 的核心就是这一个返回值</span>
+<span class="kw">@tool</span>(<span class="st">f"transfer_to_{agent_name}"</span>)
+<span class="kw">def</span> <span class="fn">handoff_to_agent</span>(state, tool_call_id):
+    <span class="kw">return</span> <span class="fn">Command</span>(
+        goto=agent_name,          <span class="cm"># 图上直接跳到目标 agent 节点</span>
+        graph=Command.PARENT,     <span class="cm"># 作用于父图（swarm 图），而非当前 agent 内部</span>
+        update={
+            <span class="st">"messages"</span>: [state[<span class="st">"messages"</span>],
+                         <span class="fn">ToolMessage</span>(<span class="st">f"Successfully transferred to {agent_name}"</span>)],
+            <span class="st">"active_agent"</span>: agent_name,  <span class="cm"># 记下「现在谁活跃」</span>
+        },
+    )
+<span class="cm"># 下一轮请求进来时，add_active_agent_router 读 active_agent 直接路由——</span>
+<span class="cm"># 这就是 swarm 重复请求比星型少跳的原因。</span></pre>
+      </div>
+    </div>
+
+    <div class="lg-demo">
+      <div class="lg-demo-head">
+        <div class="lg-demo-title">演示 3-2 · 同一请求，两种拓扑的消息路径<small>场景：『查 FAANG 2024 总人数并算总数』——跨研究和计算两个领域</small></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="lg-run" id="lgRunCross">▶ 跨领域请求</button>
+          <button class="lg-run" id="lgRunRepeat">▶▶ 重复请求</button>
+        </div>
+      </div>
+      <div class="lg-graph" id="lgGraph">
+        <div class="lg-node" data-n="u"><b>用户</b><span>发起请求</span></div>
+        <div class="lg-arrow" data-a="a-us">⇄</div>
+        <div class="lg-node lg-sup" data-n="s"><b>Supervisor</b><span>中央调度</span></div>
+        <div class="lg-arrow lg-sup-arrow" data-a="a-sr">⇄</div>
+        <div class="lg-node" data-n="r"><b>Research</b><span>搜索专家</span></div>
+        <div class="lg-arrow" data-a="a-rm">⇄</div>
+        <div class="lg-node" data-n="m"><b>Math</b><span>计算专家</span></div>
+      </div>
+      <div class="lg-stats">
+        <div class="lg-stat"><b>控制权跳转</b><span id="lgStatHops">—</span></div>
+        <div class="lg-stat"><b>LLM 调用 · 示意</b><span id="lgStatLlm">—</span></div>
+        <div class="lg-stat"><b>谁答复用户</b><span id="lgStatReply">—</span></div>
+      </div>
+      <div class="lg-log" id="lgLog"><div>▸ 用上方标签切换拓扑（swarm 下 Supervisor 节点会整个消失），再点右上角运行。</div></div>
+    </div>
+
+    <p><strong>官方性能对比（LangChain docs 实测口径）：</strong>一次性任务里 subagents 比 handoffs 多一次调用（结果要流回主 agent 再汇总）；重复请求时 swarm 反超（<code>active_agent</code> 省掉路由）；多领域并行时星型反超（subagent 可并行、上下文隔离，handoff 链只能串行）。</p>
+    <table>
+      <thead><tr><th>场景</th><th>Subagents（星型 / supervisor）</th><th>Handoffs（链式 / swarm）</th></tr></thead>
+      <tbody>
+        <tr><td><strong>一次性任务</strong>（「买杯咖啡」）</td><td>4 次模型调用</td><td><strong>3 次 ✓</strong></td></tr>
+        <tr><td><strong>重复请求</strong>（第二轮同请求）</td><td>4 次（两轮共 8）</td><td><strong>2 次（共 5）✓</strong></td></tr>
+        <tr><td><strong>多领域并行</strong>（对比 3 个领域）</td><td><strong>5 次 · ~9K tokens ✓</strong></td><td>7+ 次 · ~14K+ tokens</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn"><b>⚠ 三个别读漏的细节</b>
+      ① 官方基准里 swarm 全线略优于 supervisor、token 更省，主因是 supervisor 的「传话游戏」——worker 不能直接答复用户，主管转述会引入误差（改进后的 langgraph-supervisor 加了 <code>forward_message</code> 原样转发等手段，基准性能提升近 50%）；② 但多领域并行反转：需要 fan-out 的任务请回到星型；③ LangChain 现在建议新项目<strong>直接用工具实现 supervisor 模式</strong>（官方 multi-agent 指南），langgraph-supervisor 库主要服务向 LangChain 1.0 迁移的存量代码。</div>
+  </div>
 </section>
 
 <!-- ======================= 04 Handoff ======================= -->
@@ -256,11 +413,24 @@
 
 <!-- ======================= 06 决策树 ======================= -->
 <section class="chapter" id="c6">
-  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">决策向导：你的任务到底该用哪种</h2></div>
-  <p class="lede">综合三家官方口径做成的交互决策器。回答三道题，拿到架构建议。</p>
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">选型指南：先看任务形状，再挑架构</h2></div>
+  <p class="lede">不要先问「哪个框架最强」，先问控制权、信息流和上下文应该长什么样。先从下方最接近的场景反查，再用四道题确认边界。</p>
 
+  <h3>六个高频场景，直接反查</h3>
+  <div class="pick-grid" id="pickGrid">
+    <button class="pick-card" data-pick="research"><span class="pick-kicker">SCENARIO 01</span><b>大范围研究 / 尽调</b><span>多来源、重阅读、子问题能独立拆开</span><em>→ Subagent / Supervisor</em></button>
+    <button class="pick-card" data-pick="service"><span class="pick-kicker">SCENARIO 02</span><b>客服 / 售前 / 表单分流</b><span>不同专家要直接接住用户的多轮对话</span><em>→ Handoff / Swarm</em></button>
+    <button class="pick-card" data-pick="collab"><span class="pick-kicker">SCENARIO 03</span><b>跨端上线攻坚</b><span>前后端、测试需长期同步、质疑和认领任务</span><em>→ Agent Teams</em></button>
+    <button class="pick-card" data-pick="governance"><span class="pick-kicker">SCENARIO 04</span><b>合规 / 审批 / 第三方专家</b><span>必须留审计边界，不能让专家自行接管</span><em>→ Supervisor / Manager</em></button>
+    <button class="pick-card" data-pick="workflow"><span class="pick-kicker">SCENARIO 05</span><b>固定审批流 / ETL</b><span>步骤、条件和失败分支都能提前写清</span><em>→ Router / Custom workflow</em></button>
+    <button class="pick-card" data-pick="coupled"><span class="pick-kicker">SCENARIO 06</span><b>小改动 / 强耦合写任务</b><span>同一人写代码、看日志、补测试才不丢上下文</span><em>→ Single agent</em></button>
+  </div>
+  <div class="pick-detail" id="pickDetail" aria-live="polite"></div>
+
+  <h3>把你的任务代入决策器</h3>
+  <p>顺序有意设计成「用户控制权 → 并行与上下文 → 团队通信 → 可确定性」。只要前面的信号足够强，就不必为后面的能力付额外 token 账单。</p>
   <div class="wizard" id="wizard">
-    <div class="wiz-progress"><span id="wizStep">问题 1 / 3</span><div class="wiz-bar"><div id="wizFill"></div></div></div>
+    <div class="wiz-progress"><span id="wizStep">问题 1 / 4</span><div class="wiz-bar"><div id="wizFill"></div></div></div>
     <div class="wiz-q" id="wizQ"></div>
     <div class="wiz-opts" id="wizOpts"></div>
     <div class="wiz-result" id="wizResult" style="display:none">
@@ -281,7 +451,7 @@
     <div class="quiz-body">
       <div class="q-no" id="qNo">QUESTION 1 / 5</div>
       <div class="q-text" id="qText"></div>
-      <div id="qOpts"></div>
+      <div id="qOpts" role="radiogroup" aria-label="请选择一个答案"></div>
       <div class="q-exp" id="qExp"></div>
       <div class="q-actions">
         <button class="sim-btn" id="qSubmit" disabled>提交答案</button>
@@ -300,6 +470,9 @@
       <li>Claude Code Docs — <em>Orchestrate teams of Claude Code sessions</em> code.claude.com/docs/en/agent-teams</li>
       <li>OpenAI API Docs — <em>Orchestration and handoffs</em> developers.openai.com/api/docs/guides/agents/orchestration</li>
       <li>OpenAI Agents SDK — <em>Multi-agent orchestration</em> openai.github.io/openai-agents-python/multi_agent</li>
+      <li>LangChain Docs — <em>Multi-agent patterns（subagents / handoffs 性能对比）</em> docs.langchain.com/oss/python/langchain/multi-agent</li>
+      <li>LangChain Blog — <em>Benchmarking multi-agent architectures</em> blog.langchain.com/benchmarking-multi-agent-architectures</li>
+      <li>GitHub — <em>langchain-ai/langgraph-supervisor-py · langchain-ai/langgraph-swarm-py</em></li>
     </ul>
   </div>
 </section>
@@ -311,7 +484,7 @@
 /* ---------- TOC 构建 ---------- */
 const chapters=[...document.querySelectorAll("section.chapter")];
 const toc=document.getElementById("toc");
-const names=["控制权谱系","Subagent 星型","Multi-Agent 网状","Handoff 交接","数据说话","决策向导","终极测验"];
+const names=["控制权谱系","Subagent 星型","Multi-Agent 网状","Handoff 交接","数据说话","选型指南","终极测验"];
 chapters.forEach((sec,i)=>{
   const a=document.createElement("a");
   a.href="#"+sec.id;
@@ -350,7 +523,7 @@ document.querySelectorAll(".copybtn").forEach(btn=>{
 
 /* ---------- 01 谱系切换 ---------- */
 const SPEC=[
- {t:"Subagent · 主从星型",d:"主 Agent 创建子代理并在整个过程中保持控制权。子代理只回传最终结论，彼此互不可见。代表：Claude Code 的 Agent tool、OpenAI 的 as_tool()。成本中等（约 4× 聊天对话），行为最可预测。",k:"适合：可并行的调研、批量分析、上下文隔离"},
+ {t:"Subagent · 主从星型",d:"主 Agent 创建 sub agents 并在整个过程中保持控制权。sub agents 只回传最终结论，彼此互不可见。代表：Claude Code 的 Agent tool、OpenAI 的 as_tool()。成本中等（约 4× 聊天对话），行为最可预测。",k:"适合：可并行的调研、批量分析、上下文隔离"},
  {t:"Handoff · 控制权移交",d:"当前 agent 通过 handoff 把整段对话移交给专家，此后专家直接面对用户，原 agent 退出该分支。代表：OpenAI Agents SDK 的 handoffs。限制：一次只能交接一个，无法并行。",k:"适合：分流型业务（客服路由、多轮专业咨询）"},
  {t:"Agent Teams · 网状自组织",d:"每个成员是持久独立的实例，通过邮箱系统点对点通信，配合共享任务列表自行认领工作。lead 只负责组建和初始分工。成本最高（约 15× 聊天对话），灵活度也最高。代表：Claude Code Agent Teams（实验性）。",k:"适合：需要讨论、质疑、协商的复杂协作"}
 ];
@@ -364,10 +537,10 @@ renderSpec(0);
 
 /* ---------- 02 星型图节点点击 ---------- */
 const STAR={
- user:{t:"用户",d:"只和主 Agent 对话。子代理对用户完全透明——你甚至不知道自己被几个临时工服务过。"},
+ user:{t:"用户",d:"只和主 Agent 对话。sub agents 对用户完全透明——你甚至不知道自己被几个临时工服务过。"},
  lead:{t:"主 Agent（Orchestrator）",d:"唯一持有全局上下文的节点。它决定拆几份、每份给什么工具和边界、最后怎么合成答案。上下文里只积累各路结论，永远不被中间过程污染。"},
  s1:{t:"Subagent A",d:"收到一份自包含的任务书（目标+格式+工具白名单）。在自己的空上下文里自主调工具 N 轮，结束后只回传一段结论摘要，然后销毁。"},
- s2:{t:"Subagent B",d:"和 A 同时开工，但互相不知道对方存在。如果任务书写得含糊，A 和 B 可能干重复活——这正是 Anthropic 早期踩过的坑：两个子代理都在查 2025 供应链，第三个却跑去查 2021 芯片危机。"},
+ s2:{t:"Subagent B",d:"和 A 同时开工，但互相不知道对方存在。如果任务书写得含糊，A 和 B 可能干重复活——这正是 Anthropic 早期踩过的坑：两个 sub agents 都在查 2025 供应链，第三个却跑去查 2021 芯片危机。"},
  s3:{t:"Subagent C",d:"注意图中 C 和 D 之间没有连线。想交换信息？只能回传给 lead，再由 lead 决定要不要派新任务——一切经过中心。"},
  s4:{t:"Subagent D",d:"生命周期 = 一次派发。用完即毁的设计让它的上下文成本是 O(任务)，而不是 O(会话)。"}
 };
@@ -380,6 +553,82 @@ document.querySelectorAll("#starSvg .tnode").forEach(n=>{
     starInfo.innerHTML=`<b>${s.t}</b> — ${s.d}`;
   });
 });
+
+/* ---------- 03 LangGraph Supervisor vs Swarm ---------- */
+let lgMode="sup", lgTimer=null;
+const LG_PATHS={
+ sup:{
+  cross:{hops:[
+    {n:"u",a:[],t:"用户发起：『查 FAANG 2024 总人数并算总数』"},
+    {n:"s",a:["a-us"],t:"Supervisor ①：LLM 路由判断 → 调 transfer_to_research_expert"},
+    {n:"r",a:["a-sr"],t:"Research：自主搜网。结论回传 supervisor——它不认识用户"},
+    {n:"s",a:["a-sr"],t:"Supervisor ②：收到结果再路由 → transfer_to_math_expert"},
+    {n:"m",a:["a-sr","a-rm"],t:"Math：拿到主管转写的任务，算总数回传"},
+    {n:"s",a:["a-sr"],t:"Supervisor ③：汇总两路结论，亲自答复用户"},
+    {n:"u",a:["a-us"],t:"用户拿到答案——worker 全程没跟用户说过一句话"}
+  ],stats:["6 次，全部经过中心","5 次（supervisor 独占 3 次）","✗ 一律由 supervisor 转述"]},
+  repeat:{hops:[
+    {n:"u",a:[],t:"用户追问：『再算一下平均数』"},
+    {n:"s",a:["a-us"],t:"Supervisor：subagent 无状态，只能重走完整流程"},
+    {n:"m",a:["a-sr"],t:"Math：从头拿到任务再算一遍"},
+    {n:"s",a:["a-sr"],t:"Supervisor：再汇总、再转述"},
+    {n:"u",a:["a-us"],t:"用户拿到答案"}
+  ],stats:["4 次","4 次","✗ 转述"]}
+ },
+ swarm:{
+  cross:{hops:[
+    {n:"u",a:[],t:"用户发起同一请求——直接对当前活跃 agent 说话"},
+    {n:"r",a:["a-us"],t:"Research：搜到数据，发现要算数 → 调 transfer_to_math_expert"},
+    {n:"m",a:["a-rm"],t:"Math：Command(goto) 直接接管，带着完整对话历史开算"},
+    {n:"u",a:[],t:"Math 直接答复用户——没有任何转述层"}
+  ],stats:["3 次，点对点直达","3 次","✓ 专家直接答复"]},
+  repeat:{hops:[
+    {n:"u",a:[],t:"用户追问：『平均数也算一下』"},
+    {n:"m",a:[],t:"active_agent 仍是 math：无需路由、无需 handoff"},
+    {n:"u",a:[],t:"Math 答复用户"}
+  ],stats:["2 次","2 次","✓ 直接答复"]}
+ }
+};
+const $lgGraph=document.getElementById("lgGraph"), $lgLog=document.getElementById("lgLog");
+function lgClear(){
+  if(lgTimer){clearInterval(lgTimer);lgTimer=null;}
+  $lgGraph.querySelectorAll(".lg-node,.lg-arrow").forEach(el=>el.classList.remove("active"));
+}
+function lgRun(scenario){
+  const spec=LG_PATHS[lgMode][scenario];
+  lgClear();
+  $lgLog.innerHTML="";
+  ["lgStatHops","lgStatLlm","lgStatReply"].forEach((id,i)=>document.getElementById(id).textContent=spec.stats[i]);
+  let i=0;
+  const step=()=>{
+    if(i>=spec.hops.length){lgClear();lgTimer=null;return;}
+    const h=spec.hops[i++];
+    $lgGraph.querySelectorAll(".lg-node,.lg-arrow").forEach(el=>el.classList.remove("active"));
+    $lgGraph.querySelector(`.lg-node[data-n="${h.n}"]`).classList.add("active");
+    h.a.forEach(a=>$lgGraph.querySelector(`.lg-arrow[data-a="${a}"]`).classList.add("active"));
+    $lgLog.innerHTML+=`<div>▸ ${h.t}</div>`;
+    $lgLog.scrollTop=$lgLog.scrollHeight;
+  };
+  step();
+  lgTimer=setInterval(step,950);
+}
+document.querySelectorAll(".lg-tab").forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll(".lg-tab").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".lg-panel").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    lgMode=t.dataset.lg;
+    document.querySelector(`.lg-panel[data-lg="${lgMode}"]`).classList.add("active");
+    $lgGraph.classList.toggle("swarm",lgMode==="swarm");
+    lgClear();
+    $lgLog.innerHTML=lgMode==="swarm"
+      ?"<div>▸ 已切到 swarm：Supervisor 节点整个消失，agent 点对点转交。点右上角运行。</div>"
+      :"<div>▸ 已切到 supervisor：所有路径重新经过中心。点右上角运行。</div>";
+    ["lgStatHops","lgStatLlm","lgStatReply"].forEach(id=>document.getElementById(id).textContent="—");
+  };
+});
+document.getElementById("lgRunCross").onclick=()=>lgRun("cross");
+document.getElementById("lgRunRepeat").onclick=()=>lgRun("repeat");
 
 /* ---------- 04 路由模拟 ---------- */
 const ROUTES={
@@ -399,25 +648,46 @@ document.querySelectorAll(".rmsg").forEach(btn=>{
   };
 });
 
-/* ---------- 06 决策向导 ---------- */
+/* ---------- 06 场景选型 + 决策向导 ---------- */
+const PICKS={
+ research:{t:"大范围研究 / 尽调",why:"子问题能独立拆开、中间信息量大而结论只占一小块——subagent 的隔离上下文正好吃掉脏活。Anthropic 研究系统就是范本：lead 并行拉起 3–5 个 subagent 分头搜索，只回收压缩结论。",how:"用 Supervisor / Manager 模式：主管持有全局上下文和最终答案所有权，worker 只回传 ≤ 几百 token 的摘要。预算按约 4× 聊天 token 估。",whennot:"如果研究结论必须互相引用才能推进，说明子问题没拆干净——先重组任务边界，别硬上并行。",fit:"→ Subagent / Supervisor"},
+ service:{t:"客服 / 售前 / 表单分流",why:"不同专家要直接接住用户的多轮对话，主管再转述会失真（Anthropic 的『传话游戏』）。控制权需要真正移交。",how:"OpenAI handoff（白名单式）或 LangGraph swarm：triage 判断意图后把整个对话交给专家；swarm 用 active_agent 记住上次谁在台面，重复请求省一跳。",whennot:"如果最终必须由主管统一口径答复（合规、法务），那这是 supervisor 场景，不是 handoff。",fit:"→ Handoff / Swarm"},
+ collab:{t:"跨端上线攻坚",why:"前后端、测试需要长期同步、互相质疑、自行认领任务——这是 Claude Agent Teams 的教科书场景：共享 Task List + Mailbox 点对点通信。",how:"Lead 只负责组建和初始分工，之后成员通过 mailbox 直接私聊、claim 任务；适合以天为单位的持久团队。",whennot:"一次性的小任务别组团队：每个 teammate 都是完整实例，成本约 15× 聊天 token。",fit:"→ Agent Teams"},
+ governance:{t:"合规 / 审批 / 第三方专家",why:"必须留审计边界、不能让专家自行接管用户——主管保留全部决策和答复权，专家只是有界能力。",how:"Supervisor / Manager 模式：专家包装成 as_tool() 或 transfer_to_&lt;agent&gt;，所有调用和结果都记录在主管上下文中，天然形成审计轨迹。",whennot:"如果专家来自第三方且不能持久保持 active 状态，这正是 supervisor 比 swarm 更合适的理由。",fit:"→ Supervisor / Manager"},
+ workflow:{t:"固定审批流 / ETL",why:"步骤、条件、失败分支都能提前写清，就不该让 LLM 每次重新『决策』——确定性流程更便宜更可预测。",how:"Router 模式（显式路由步骤）或 LangGraph Custom workflow：把分支画成图，LLM 只在需要判断的节点介入。",whennot:"流程一旦开始频繁改动、需要涌现式协调，说明它在向 Agent Teams 演化——别用死流程硬卡。",fit:"→ Router / Custom workflow"},
+ coupled:{t:"小改动 / 强耦合写任务",why:"写代码、看日志、补测试、修 bug 都在同一上下文里才不丢信息——按角色拆分只会让每次交接丢上下文（Anthropic 的反面案例）。",how:"先用单 agent + 写好 prompt；只在出现上下文污染的局部用单个 verification subagent 黑盒验收。",whennot:"如果同屏工具超过 15–20 个或需要冲突的系统提示词，才考虑按上下文边界拆。",fit:"→ Single agent"}
+};
+const pickGrid=document.getElementById("pickGrid"),pickDetail=document.getElementById("pickDetail");
+function renderPick(k){
+  document.querySelectorAll(".pick-card").forEach(c=>c.classList.toggle("active",c.dataset.pick===k));
+  const p=PICKS[k];
+  pickDetail.innerHTML=`<b>${p.t}</b><p><strong>为什么：</strong>${p.why}</p><p><strong>怎么落地：</strong>${p.how}</p><p><strong>何时别用：</strong>${p.whennot}</p><span class="pick-fit">${p.fit}</span>`;
+}
+pickGrid.querySelectorAll(".pick-card").forEach(c=>c.onclick=()=>renderPick(c.dataset.pick));
+renderPick("research");
+
 const WIZ=[
- {q:"你的任务会产生大量中间信息吗？（搜索结果、文件内容、日志……）",
-  o:["会，而且大部分对最终答案没用","不会，或都很有用"],
-  map:[1,-1]},
- {q:"这些子任务可以互相独立地并行执行吗？（不需要彼此的产出作为输入）",
-  o:["完全可以独立并行","强依赖，必须串行或频繁同步"],
-  map:[1,-1]},
- {q:"干活的成员需要互相讨论、质疑对方的结论吗？",
-  o:["需要真讨论","不用，各自交结果就行"],
-  map:[{next:2},-1]}
+ {q:"① 谁应该直接答复用户？",o:["专家直接接住对话（分流、客服、售后）","主管 / 主 Agent 合成最终答案"],map:[1,2]},
+ {q:"② 成员需要长期持久协作、互相讨论质疑吗？",o:["需要——以天为单位并肩干活","不需要——一次交接就能办完"],map:["teams","handoff"]},
+ {q:"③ 子任务能并行拆开、且中间信息很多吗？",o:["能，中间信息大部分对最终答案没用","不能——强依赖、必须串行或频繁同步"],map:["subagent",3]},
+ {q:"④ 流程步骤、条件、失败分支能提前写死吗？",o:["能——是固定审批流 / ETL","不能——需要动态协调演进"],map:["workflow","single"]}
 ];
-let wStep=0,wPath=[];
+const WIZ_RES={
+ teams:{v:"Agent Teams（网状协作）",e:"成员互相质疑、共享任务列表、Mailbox 点对点私聊——以天为单位的持久团队。成本最高（约 15× 聊天 token），灵活度也最高。代表：Claude Code Agent Teams、LangGraph 手工网状编排。",fit:"适合：跨端上线攻坚、研究团队、需要讨论的复杂协作"},
+ handoff:{v:"Handoff / Swarm（点对点交接）",e:"控制权随交接游走：triage 交给专家后专家直接面对用户。简单分流用 OpenAI handoff（白名单式）；需要记住『上次谁在台面』用 LangGraph swarm（active_agent + checkpointer，重复请求省一跳）。",fit:"适合：客服路由、多轮专业咨询"},
+ subagent:{v:"Subagent / Supervisor（星型）",e:"主管拆任务 → 并行 fan-out → 只回收压缩结论。中间信息被隔离在 worker 上下文里，主上下文不被污染。预算按约 4× 聊天 token 估。",fit:"适合：并行调研、批量分析、上下文隔离场景"},
+ workflow:{v:"Router / Custom workflow（确定性流程）",e:"把分支画成图，LLM 只在判断节点介入——比每次让 LLM 重新『决策』便宜且可预测。",fit:"适合：固定审批流、ETL、有明确状态机的任务"},
+ single:{v:"先别上多 Agent（单 agent 收口）",e:"强依赖 + 动态协调 = 拆了只会更贵更乱。先写好 prompt；只在出现上下文污染的那一小块用单个 verification subagent 黑盒验收。",fit:"适合：小改动、强耦合写任务"}
+};
+let wStep=0;
 const $wQ=document.getElementById("wizQ"),$wO=document.getElementById("wizOpts"),
       $wR=document.getElementById("wizResult"),$wV=document.getElementById("wizVerdict"),
       $wE=document.getElementById("wizExplain"),$wStep=document.getElementById("wizStep"),
       $wFill=document.getElementById("wizFill"),$wRestart=document.getElementById("wizRestart");
 function wizRender(){
-  $wR.style.display="none";$wQ.parentElement.querySelector(".wiz-q").style.display="";
+  $wR.style.display="none";
+  $wQ.style.display="";
+  $wO.style.display="";
   const Q=WIZ[wStep];
   $wStep.textContent=`问题 ${wStep+1} / ${WIZ.length}`;
   $wFill.style.width=((wStep)/WIZ.length*100)+"%";
@@ -430,28 +700,23 @@ function wizRender(){
 }
 function wizAnswer(i){
   const m=WIZ[wStep].map[i];
-  if(typeof m==="object"){ wPath.push(wStep*2+i); wStep=m.next; wizRender(); return; }
-  wPath.push(wStep*2+i);
+  if(typeof m==="number"){ wStep=m; wizRender(); return; }
   $wFill.style.width="100%";
-  $wQ.parentElement.querySelector(".wiz-q").style.display="none";
-  $wO.innerHTML="";
+  $wQ.style.display="none";
+  $wO.style.display="none";
   $wR.style.display="block";
-  if(m===1){
-    $wV.innerHTML="建议：Subagent 编排（orchestrator-worker）";
-    $wE.innerHTML="高并行 + 可隔离的上下文 = fan-out subagent 的教科书场景。参考 Anthropic 研究系统的做法：lead 并行拉起 3–5 个子代理，每个只回传压缩后的结论。预算按约 4× 聊天 token 估。如果第 3 题你选了『不需要讨论』，就停在这一层——别为用不上的协作能力付 15× 的账单。";
-  }else{
-    $wV.innerHTML="建议：先别上多 Agent";
-    $wE.innerHTML="强依赖 + 强同步 = 拆了只会更贵更乱。Anthropic 见过太多团队按角色拆分后协调开销超过干活的案例。回去把 prompt 写好，或者只在真正出现上下文污染的那一小块用单个 verification subagent 黑盒验收。等模型实时协作能力更强了再回来重评。";
-  }
+  const r=WIZ_RES[m];
+  $wV.textContent=r.v;
+  $wE.innerHTML=r.e+" <span class=\"pick-fit\">"+r.fit+"</span>";
 }
-$wRestart.onclick=()=>{wStep=0;wPath=[];wizRender();};
+$wRestart.onclick=()=>{wStep=0;wizRender();};
 wizRender();
 
 /* ---------- 07 终极测验 ---------- */
 const QUESTIONS=[
- {q:"Subagent 模式下，子代理之间的信息如何流动？",
+ {q:"Subagent 模式下，sub agents 之间的信息如何流动？",
   o:["直接点对点互发消息","只能回传给主 Agent，由它决定是否转发","通过共享文件系统自动同步","广播给所有兄弟节点"],
-  a:1,ex:"星型拓扑是一切的关键：所有箭头都经过中心节点。子代理互相不知道对方的存在——这既是可预测性的来源，也是『重复劳动』事故的原因。"},
+  a:1,ex:"星型拓扑是一切的关键：所有箭头都经过中心节点。sub agents 互相不知道对方的存在——这既是可预测性的来源，也是『重复劳动』事故的原因。"},
  {q:"Claude Code Agent Teams 里，『发送消息』的实现机制是什么？",
   o:["HTTP 调用中央消息总线","WebSocket 长连接","成功写入接收方的 JSON inbox 文件","共享内存队列"],
   a:2,ex:"每个 agent 的 mailbox 就是 ~/.claude/teams/{team}/inboxes/{name}.json，发送 = 写入成功才确认。没有中间件，纯文件读写。"},
@@ -479,12 +744,20 @@ function loadQ(){
   $qSub.disabled=true;$qSub.style.display="";$qNxt.style.display="none";$qRst.style.display="none";
   $qOpts.innerHTML="";
   Q.o.forEach((opt,i)=>{
-    const b=document.createElement("div");
-    b.className="q-opt";b.textContent=String.fromCharCode(65+i)+". "+opt;
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="q-opt";
+    b.textContent=String.fromCharCode(65+i)+". "+opt;
+    b.setAttribute("role","radio");
+    b.setAttribute("aria-checked","false");
     b.onclick=()=>{
       if(qDone)return;
       qPicked=i;
-      [...$qOpts.children].forEach((c,j)=>c.classList.toggle("picked",j===i));
+      [...$qOpts.children].forEach((c,j)=>{
+        const picked=j===i;
+        c.classList.toggle("picked",picked);
+        c.setAttribute("aria-checked",String(picked));
+      });
       $qSub.disabled=false;
     };
     $qOpts.appendChild(b);

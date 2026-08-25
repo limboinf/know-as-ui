@@ -75,12 +75,12 @@
   h2.ch{font-family:var(--serif);font-size:clamp(24px,3vw,32px);font-weight:800;letter-spacing:.01em}
   section.chapter{margin-bottom:88px;padding-top:8px;border-top:1.5px solid var(--ink)}
   section.chapter > .chapter-head{margin-top:26px}
-  .lede{font-family:var(--serif);font-size:17.5px;color:var(--ink-soft);margin:14px 0 30px;max-width:62ch}
+  .lede{width:100%;max-width:var(--content-rail);font-family:var(--serif);font-size:17.5px;color:var(--ink-soft);margin:14px 0 30px}
 
   h3{font-size:19px;margin:38px 0 14px;display:flex;align-items:center;gap:10px}
   h3::before{content:"§";color:var(--accent);font-family:var(--serif);font-weight:700}
-  p{max-width:70ch;margin-bottom:12px}
-  ul.plain{margin:0 0 14px 20px;max-width:68ch}
+  p{width:100%;max-width:var(--content-rail);margin-bottom:12px}
+  ul.plain{width:100%;max-width:var(--content-rail);margin:0 0 14px;padding-left:20px}
   ul.plain li{margin-bottom:6px}
   strong{font-weight:650}
   code:not(pre code){
