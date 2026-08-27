@@ -30,6 +30,9 @@ subagent-vs-multi-agent/
 
 pi-context-management/
 └── a.html                     # pi 上下文管理与压缩插件生态交互手册
+
+llm-prompt-caching/
+└── a.html                     # LLM 前缀缓存原理、厂商对照与成本实验室
 ```
 
 ## 新增知识点
@@ -52,7 +55,16 @@ pi-context-management/
 
 ## 本地预览
 
-直接打开：
+**一键启动并打开**（推荐）：
+
+```bash
+cd ~/work/github/know-as-ui
+make open        # 后台启动 http.server :8000，并用浏览器打开
+make stop        # 停止后台服务器
+make serve       # 前台运行（Ctrl+C 退出，适合调试）
+```
+
+直接双击打开：
 
 ```bash
 open ~/work/github/know-as-ui/index.html
@@ -64,7 +76,7 @@ Cloudflare Worker 部署：
 npx wrangler deploy --domains dev.limbo101.win
 ```
 
-也可以用任意静态文件服务器：
+也可以手动起任意静态文件服务器：
 
 ```bash
 cd ~/work/github/know-as-ui

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>LLM Prompt Caching · 前缀缓存实验室</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">LLM <em>Prompt Caching</em> · 前缀缓存实验室</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">一句话：缓存的不是答案，是已经算过的前缀状态</h2></div>
+  <div class="hero-rule">
+    <div class="hero-claim">把已经算过的<strong>前缀注意力状态</strong>留下；命中就按折扣价读，<em>分叉之后重新算。</em></div>
+    <div class="hero-aside">CACHE ≠ RESPONSE<br>CACHE = REUSABLE PREFIX STATE<br><br>同一个输入仍会重新生成输出；temperature 等参数仍可能让答案不同。</div>
+  </div>
+  <p class="lede">“LLM 缓存”至少指四件不同的事。先把它们拆开，后面的价格、TTL、命中率才不会串台。</p>
+
+  <div class="cache-types" id="cacheTypes">
+    <div class="type-tabs">
+      <button class="type-tab active" data-type="0">KV CACHE<br>单次生成</button>
+      <button class="type-tab" data-type="1">PREFIX CACHE<br>跨请求</button>
+      <button class="type-tab" data-type="2">DISK CONTEXT<br>DeepSeek</button>
+      <button class="type-tab" data-type="3">SEMANTIC CACHE<br>应用层</button>
+    </div>
+    <div class="type-panel"><div class="type-glyph" id="typeGlyph">KV</div><div><h4 id="typeTitle"></h4><p id="typeText"></p><div class="type-meta" id="typeMeta"></div></div></div>
+  </div>
+
+  <div class="note danger"><b>先纠正一个常见说法</b>“前缀差一个字节就整段作废”说得太狠了。准确说法是：<strong>从第一个分叉点往后不能复用；分叉前若存在可用缓存断点或缓存前缀单元，仍可能命中更短前缀。</strong>厂商会向后寻找最长可用匹配，但规则各不相同。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="pc1"><div class="ckpt-box">✓</div><div class="ckpt-text">能说清 KV Cache、Prefix Cache 与 Semantic Cache 为什么不是一回事</div></div></div>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">里面发生了什么：每个词都做成 K/V 卡片，前缀第二次直接复用</h2></div>
+  <p class="lede">别被 K/V 吓到。模型读句子，就像店员在仓库取货：每个词都先被做成两张小卡片，后面要用时才有现成的可拿。先把这三张卡认熟：</p>
+
+  <div class="qkv-intro">
+    <div class="qkv-card"><span class="qkv-glyph">Q</span><b>查询卡</b><p>“我现在想找什么”。每读到一个新词，模型就拿着它当问题，去前面挨个问。</p></div>
+    <div class="qkv-card"><span class="qkv-glyph">K</span><b>门牌卡</b><p>“这个词是什么来头”。每个词都贴一张门牌，用来被别人的查询卡比对。</p></div>
+    <div class="qkv-card"><span class="qkv-glyph">V</span><b>储物柜</b><p>“这个词真正装着什么”。门牌对上了，才打开柜子把内容取出来用。</p></div>
+  </div>
+
+  <div class="note"><b>一句话版本：</b>注意力 = 拿新词的 Q，去比前面每个词的 K，比得越像，取的 V 越多。<strong>K/V 不是缓存的“答案”，而是模型回头翻材料用的中间账本。</strong></div>
+
+  <div class="kv-stage">
+    <div class="kv-stage-head"><span class="kv-scene" id="kvScene">第 1 幕 · 第一次请求</span><span class="kv-dots" id="kvDots"></span></div>
+
+    <div class="kv-row" id="kvRowA"></div>
+
+    <div class="kv-shelf">
+      <div class="shelf-head">CACHE SHELF · 缓存货架<span id="shelfCount">未存档</span></div>
+      <div class="shelf-slots" id="shelfSlots"></div>
+    </div>
+
+    <div class="kv-row" id="kvRowB" hidden><div class="row-placeholder">第 2 幕 · 等待第二次请求</div></div>
+
+    <div class="kv-payoff" id="kvPayoff" hidden>
+      <div class="payoff-bar"><div class="payoff-cached" id="payoffCached"></div><div class="payoff-fresh" id="payoffFresh"></div></div>
+      <div class="payoff-legend"><span class="p-cached">■ 复用前缀 · 从货架取</span><span class="p-fresh">■ 现场新算</span><b id="payoffText"></b></div>
+    </div>
+
+    <div class="kv-controls">
+      <button class="sim-btn ghost" id="kvPrev" disabled>◀ 上一步</button>
+      <button class="sim-btn" id="kvPlay">▶ 自动播放</button>
+      <button class="sim-btn" id="kvNext2">下一步 →</button>
+      <button class="sim-btn ghost" id="kvReset">↺ 重播</button>
+      <span class="kv-status" id="kvStatus">点击“下一步”开始</span>
+    </div>
+  </div>
+
+  <ul class="plain">
+    <li><strong>第一次：</strong>完整前缀进模型，逐词做成 K/V 卡（最费算力的一段）；合格前缀被存进缓存货架。</li>
+    <li><strong>下一次：</strong>前缀一字不差，卡片直接货架取，只给新尾部现场做卡，再照常生成新答案。</li>
+    <li><strong>账单不等于显存：</strong>推理引擎内部那张 K/V 表是单次请求的加速；API usage 里的 cached tokens 才是跨请求的货架复用。</li>
+  </ul>
+  <div class="note"><b>为什么输出不缓存？</b>货架只存“读完这段前缀后的模型状态”。模型还是要对新问题做注意力、逐 token 采样生成答案——输入可以复用，<strong>输出不承诺相同</strong>。</div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">动手：看前缀从左向右咬合，在哪里断</h2></div>
+  <p class="lede">点击四种变体。蓝色是复用的缓存前缀，橙色是正常变化的动态尾部，红色是本来想复用、却因更早变化而重新计算的部分。</p>
+
+  <div class="matcher">
+    <div class="matcher-head"><span class="label">PREFIX MATCHER · 模拟已存在“稳定区末尾”断点</span><button class="preset active" data-preset="question">只换问题</button><button class="preset" data-preset="time">头部时间戳</button><button class="preset" data-preset="tools">工具换序</button><button class="preset" data-preset="history">改写历史</button></div>
+    <div class="prompt-pair">
+      <div class="prompt-line"><span class="prompt-label">已缓存</span><div class="blocks" id="promptA"></div></div>
+      <div class="prompt-line"><span class="prompt-label">新请求</span><div class="blocks" id="promptB"></div></div>
+    </div>
+    <div class="match-result"><div class="match-metric">最长相同前缀<b class="cache" id="matchCount">—</b></div><div class="match-metric">断点能否命中<b id="breakHit">—</b></div><div class="match-metric">根因<b id="matchWhy">—</b></div></div>
+  </div>
+
+  <p>真正比较的是厂商<strong>渲染后的完整上下文</strong>，不只是你肉眼看到的字符串。模型、工具 schema、结构化输出、reasoning/thinking 配置都可能改变前缀。稳定骨架通常是：</p>
+  <div class="codewrap"><span class="filetab">append-only-prompt.txt · 通用结构</span><pre><code><span class="fn">[tools / 工具定义]</span>       <span class="cm"># 最稳，固定内容与顺序</span>
+<span class="fn">[system / developer]</span>     <span class="cm"># 稳定指令</span>
+<span class="fn">[参考文档 / few-shot]</span>    <span class="cm"># 按版本稳定</span>
+<span class="fn">[对话历史]</span>               <span class="cm"># 只追加，不回头改</span>
+<span class="kw">──────── CACHE BREAKPOINT ────────</span>
+<span class="st">[动态 RAG / 时间 / 用户问题]</span> <span class="cm"># 每次变，放最后</span></code></pre></div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">一次请求：从序列化到最长命中，再写入新状态</h2></div>
+  <p class="lede">点“推进”走完整条流水线。注意：共同前缀存在，不代表它已经被写成可读取的缓存项。</p>
+
+  <div class="flow-lab">
+    <div class="flow-track" id="flowTrack">
+      <div class="flow-step"><div class="flow-dot">01</div>渲染完整<br>上下文</div><div class="flow-step"><div class="flow-dot">02</div>检查长度<br>与断点</div><div class="flow-step"><div class="flow-dot">03</div>寻找最长<br>缓存项</div><div class="flow-step"><div class="flow-dot">04</div>读取前缀<br>K / V</div><div class="flow-step"><div class="flow-dot">05</div>计算尾部<br>生成答案</div><div class="flow-step"><div class="flow-dot">06</div>持久化新<br>缓存项</div>
+    </div>
+    <div class="flow-caption" id="flowCaption"></div>
+    <div class="flow-controls"><button class="sim-btn" id="flowNext">推进一步 →</button><button class="sim-btn ghost" id="flowReset">↺ 重置</button></div>
+  </div>
+
+  <h3>DeepSeek 的缓存前缀单元，是一个重要例外</h3>
+  <p>DeepSeek 默认自动构建磁盘缓存，但新版规则不是“发现任意公共前缀，当次马上命中”。每个可命中的前缀必须先成为完整的<strong>缓存前缀单元</strong>：</p>
+  <ul class="plain">
+    <li>请求会在<strong>用户输入末尾</strong>和<strong>模型输出末尾</strong>持久化前缀单元；长内容还会按固定 token 间隔切单元。</li>
+    <li>若第一次是 A+B，第二次是 A+C，第二次不能命中 A+B；系统会发现公共 A 并将 A 持久化，第三次 A+D 才可能命中 A。</li>
+    <li>缓存构建需要数秒，且是 best-effort；并发冷启动不能假定 100% 命中。</li>
+  </ul>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">三家对照：别把模型代际与平台规则揉成一张假表</h2></div>
+  <p class="lede">以下规则来自 2026-08-27 官方文档。价格和模型会变，生产环境应把 usage 与实际价目表作为最终事实。</p>
+
+  <div class="vendor-grid">
+    <article class="vendor"><h4>OpenAI</h4><dl><dt>CONTROL</dt><dd>支持模型默认启用；GPT-5.6+ 有 implicit / explicit-only，最多 4 次写入、读取看最近 50 个断点。</dd><dt>MINIMUM</dt><dd>GPT-5.6+：1,024 可见 token；更早模型通常 2,048。</dd><dt>PRICE</dt><dd>GPT-5.6+ 写 1.25×、读 0.1×；更早模型不另收写费，读价看模型。</dd><dt>LIFETIME</dt><dd>GPT-5.6+ 默认且仅支持最低 30m；更早模型有 in-memory 或支持时 24h。</dd><dt>USAGE</dt><dd><code>cached_tokens</code>、GPT-5.6+ 的 <code>cache_write_tokens</code></dd></dl></article>
+    <article class="vendor"><h4>Anthropic</h4><dl><dt>CONTROL</dt><dd>顶层 automatic caching，或 content block 显式 <code>cache_control</code>；最多 4 个断点，回看 20 blocks。</dd><dt>MINIMUM</dt><dd>按模型 512 / 1,024 / 2,048 / 4,096，不再适合概括成“多数 1,024”。</dd><dt>PRICE</dt><dd>5m 写 1.25×；1h 写 2×；读 0.1×。</dd><dt>LIFETIME</dt><dd>默认 5m，可选 1h；写或读会刷新，计时从请求开始。</dd><dt>USAGE</dt><dd><code>cache_creation_input_tokens</code> + <code>cache_read_input_tokens</code></dd></dl></article>
+    <article class="vendor deepseek"><h4>DeepSeek</h4><dl><dt>CONTROL</dt><dd>磁盘 Context Cache 默认开启，无需改代码；完整匹配已经持久化的缓存前缀单元。</dd><dt>MINIMUM</dt><dd>官方当前 Context Caching 指南未承诺统一最低命中长度；旧公告曾称 64 token 存储单元，不应当作新版 SLA。</dd><dt>PRICE</dt><dd>V4 当前峰值缓存命中相对 miss 约 1/31.4；离峰同倍率，具体价格随模型变化。</dd><dt>LIFETIME</dt><dd>未使用后通常数小时至数天自动清除，无可配置 TTL 承诺。</dd><dt>USAGE</dt><dd><code>prompt_cache_hit_tokens</code> + <code>prompt_cache_miss_tokens</code></dd></dl></article>
+  </div>
+
+  <table><tr><th>问题</th><th>OpenAI</th><th>Anthropic</th><th>DeepSeek</th></tr><tr><td>缓存原文答案？</td><td colspan="3"><strong>都不是。</strong>复用输入前缀状态，输出重新生成。</td></tr><tr><td>能否手动清空？</td><td>否</td><td>否</td><td>文档未提供</td></tr><tr><td>命中保证？</td><td>受路由与容量影响</td><td>并发首写完成前不可读</td><td>明确 best-effort</td></tr><tr><td>变化最敏感处</td><td>完整 rendered context</td><td><code>tools → system → messages</code></td><td>已持久化前缀单元的完整匹配</td></tr></table>
+
+  <div class="note warn"><b>⚠ 规则变化比你想得快</b>Anthropic 当前文档已支持顶层 automatic caching，最低长度也按新模型细分；OpenAI GPT-5.6+ 又增加显式断点和写入计费。不要把 2024 年博客里的数字长期硬编码进监控系统。</div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">成本实验室：写一次，读几次，什么时候开始省</h2></div>
+  <p class="lede">拖动参数观察输入成本。图中用“标准输入 token 等价成本”比较，避免把不同模型的美元单价混在一起；输出 token 与动态尾部不受缓存折扣。</p>
+
+  <div class="cost-lab">
+    <div class="cost-controls">
+      <div class="control"><label>提供方 <b id="providerLabel">OpenAI 5.6+</b></label><div class="provider-pills"><button class="provider-pill active" data-provider="openai">OpenAI 5.6+</button><button class="provider-pill" data-provider="anthropic">Anthropic 5m</button><button class="provider-pill" data-provider="deepseek">DeepSeek V4</button></div></div>
+      <div class="control"><label>稳定前缀 <b id="prefixValue">20,000 tok</b></label><input id="prefixRange" type="range" min="1000" max="100000" step="1000" value="20000"></div>
+      <div class="control"><label>每次动态尾部 <b id="tailValue">1,000 tok</b></label><input id="tailRange" type="range" min="100" max="10000" step="100" value="1000"></div>
+      <div class="control"><label>总请求数 <b id="requestValue">10</b></label><input id="requestRange" type="range" min="1" max="50" step="1" value="10"></div>
+      <div class="control"><label>后续命中率 <b id="hitValue">80%</b></label><input id="hitRange" type="range" min="0" max="100" step="5" value="80"></div>
+    </div>
+    <div class="cost-output"><div class="saving" id="savingValue">—<small>相对无缓存节省</small></div><div class="cost-bars"><div><div class="cost-bar-label"><span>完全不缓存</span><b id="baseCost"></b></div><div class="cost-bar"><div class="cost-fill base" id="baseBar"></div></div></div><div><div class="cost-bar-label"><span>按当前命中率</span><b id="cacheCost"></b></div><div class="cost-bar"><div class="cost-fill saved" id="cacheBar"></div></div></div></div><p class="cost-note" id="costNote"></p></div>
+  </div>
+
+  <details class="quiz"><summary>怎么算？</summary><div class="ans">无缓存 = N ×（稳定前缀 + 动态尾部）。有缓存 = 首次写入前缀 + 每次动态尾部 + 后续命中的前缀读价 + 后续未命中的前缀标准价。OpenAI / Anthropic 分别使用写 1.25×、读 0.1×；DeepSeek 当前 V4 峰值 hit/miss 比约 0.0318，自动写入没有单列写费。模拟忽略输出、路由失败和 TTL 过期。</div></details>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">缓存杀手挑战：8 个改动，哪些会砸掉命中</h2></div>
+  <p class="lede">假设改动发生在缓存断点之前，并且没有更早的独立断点可退。先判断，再看真实失效边界。</p>
+  <div class="challenge"><div class="challenge-head"><b>CACHE KILLER REVIEW</b><span class="challenge-score" id="challengeScore">0 / 8 已判断</span></div><div class="case-list" id="caseList"></div><div class="challenge-foot"><button class="sim-btn" id="caseSubmit" disabled>提交判定</button><button class="sim-btn ghost" id="caseReset" style="display:none">↺ 再来一次</button><span class="q-verdict" id="caseVerdict"></span></div></div>
+
+  <h3>生产口诀，不是玄学</h3>
+  <ul class="plain"><li><strong>稳定的放前，变化的放后：</strong>时间、用户 ID、request ID、动态 RAG 结果留在断点后。</li><li><strong>工具定义冻结：</strong>固定名称、schema、描述与顺序；OpenAI 可用 allowed tools，而不是每轮删工具。</li><li><strong>历史只追加：</strong>不要重排、重写旧消息；compaction 会改变前缀，需接受压缩后的第一次命中下降。</li><li><strong>先测 usage：</strong>看 token 级命中率，不要用“请求命中过几次”掩盖只命中很短前缀。</li><li><strong>先预热再并发：</strong>Anthropic 要等首个响应开始后缓存才可用；DeepSeek 构建也需要数秒。</li></ul>
+  <div class="note ok"><b>Agent 场景的肥肉</b><code>tools + system/developer + 长文档 + append-only history</code> 才值得缓存。用户的当前问题天然会变，把它留在最后，不要让它挡在稳定前缀前面。</div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">终极测验：你真的会设计可命中的 Prompt 了吗？</h2></div>
+  <p class="lede">5 题验收。答对 4 题以上，才算能去看生产账单。</p>
+  <div class="quizbox"><div class="quiz-head"><span>FINAL EXAM · PREFIX CACHING</span><strong id="quizScore">0 / 5</strong></div><div class="quiz-body"><div class="q-no" id="qNo"></div><div class="q-text" id="qText"></div><div id="qOpts"></div><div class="q-exp" id="qExp"></div></div><div class="quiz-foot"><button class="sim-btn" id="qSubmit" disabled>确认答案</button><button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button><button class="sim-btn ghost" id="qRestart" style="display:none">↺ 重新考</button><span class="q-verdict" id="qVerdict"></span></div></div>
+
+  <h3>官方来源</h3>
+  <ul class="plain source-list"><li><a href="https://developers.openai.com/api/docs/guides/prompt-caching" target="_blank" rel="noopener">OpenAI · Prompt caching</a></li><li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noopener">Anthropic · Prompt caching</a></li><li><a href="https://api-docs.deepseek.com/guides/kv_cache" target="_blank" rel="noopener">DeepSeek · Context Caching</a></li><li><a href="https://api-docs.deepseek.com/quick_start/pricing" target="_blank" rel="noopener">DeepSeek · Models &amp; Pricing</a></li></ul>
+  <footer class="colophon">资料核对日期：2026-08-27 · 价格与模型规则会变化，请以链接中的官方文档与实际 API usage 为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* TOC + scrollspy */
+const chapters=[...document.querySelectorAll("section.chapter")],toc=document.getElementById("toc"),names=["四种缓存","KV 状态","前缀咬合","请求流程","三家对照","成本实验室","缓存杀手","终极测验"];
+chapters.forEach((sec,i)=>{const a=document.createElement("a");a.href="#"+sec.id;a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;toc.appendChild(a)});
+const links=[...toc.querySelectorAll("a")],progFill=document.getElementById("progFill"),progLabel=document.getElementById("progLabel");
+function updateSpy(){const y=scrollY+120;let cur=0;chapters.forEach((s,i)=>{if(s.offsetTop<=y)cur=i});links.forEach((a,i)=>a.classList.toggle("active",i===cur));progFill.style.width=((cur+1)/chapters.length*100)+"%";progLabel.textContent=`${cur+1} / ${chapters.length} 章`}
+addEventListener("scroll",updateSpy,{passive:true});addEventListener("resize",updateSpy);updateSpy();
+
+/* checkpoints */
+const CK="llm-prompt-caching-checkpoints";let ck={};try{ck=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){}
+document.querySelectorAll(".ckpt-item").forEach(el=>{if(ck[el.dataset.key])el.classList.add("done");el.onclick=()=>{el.classList.toggle("done");ck[el.dataset.key]=el.classList.contains("done");try{localStorage.setItem(CK,JSON.stringify(ck))}catch(e){}}});
+
+/* four cache types */
+const TYPES=[
+ {g:"KV",t:"KV Cache · 单次请求内部",x:"自回归生成时，把前面 token 的 Key / Value 留在 GPU 显存，生成下一 token 不必重算整个序列。请求结束后通常释放。它降低推理计算，不对应 API 账单里的“缓存输入命中”。",m:["范围：一次生成","位置：推理引擎 / GPU","缓存：注意力 K/V"]},
+ {g:"PX",t:"Prompt / Prefix Cache · 跨请求",x:"服务端保留稳定输入前缀的中间状态。后续请求若找到可用的相同前缀，直接读取状态，只处理动态尾部。OpenAI 与 Anthropic 的 API 缓存主要属于这里。",m:["范围：多次请求","匹配：精确前缀","收益：输入价 + TTFT"]},
+ {g:"DS",t:"DeepSeek · 磁盘 Context Cache",x:"DeepSeek 默认把可复用上下文状态存到分布式磁盘。新版按“缓存前缀单元”持久化与完整匹配，容量经济，但构建要数秒、命中是 best-effort。",m:["默认开启","介质：磁盘阵列","清理：数小时至数天"]},
+ {g:"≈",t:"Semantic Cache · 应用层答案缓存",x:"用 embedding 或规则判断问题是否足够相似，命中就直接返回旧答案，可能完全不调用 LLM。省得最多，也最容易因权限、时效或细微语义差异返回错误答案。",m:["缓存：最终答案","匹配：语义相似","风险：陈旧 / 串租户"]}
+];
+function showType(i){const x=TYPES[i];document.getElementById("typeGlyph").textContent=x.g;document.getElementById("typeTitle").textContent=x.t;document.getElementById("typeText").textContent=x.x;document.getElementById("typeMeta").innerHTML=x.m.map(v=>`<span>${v}</span>`).join("");document.querySelectorAll(".type-tab").forEach((b,j)=>b.classList.toggle("active",i===j))}
+document.querySelectorAll(".type-tab").forEach(b=>b.onclick=()=>showType(+b.dataset.type));showType(0);
+
+/* KV stage v2 —— 两幕剧：第一次请求 → 货架存档 → 第二次请求复用 */
+const TOKENS_A=["tools","system","long_doc","user_q"],TOKENS_B=["tools","system","long_doc","new_q"],SCORES=[.1,.2,.3,.4];
+const rowA=document.getElementById("kvRowA"),rowB=document.getElementById("kvRowB"),shelfSlots=document.getElementById("shelfSlots"),shelfCount=document.getElementById("shelfCount"),scene=document.getElementById("kvScene"),dots=document.getElementById("kvDots"),kvStatus=document.getElementById("kvStatus"),payoff=document.getElementById("kvPayoff"),payoffCached=document.getElementById("payoffCached"),payoffFresh=document.getElementById("payoffFresh"),payoffText=document.getElementById("payoffText"),btnPrev=document.getElementById("kvPrev"),btnNext2=document.getElementById("kvNext2"),btnPlay=document.getElementById("kvPlay"),btnReset=document.getElementById("kvReset");
+const KV_TEXTS=["第一次请求：一句话拆成 4 个 token，排队进模型。","每个 token 都被改造成两张卡：K（门牌）+ V（内容）。做卡这步最费算力。","读 user_q 时，它拿 Q 去比前面每张 K：门牌越像，取的 V 越多——这就是注意力。","算完的 K/V 顺手存档：tools、system、long_doc 被放上缓存货架。","第二次请求：前三词一字不差，直接从货架取卡；只有 new_q 需要现场做卡。","结果：75% 的输入处理被复用，而 new_q 的答案仍然重新生成。"],KV_STEPS=KV_TEXTS.length;
+function buildTokenRow(container,toks){container.innerHTML="";toks.forEach((t,i)=>{const el=document.createElement("div");el.className="kv-token";el.style.setProperty("--score",(SCORES[i]*100)+"%");el.innerHTML=`<span class="q-badge">Q</span><div class="tok-label">${t}</div><div class="tok-kv"><span class="kv-chip k">K</span><span class="kv-chip v">V</span></div><div class="kv-score"><div class="kv-score-fill"></div></div><span class="arch-tag">已存档</span><span class="src-tag"></span>`;container.appendChild(el)})}
+buildTokenRow(rowA,TOKENS_A);
+shelfSlots.innerHTML="";[["KV","tools"],["KV","system"],["KV","long_doc"],["——","new_q"]].forEach(p=>{const s=document.createElement("div");s.className="shelf-slot";s.innerHTML=`${p[0]}<small>${p[1]}</small>`;shelfSlots.appendChild(s)});
+dots.innerHTML="";for(let i=0;i<KV_STEPS;i++){const d=document.createElement("span");d.className="kv-dot";dots.appendChild(d)}
+let kvI=0,kvTimer=null,kvBeamSvg=null;
+function slotsSet(fill){[...shelfSlots.children].forEach((s,i)=>s.classList.toggle("filled",fill&&i<3));shelfCount.textContent=fill?"3 / 3 已存档":"未存档"}
+function hideBeams(){if(kvBeamSvg){kvBeamSvg.remove();kvBeamSvg=null}}
+function drawKvBeams(){hideBeams();const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("class","kv-beam-svg");const rect=rowA.getBoundingClientRect(),toks=[...rowA.children],src=toks[3].querySelector(".q-badge").getBoundingClientRect(),x0=src.left+src.width/2-rect.left,y0=src.top+src.height/2-rect.top;toks.slice(0,3).forEach((el,i)=>{const kc=el.querySelector(".kv-chip.k").getBoundingClientRect(),x1=kc.left+kc.width/2-rect.left,y1=kc.top+kc.height/2-rect.top,mx=(x0+x1)/2,my=Math.min(y0,y1)-32;const p=document.createElementNS("http://www.w3.org/2000/svg","path");p.setAttribute("d",`M${x0},${y0} Q${mx},${my} ${x1},${y1}`);p.setAttribute("stroke",i===2?"#e8a35c":"#7fc4d0");p.setAttribute("stroke-width",(1.2+SCORES[i]*6).toFixed(1));p.setAttribute("stroke-linecap","round");p.classList.add("beam");p.style.transitionDelay=(i*200)+"ms";svg.appendChild(p)});rowA.appendChild(svg);kvBeamSvg=svg;requestAnimationFrame(()=>requestAnimationFrame(()=>[...svg.children].forEach(p=>p.classList.add("on"))))}
+function renderKv(){
+  scene.textContent=kvI<3?"第 1 幕 · 第一次请求":kvI===3?"存档 · 写入缓存货架":"第 2 幕 · 第二次请求";
+  [...dots.children].forEach((d,i)=>d.classList.toggle("done",i<kvI));
+  kvStatus.textContent=KV_TEXTS[kvI];btnPrev.disabled=kvI===0;btnNext2.textContent=kvI===KV_STEPS-1?"从头再看 ↺":"下一步 →";
+  /* 场景 1 */
+  const toks=[...rowA.children];hideBeams();rowA.style.opacity=kvI<=3?"1":".25";slotsSet(kvI>=3);
+  toks.forEach(el=>{el.classList.remove("has-kv","scored","archived","q-on");el.style.transitionDelay="0ms"});
+  toks.forEach(el=>el.classList.add("in"));
+  if(kvI>=1)toks.forEach((el,i)=>{el.style.transitionDelay=(i*80)+"ms";el.classList.add("has-kv")});
+  if(kvI>=2){toks.forEach((el,i)=>{el.style.transitionDelay=(i*180)+"ms";el.classList.add("scored")});toks[3].style.transitionDelay="0ms";toks[3].classList.add("q-on");setTimeout(()=>{if(kvI===2)drawKvBeams()},120)}
+  if(kvI>=3)toks.forEach((el,i)=>{el.style.transitionDelay=(i*120)+"ms";el.classList.add("archived")});
+  /* 场景 2 */
+  if(kvI>=4){rowB.hidden=false;if(!rowB.dataset.built){rowB.dataset.built=1;buildTokenRow(rowB,TOKENS_B)}void rowB.offsetHeight;const bs=[...rowB.children];bs.forEach((el,i)=>{el.style.transitionDelay=(i*130)+"ms";el.classList.add("has-kv");if(i<3){el.classList.add("cached");el.querySelector(".src-tag").textContent="从货架取"}else{el.classList.add("fresh");el.querySelector(".src-tag").textContent="现场做卡"}el.classList.add("in")})}
+  else{rowB.hidden=true;delete rowB.dataset.built}
+  /* 结算条 */
+  payoff.hidden=kvI<5;payoffCached.style.width=kvI>=5?"75%":"0";payoffFresh.style.width=kvI>=5?"25%":"0";payoffText.textContent=kvI>=5?"复用 3 / 4 前缀 · new_q 的答案仍重新生成":"";
+}
+function kvStop(){if(kvTimer){clearInterval(kvTimer);kvTimer=null}btnPlay.textContent="▶ 自动播放"}
+btnPrev.onclick=()=>{kvI=Math.max(0,kvI-1);kvStop();renderKv()};
+btnNext2.onclick=()=>{kvI=kvI===KV_STEPS-1?0:Math.min(KV_STEPS-1,kvI+1);kvStop();renderKv()};
+btnReset.onclick=()=>{kvI=0;kvStop();renderKv()};
+btnPlay.onclick=()=>{if(kvTimer){kvStop();return}kvI=0;renderKv();btnPlay.textContent="⏸ 暂停";kvTimer=setInterval(()=>{if(kvI>=KV_STEPS-1){kvStop();return}kvI++;renderKv()},1800)};
+addEventListener("resize",()=>{if(kvI===2)drawKvBeams()});
+renderKv();
+
+/* matcher */
+const baseline=["tools:v3","system:你是代码审查员","docs:repo-map@42","history:只追加","◆ breakpoint","question:检查 auth"],presets={
+ question:{b:["tools:v3","system:你是代码审查员","docs:repo-map@42","history:只追加","◆ breakpoint","question:检查 billing"],why:"动态尾部变化",hit:true},
+ time:{b:["time:21:03:02","tools:v3","system:你是代码审查员","docs:repo-map@42","history:只追加","◆ breakpoint","question:检查 billing"],why:"头部插入时间",hit:false},
+ tools:{b:["tools:v3(顺序变)","system:你是代码审查员","docs:repo-map@42","history:只追加","◆ breakpoint","question:检查 billing"],why:"工具定义抖动",hit:false},
+ history:{b:["tools:v3","system:你是代码审查员","docs:repo-map@42","history:重写首轮","◆ breakpoint","question:检查 billing"],why:"旧历史被改写",hit:false}
+};
+function renderBlocks(el,arr,classes=[]){el.innerHTML=arr.map((x,i)=>`<span class="pblock ${classes[i]||''}">${x}</span>`).join("")}
+function showPreset(key){const p=presets[key],a=baseline,b=p.b;let common=0;while(common<a.length&&common<b.length&&a[common]===b[common])common++;const breakA=4,breakB=b.indexOf("◆ breakpoint"),canHit=breakB>=0&&common>breakA&&p.hit;renderBlocks(document.getElementById("promptA"),a,a.map((_,i)=>i<breakA?"hit":i===breakA?"hit":"tail"));renderBlocks(document.getElementById("promptB"),b,b.map((_,i)=>i<common?"hit":i===b.length-1?"tail":"miss"));document.getElementById("matchCount").textContent=common+" blocks";const bh=document.getElementById("breakHit");bh.textContent=canHit?"HIT ✓":"MISS ✗";bh.className=canHit?"cache":"bad";document.getElementById("matchWhy").textContent=p.why;document.querySelectorAll(".preset").forEach(x=>x.classList.toggle("active",x.dataset.preset===key))}
+document.querySelectorAll(".preset").forEach(b=>b.onclick=()=>showPreset(b.dataset.preset));showPreset("question");
+
+/* flow */
+const flowTexts=["API 先把隐藏指令、tools、system/developer、消息、图片与相关配置渲染成模型真正看到的上下文。","前缀必须达到当前模型最低长度；显式模式还要检查断点位置。短于门槛通常静默不缓存。","系统按厂商规则寻找最长可用项：OpenAI 看合格断点，Anthropic 最多回看 20 blocks，DeepSeek 要完整匹配已持久化前缀单元。","命中部分直接恢复 K/V 状态。cached tokens 省的是输入处理，不是输出生成。","分叉后的动态尾部按普通输入处理；模型继续推理并生成全新输出。","请求在合格断点或前缀单元处写入新缓存，为下一次 append-only 请求铺路。"],flowSteps=[...document.querySelectorAll(".flow-step")];let flowI=0;
+function renderFlow(){flowSteps.forEach((s,i)=>{s.classList.toggle("done",i<flowI);s.classList.toggle("on",i===flowI)});document.getElementById("flowCaption").textContent=flowTexts[flowI];document.getElementById("flowNext").textContent=flowI===5?"从头再看 ↺":"推进一步 →"}
+document.getElementById("flowNext").onclick=()=>{flowI=flowI===5?0:flowI+1;renderFlow()};document.getElementById("flowReset").onclick=()=>{flowI=0;renderFlow()};renderFlow();
+
+/* cost lab */
+const providers={openai:{name:"OpenAI 5.6+",w:1.25,r:.1,desc:"写入 1.25×，读取 0.1×。"},anthropic:{name:"Anthropic 5m",w:1.25,r:.1,desc:"5 分钟写入 1.25×，读取 0.1×。"},deepseek:{name:"DeepSeek V4",w:1,r:.014/.44,desc:"按 V4 峰值 hit $0.014 / miss $0.44 的比例模拟；自动缓存无独立写费。"}};let provider="openai";
+const ranges={prefix:document.getElementById("prefixRange"),tail:document.getElementById("tailRange"),requests:document.getElementById("requestRange"),hit:document.getElementById("hitRange")};
+function fmt(n){return Math.round(n).toLocaleString()+" eq"}
+function renderCost(){const P=providers[provider],prefix=+ranges.prefix.value,tail=+ranges.tail.value,n=+ranges.requests.value,rate=+ranges.hit.value/100,hits=(n-1)*rate,misses=(n-1)-hits,base=n*(prefix+tail),cost=prefix*P.w+n*tail+hits*prefix*P.r+misses*prefix,saving=Math.max(-999,(1-cost/base)*100);document.getElementById("providerLabel").textContent=P.name;document.getElementById("prefixValue").textContent=prefix.toLocaleString()+" tok";document.getElementById("tailValue").textContent=tail.toLocaleString()+" tok";document.getElementById("requestValue").textContent=n;document.getElementById("hitValue").textContent=Math.round(rate*100)+"%";document.getElementById("baseCost").textContent=fmt(base);document.getElementById("cacheCost").textContent=fmt(cost);document.getElementById("baseBar").style.transform="scaleX(1)";document.getElementById("cacheBar").style.transform=`scaleX(${Math.min(1,cost/base)})`;document.getElementById("savingValue").firstChild.textContent=(saving>=0?"省 ":"多 ")+Math.abs(saving).toFixed(1)+"%";document.getElementById("savingValue").style.color=saving>=0?"var(--cache)":"var(--miss)";document.getElementById("costNote").textContent=`${P.desc} 预计后续 ${hits.toFixed(1)} 次命中、${misses.toFixed(1)} 次未命中。`}
+Object.values(ranges).forEach(r=>r.oninput=renderCost);document.querySelectorAll(".provider-pill").forEach(b=>b.onclick=()=>{provider=b.dataset.provider;document.querySelectorAll(".provider-pill").forEach(x=>x.classList.toggle("active",x===b));renderCost()});renderCost();
+
+/* challenge */
+const CASES=[
+ {t:"把 `Current time: 21:03:01` 放在 system 第一行",kill:true,x:"每秒改变最前缀；从时间戳后全部无法复用。移到断点后。"},
+ {t:"用户问题变化，但它位于显式稳定断点之后",kill:false,x:"这是正确结构：缓存稳定前缀，动态尾部按标准输入处理。"},
+ {t:"MCP 工具列表内容不变，只交换两个工具的顺序",kill:true,x:"顺序也是 rendered context 的一部分；tools 位于最前层，后续都受影响。"},
+ {t:"保持旧消息原样，只在末尾追加新一轮",kill:false,x:"append-only 正是多轮对话复用越来越长前缀的理想路径。"},
+ {t:"把摘要回填到第一轮，替换原对话",kill:true,x:"语义可能相同，字节前缀已经不同；第一次压缩后通常会损失旧缓存。"},
+ {t:"OpenAI 请求复用稳定的 `prompt_cache_key`",kill:false,x:"稳定 key 帮助相同前缀路由到同类缓存；它不保证命中，但不会主动破坏前缀。"},
+ {t:"在缓存区内把 JSON key 从 a,b 改成 b,a",kill:true,x:"序列化字节改变。固定 canonical serialization，别依赖无序 map。"},
+ {t:"TTL 内复用完全相同前缀，但切换模型",kill:true,x:"不同模型权重与缓存行为不同，不能假定跨模型共享 K/V。"}
+];let picks={};const caseList=document.getElementById("caseList"),caseSubmit=document.getElementById("caseSubmit"),caseReset=document.getElementById("caseReset");
+function buildCases(){caseList.innerHTML="";CASES.forEach((c,i)=>{const d=document.createElement("div");d.className="case";d.dataset.i=i;d.innerHTML=`<div class="case-title">${i+1}. ${c.t}</div><div class="case-actions"><button class="case-btn" data-v="1">会 MISS</button><button class="case-btn" data-v="0">仍可 HIT</button></div><div class="case-result"></div>`;d.querySelectorAll(".case-btn").forEach(b=>b.onclick=()=>{picks[i]=b.dataset.v==="1";d.querySelectorAll(".case-btn").forEach(x=>x.classList.toggle("picked",x===b));document.getElementById("challengeScore").textContent=`${Object.keys(picks).length} / ${CASES.length} 已判断`;caseSubmit.disabled=Object.keys(picks).length<CASES.length});caseList.appendChild(d)})}
+caseSubmit.onclick=()=>{let score=0;[...caseList.children].forEach(d=>{const i=+d.dataset.i,ok=picks[i]===CASES[i].kill;if(ok)score++;d.classList.add("locked",ok?"right":"wrong");d.querySelector(".case-result").textContent=(ok?"✓ ":"✗ ")+CASES[i].x});document.getElementById("caseVerdict").textContent=`${score} / ${CASES.length} · ${score>=7?"缓存守门员":"再查一次变化发生在哪里"}`;document.getElementById("caseVerdict").className="q-verdict "+(score>=7?"ok":"bad");caseSubmit.style.display="none";caseReset.style.display=""};caseReset.onclick=()=>{picks={};buildCases();document.getElementById("challengeScore").textContent="0 / 8 已判断";document.getElementById("caseVerdict").textContent="";caseSubmit.style.display="";caseSubmit.disabled=true;caseReset.style.display="none"};buildCases();
+
+/* final quiz */
+const QUESTIONS=[
+ {q:"前缀缓存命中后，输入前缀的 K/V 状态直接复用、无需重新前向计算。以下哪一步仍然必须完整执行？",o:["重新计算命中前缀的 K/V 状态","生成新的输出 token","重新解析并编码工具 schema","重算已缓存 system 指令的表示"],a:1,x:"命中时前缀 KV 从缓存加载，system/tools 的编码也随之命中；只有输出 token 从未被算过，仍需完整推理与采样。它是状态缓存，不是答案缓存。"},
+ {q:"A+B 已被 DeepSeek 持久化；下一次请求 A+C。按新版缓存前缀单元规则，当次会怎样？",o:["一定命中 A","完整命中 A+B","不能命中 A+B；可能识别并持久化公共 A，供后续请求使用","语义相似所以命中"],a:2,x:"DeepSeek 要完整匹配已经持久化的缓存前缀单元。公共 A 在被识别持久化前，不是可读缓存项。"},
+ {q:"Anthropic 的缓存前缀层级顺序是？",o:["messages → system → tools","system → tools → messages","tools → system → messages","顺序不影响缓存"],a:2,x:"工具定义在最前层；改 tools 会连带使 system 与 messages 缓存失效。"},
+ {q:"OpenAI GPT-5.6+ 的动态用户问题不值得写缓存，应该怎么做？",o:["放在 system 最前面","explicit-only，并在稳定内容末尾设断点","每轮生成新 prompt_cache_key","关闭缓存"],a:1,x:"显式模式只写开发者选中的断点，动态尾部按普通输入计费，避免每轮 1.25× 写入不会复用的内容。"},
+ {q:"评估生产缓存效果，最有意义的核心指标是？",o:["有多少请求返回 200","缓存 token ÷ 总输入 token 的加权命中率","平均输出长度","创建了多少 cache key"],a:1,x:"请求级 hit/miss 会掩盖“只命中一小段”。应聚合 cached tokens / total input tokens，并结合实际成本与 TTFT。"}
+];let qi=0,qs=0,picked=-1,locked=false;const qNo=document.getElementById("qNo"),qText=document.getElementById("qText"),qOpts=document.getElementById("qOpts"),qExp=document.getElementById("qExp"),qSubmit=document.getElementById("qSubmit"),qNext=document.getElementById("qNext"),qRestart=document.getElementById("qRestart"),qVerdict=document.getElementById("qVerdict"),quizScore=document.getElementById("quizScore");
+function loadQ(){picked=-1;locked=false;const Q=QUESTIONS[qi];qNo.textContent=`QUESTION ${qi+1} / ${QUESTIONS.length}`;qText.textContent=Q.q;qOpts.innerHTML="";Q.o.forEach((o,i)=>{const d=document.createElement("div");d.className="q-opt";d.textContent=String.fromCharCode(65+i)+". "+o;d.onclick=()=>{if(locked)return;picked=i;[...qOpts.children].forEach((x,j)=>x.classList.toggle("picked",j===i));qSubmit.disabled=false};qOpts.appendChild(d)});qExp.classList.remove("show");qVerdict.textContent="";qSubmit.style.display="";qSubmit.disabled=true;qNext.style.display="none";qRestart.style.display="none"}
+qSubmit.onclick=()=>{if(picked<0)return;locked=true;const Q=QUESTIONS[qi],ok=picked===Q.a;if(ok)qs++;[...qOpts.children].forEach((x,i)=>{x.classList.remove("picked");x.classList.add("locked");if(i===Q.a)x.classList.add("right");else if(i===picked)x.classList.add("wrong")});qExp.textContent=(ok?"✓ ":"✗ ")+Q.x;qExp.classList.add("show");quizScore.textContent=`${qs} / ${QUESTIONS.length}`;qVerdict.textContent=ok?"正确":"再想想";qVerdict.className="q-verdict "+(ok?"ok":"bad");qSubmit.style.display="none";if(qi<QUESTIONS.length-1)qNext.style.display="";else{qRestart.style.display="";qVerdict.textContent+=qs>=4?" · 出师！":" · 建议复习 03 / 05 章"}};
+qNext.onclick=()=>{qi++;loadQ()};qRestart.onclick=()=>{qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};loadQ();
+</script>
+</body>
+</html>
