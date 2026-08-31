@@ -25,6 +25,10 @@ pi-extensions/
 pi-agent-loop/
 └── a.html                     # pi agent loop 可视化
 
+pi-react-agent/
+├── a.html                     # pi ReAct Agent 实现原理交互手册（R/A/O 解剖、拆件实验台、提示词拼装机）
+└── assets/                    # 手册配图
+
 subagent-vs-multi-agent/
 └── a.html                     # subagent vs 多 agent 架构对照手册
 

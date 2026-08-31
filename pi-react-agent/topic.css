@@ -1,0 +1,174 @@
+/* pi-react-agent 专属样式：拆件模拟器 + 提示词拼装机 + 挂载点钉板 + 终极测验（公共部分见 /assets/handbook.css） */
+
+/* ===== R/A/O 徽标 ===== */
+  .rao{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:12px;
+    width:26px;height:26px;border-radius:7px;flex-shrink:0;
+    letter-spacing:.02em;vertical-align:middle;
+  }
+  .rao.r{background:#e8ecf5;color:#2c4a7c;border:1.5px solid #9db1d4}
+  .rao.a{background:#f7e3d8;color:#8f3512;border:1.5px solid #c2491d}
+  .rao.o{background:#e2ecdd;color:#3d5a33;border:1.5px solid #3d7a44}
+
+/* ===== 信息图 ===== */
+  .diagram img{display:block;width:100%;height:auto;border-radius:6px}
+
+/* ===== 参考资料 ===== */
+  .ref-item{
+    width:100%;max-width:var(--content-rail);
+    border:1.5px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:0 9px 9px 0;background:#fffdf8;
+    padding:13px 18px;margin:0 0 12px;
+  }
+  .ref-item .ref-title{font-weight:650;font-size:15.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ref-item .ref-title a{color:var(--accent-deep);text-decoration:none;border-bottom:1px dashed var(--accent)}
+  .ref-item .ref-title a:hover{color:var(--accent)}
+  .ref-item .ref-meta{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-top:4px}
+  .ref-item .ref-meta a{color:var(--ink-soft)}
+  .ref-item .ref-desc{font-size:14px;color:var(--ink-soft);line-height:1.7;margin-top:6px;max-width:78ch}
+
+/* ===== 通用交互面板 ===== */
+  .sim-btn{
+    font-family:var(--mono);font-size:13px;font-weight:600;cursor:pointer;
+    background:var(--ink);color:var(--paper);border:none;border-radius:6px;padding:8px 18px;
+    transition:.15s;
+  }
+  .sim-btn:hover{background:var(--accent-deep)}
+  .sim-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--ink-soft)}
+  .sim-btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
+
+/* ===== 第02章 · 拆件模拟器 ===== */
+  .parts{
+    width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;
+    background:#fffdf8;margin:20px 0 10px;overflow:hidden;
+  }
+  .parts-head{display:flex;justify-content:space-between;align-items:center;padding:13px 20px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep);flex-wrap:wrap;gap:8px}
+  .parts-head .pt{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+  .parts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px 20px 6px}
+  .part{
+    border:1.5px solid var(--line);border-radius:9px;padding:12px 14px;cursor:pointer;
+    transition:.15s;background:var(--paper);user-select:none;
+  }
+  .part:hover{border-color:var(--ink)}
+  .part .p-top{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+  .part .p-name{font-weight:700;font-size:15px}
+  .part .p-role{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint)}
+  .part .p-desc{font-size:13px;color:var(--ink-soft);line-height:1.6}
+  .part .p-toggle{
+    margin-left:auto;width:34px;height:19px;border-radius:99px;background:var(--ink);position:relative;flex-shrink:0;transition:.18s;
+  }
+  .part .p-toggle::after{
+    content:"";position:absolute;top:2.5px;left:18px;width:14px;height:14px;border-radius:50%;
+    background:#fffdf8;transition:.18s;
+  }
+  .part.off{border-color:var(--bad);background:#faf1ee}
+  .part.off .p-name{color:var(--bad)}
+  .part.off .p-toggle{background:var(--bad)}
+  .part.off .p-toggle::after{left:2.5px}
+  .parts-run{display:flex;gap:10px;align-items:center;padding:6px 20px 16px;flex-wrap:wrap}
+  .parts-stage{
+    border-top:1.5px dashed var(--line);background:var(--paper);
+    padding:14px 20px 18px;min-height:118px;
+  }
+  .parts-stage .st-title{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+  .parts-stage .st-line{
+    font-family:var(--mono);font-size:12.5px;line-height:2;border-radius:5px;padding:1px 10px;margin-bottom:2px;
+    opacity:0;animation:simIn .35s ease-out forwards;
+  }
+  .st-line.ok{background:#e2ecdd;color:#2f5527}
+  .st-line.bad{background:#f6dede;color:#7c2020}
+  .st-line.dim{color:var(--ink-faint)}
+  .st-line.act{background:#f7e3d8;color:#8f3512}
+  @keyframes simIn{to{opacity:1}}
+  .parts-verdict{font-size:14px;color:var(--ink-soft);margin-top:10px;max-width:74ch;line-height:1.75}
+
+/* ===== 第06章 · 系统提示词拼装机 ===== */
+  .builder{
+    width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;
+    background:#fffdf8;margin:20px 0 10px;overflow:hidden;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
+  }
+  .builder-left{border-right:1px solid var(--line);padding:16px 18px;background:var(--paper)}
+  .builder-left .bl-title{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px}
+  .bpart{
+    display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;
+    margin-bottom:8px;cursor:pointer;transition:.14s;background:#fffdf8;
+  }
+  .bpart:hover{border-color:var(--ink)}
+  .bpart.on{border-color:var(--accent);background:#f9ece4}
+  .bpart .b-box{
+    width:17px;height:17px;border:2px solid var(--ink-soft);border-radius:4px;flex-shrink:0;margin-top:3px;
+    display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;transition:.14s;
+  }
+  .bpart.on .b-box{background:var(--accent);border-color:var(--accent);color:#fff}
+  .bpart .b-name{font-weight:650;font-size:13.5px;line-height:1.4}
+  .bpart .b-sub{font-size:12px;color:var(--ink-soft);line-height:1.55;margin-top:2px}
+  .bpart.locked{opacity:.55;cursor:not-allowed}
+  .builder-right{padding:16px 0 0;display:flex;flex-direction:column;min-width:0}
+  .builder-right .br-title{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);padding:0 18px 10px}
+  .builder-right pre{
+    flex:1;margin:0;border:none;border-radius:0;border-top:1px dashed var(--line);
+    font-size:12px;line-height:1.7;min-height:380px;white-space:pre-wrap;word-break:break-word;
+  }
+  .builder-right pre .seg{transition:background .3s}
+  .builder-right pre .seg.fresh{background:rgba(224,145,90,.28);border-radius:3px}
+  .builder-right pre .seg-note{color:#8a8065;font-style:italic}
+
+/* ===== 第07章 · 挂载点钉板 ===== */
+  .board{
+    width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;
+    background:#fffdf8;margin:20px 0 10px;overflow:hidden;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);
+  }
+  .board-left{border-right:1px solid var(--line);padding:16px 14px;background:var(--paper)}
+  .board-left .bl-title{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px}
+  .layer{
+    display:flex;gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:8px;
+    padding:9px 12px;margin-bottom:8px;cursor:pointer;transition:.14s;background:#fffdf8;
+  }
+  .layer:hover{border-color:var(--ink)}
+  .layer.active{border-color:var(--accent);background:#f9ece4;box-shadow:2px 2px 0 rgba(194,73,29,.25)}
+  .layer .l-ico{font-size:16px;flex-shrink:0}
+  .layer .l-name{font-weight:650;font-size:13.5px}
+  .layer .l-hook{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);display:block;margin-top:1px}
+  .board-right{display:flex;flex-direction:column;min-width:0}
+  .board-right pre{
+    flex:1;margin:0;border:none;border-radius:0;font-size:11.8px;line-height:1.72;
+    min-height:330px;overflow-x:auto;
+  }
+  .board-right pre .cl{display:block;padding:0 14px;border-left:3px solid transparent;white-space:pre}
+  .board-right pre .cl.hot{background:rgba(224,145,90,.3);border-left-color:var(--accent);color:#ffe9d6}
+  .board-story{
+    border-top:1.5px solid var(--ink);background:var(--paper-deep);padding:13px 18px;
+    font-size:13.5px;line-height:1.7;color:var(--ink-soft);min-height:86px;
+  }
+  .board-story b{color:var(--accent-deep)}
+
+/* ===== 终极测验 ===== */
+  .quizbox{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:20px 0;overflow:hidden}
+  .quiz-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep)}
+  .quiz-head .qt{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+  .quiz-score{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent-deep)}
+  .quiz-body{padding:20px 24px}
+  .q-no{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.1em;margin-bottom:6px}
+  .q-text{font-size:17px;font-weight:650;margin-bottom:16px;max-width:64ch}
+  .q-opt{display:block;border:1.5px solid var(--line);border-radius:8px;padding:11px 16px;margin-bottom:9px;cursor:pointer;transition:.13s;font-size:15px;max-width:100%}
+  .q-opt:hover{border-color:var(--ink);background:var(--paper-deep)}
+  .q-opt.picked{border-color:var(--accent);background:#f7e3d8}
+  .q-opt.right{border-color:var(--ok);background:#e2ecdd}
+  .q-opt.wrong{border-color:var(--bad);background:#f6dede}
+  .q-opt.locked{pointer-events:none}
+  .q-exp{display:none;border-top:1px dashed var(--line);margin-top:12px;padding-top:12px;font-size:14.5px;color:var(--ink-soft)}
+  .q-exp.show{display:block}
+  .quiz-foot{display:flex;gap:10px;padding:14px 24px;border-top:1.5px solid var(--ink);background:var(--paper-deep)}
+  .q-verdict{font-size:14.5px;font-weight:700;margin-left:6px;align-self:center}
+  .q-verdict.ok{color:var(--ok)} .q-verdict.bad{color:var(--bad)}
+
+@media (max-width:920px){
+  .parts-grid{grid-template-columns:1fr}
+  .builder{grid-template-columns:1fr}
+  .builder-left{border-right:none;border-bottom:1px solid var(--line)}
+  .board{grid-template-columns:1fr}
+  .board-left{border-right:none;border-bottom:1px solid var(--line)}
+}

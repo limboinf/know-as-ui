@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>pi ReAct Agent · 实现手册</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">pi <em>react agent</em> · 实现手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 10 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc">
+  <div class="toc-title">目录 · Contents</div>
+</nav>
+
+<main>
+
+<!-- ======================= 01 ReAct 是什么 ======================= -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">浅层：ReAct 就是「想一步、动一步、看一眼」</h2></div>
+  <p class="lede">找一个水管工来家里修漏水的水管，他不会把整套方案一次想完再动手——他是想一下「先关总闸」，动手拧一下，蹲下来看一眼水停没停，再想下一步。LLM 自己只会「说」，不会「做」；把想、做、看接成一个闭环，让模型像水管工一样边干边看，这就是 ReAct。</p>
+
+  <h3>这个词从哪来的</h3>
+  <p>ReAct = <strong>Rea</strong>soning + <strong>Act</strong>ing，来自 2022 年的论文《ReAct: Synergizing Reasoning and Acting in Language Models》（Yao et al., ICLR 2023）。论文的做法很直白：用提示词要求模型按固定格式输出三行戏——</p>
+
+  <div class="codewrap"><span class="filetab">2022 年的 ReAct · 文本协议版</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="cm">Thought:</span>  我需要先查一下 Apple 的创始人是谁          <span class="cm">← Reason：想</span>
+<span class="cm">Action:</span>    Search[Apple 创始人]                      <span class="cm">← Act：动（一个文本指令）</span>
+<span class="cm">Observation:</span> Apple 由 Steve Jobs、Steve Wozniak 创立…  <span class="cm">← 程序执行后，把结果拼回 prompt</span>
+<span class="cm">Thought:</span>  我还需要查 Wozniak 的出生年……              <span class="cm">← 带着观察，继续想</span></code></pre></div>
+
+  <p>这套协议有个致命软肋：<strong>Action 是一段自由文本</strong>，全靠解析器从模型的回复里抠出「Search[...]」这种格式。模型格式写歪一个括号，整个系统就崩。2023 年之后各家 API 原生支持了 function calling / tool use——Action 从「要解析的文本」升级成了「API 级的结构化对象」，解析器直接下岗。这就是<strong>现代 ReAct</strong>：协议下沉到了模型 API 里，但三拍节奏一步没变。</p>
+
+  <figure class="diagram">
+  <svg viewBox="0 0 880 320" role="img" aria-label="ReAct 三拍节奏与 pi 消息的对应">
+    <defs>
+      <marker id="p1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+      <marker id="p1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+    </defs>
+    <rect x="40" y="40" width="230" height="86" rx="9" fill="#e8ecf5" stroke="#2c4a7c" stroke-width="1.6"/>
+    <text x="155" y="70" text-anchor="middle" class="dg-title">R · Reason（想）</text>
+    <text x="155" y="92" text-anchor="middle" class="dg-sub">assistant 消息</text>
+    <text x="155" y="111" text-anchor="middle" class="dg-tiny">thinking 块 + text 块</text>
+
+    <rect x="330" y="40" width="230" height="86" rx="9" class="dg-accent"/>
+    <text x="445" y="70" text-anchor="middle" class="dg-title">A · Act（动）</text>
+    <text x="445" y="92" text-anchor="middle" class="dg-sub">content 里的 toolCall 块</text>
+    <text x="445" y="111" text-anchor="middle" class="dg-tiny">由循环进程执行，不归模型管</text>
+
+    <rect x="620" y="40" width="230" height="86" rx="9" fill="#e2ecdd" stroke="#3d7a44" stroke-width="1.6"/>
+    <text x="735" y="70" text-anchor="middle" class="dg-title">O · Observe（看）</text>
+    <text x="735" y="92" text-anchor="middle" class="dg-sub">role:"toolResult" 消息</text>
+    <text x="735" y="111" text-anchor="middle" class="dg-tiny">执行结果写回，成为下轮输入</text>
+
+    <path d="M272,83 H326" class="dg-flow" marker-end="url(#p1b)"/>
+    <path d="M562,83 H616" class="dg-flow" marker-end="url(#p1b)"/>
+    <path d="M735,128 C735,230 220,250 158,132" class="dg-line" marker-end="url(#p1a)"/>
+    <text x="445" y="215" text-anchor="middle" class="dg-lbl-ink">带着全部历史，回到 R ——直到某一拍没有 toolCall，循环自然结束</text>
+
+    <rect x="40" y="248" width="810" height="52" rx="8" fill="#efe9dd" stroke="#d8cfbd" stroke-width="1.2"/>
+    <text x="62" y="270" class="dg-sub" font-weight="bold">三样东西全部是「消息数组里的普通成员」——ReAct 没有任何超出「消息列表 + 循环」的神秘结构。</text>
+    <text x="62" y="289" class="dg-sub">想/动/看不是三个系统，是同一个数组里三种 role 的消息，按时间排成一列。</text>
+  </svg>
+  <figcaption>fig.01 — ReAct 三拍与 pi 消息模型的一一对应：协议消失了，只剩下消息</figcaption>
+  </figure>
+
+  <h3>通用智能体：三环分工，各决定什么</h3>
+  <p>把视角再拉高一层。既然所有 Agent 都是「ReAct 循环 + 通用大模型」，那构建出来的就是<strong>通用智能体</strong>——它不像传统软件那样被领域逻辑焊死：换一个领域，不用重写 Agent，只需要换工具和上下文。而三环各自由什么决定、边界在哪，非常清楚：</p>
+
+  <table>
+    <tr><th>环节</th><th>由什么决定</th><th>形象地说</th><th>关键事实（ReAct 论文）</th></tr>
+    <tr>
+      <td><strong>思考 <em>Reasoning</em></strong></td>
+      <td>大模型基座</td>
+      <td>Agent 的「智商」：理解复杂指令、多步推理、信息不全时做合理假设</td>
+      <td>缩放实验：同一框架换更强模型，所有任务成绩整体抬升——<strong>基座能力直接决定 Agent 上限</strong>，不可违背</td>
+    </tr>
+    <tr>
+      <td><strong>行动 <em>Acting</em></strong></td>
+      <td>工具集</td>
+      <td>Agent 的「手脚」：给自行车只能短途，给汽车才能远行</td>
+      <td>ALFWorld 这类交互任务里<strong>根本不存在「纯推理」基线</strong>——没有动作空间，智能无处落地；Act 基线 45%，ReAct 71%</td>
+    </tr>
+    <tr>
+      <td><strong>观察 <em>Observation</em></strong></td>
+      <td>环境返回的信息</td>
+      <td>Agent 的「感知系统」：必须真实、结构化</td>
+      <td>模糊反馈（只说「出错了」不说为什么）= 逼模型瞎猜；<strong>详细错误描述 + 修复建议 ≫ 一个错误码</strong></td>
+    </tr>
+  </table>
+
+  <figure class="diagram">
+    <img src="assets/react-three-loop.png" alt="通用智能体 = ReAct 三环：思考 + 行动 + 观察" loading="lazy">
+    <figcaption>fig.02 — 通用智能体 = ReAct 三环总览，右侧即工程团队的着力点：行动与观察</figcaption>
+  </figure>
+
+  <div class="note ok"><b>✦ 工程团队的着力点</b>
+    「思考」归算法团队管——基座能力无法在工程侧弥补。但「行动」和「观察」完全握在工程团队手里：<strong>提供更好的工具、返回更结构化的执行结果</strong>。这能极大减少幻觉和弯路——不是因为模型变聪明了，而是因为它做决策的依据更充分了。本手册第 04 / 05 章（解剖 A / 解剖 O），就是这两个着力点在 pi 里的完整落地。
+  </div>
+
+  <div class="note ok"><b>✦ 最重要的一个认知</b>
+    Agent 之所以能干活，不是因为模型突然变聪明了，而是因为「说」和「做」被接成了闭环。<strong>模型只出主意（输出文本和工具调用申请），循环负责动手。</strong>pi 的核心 <code>agent-loop.ts</code> 把这件事压缩进了几百行代码（本机 0.84.3 版含注释 797 行，编译后 552 行），循环本体在《<a href="../pi-agent-loop/a.html">pi Agent Loop</a>》手册已逐行走读过。本手册回答另一个问题：<strong>有了这个循环之后，一个完整能干活的 ReAct Agent 是怎么长出来的。</strong>
+  </div>
+
+  <details class="quiz"><summary>自测：2022 年论文版 ReAct 和现代 ReAct（如 pi）最本质的区别是什么？</summary>
+    <div class="ans">三拍节奏（想→动→看）完全一样，区别在 <strong>Action 的载体</strong>：论文版是一段需要解析器抽取的自由文本（脆弱，格式一歪就崩）；现代版是模型 API 原生输出的结构化 toolCall 对象（协议下沉进了模型 API）。pi 从第一行代码起就建立在原生工具调用上，没有任何文本解析环节。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="1">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件（点击打卡）</div>
+    <div class="ckpt-item" data-key="r1a"><div class="ckpt-box">✓</div><div class="ckpt-text">能用修水管比喻向别人讲清 ReAct 的三拍节奏</div></div>
+    <div class="ckpt-item" data-key="r1b"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出 R/A/O 分别对应 pi 里的哪种消息内容</div></div>
+    <div class="ckpt-item" data-key="r1c"><div class="ckpt-box">✓</div><div class="ckpt-text">能向工程同事讲清：为什么着力点在行动和观察，而不是思考</div></div>
+  </div>
+</section>
+
+<!-- ======================= 02 四样原料 ======================= -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">配方：拼一个最小 Agent，只要四样原料</h2></div>
+  <p class="lede">把 ReAct 拆到不能再拆，会剩四样东西：一份说明书、一本记事本、一个工具箱、一台发动机。少任何一样，agent 都会以一模一样的方式坏掉——下面可以亲手拆给你看。</p>
+
+  <p>pi 的类型系统把这四样钉得死死的。<code>AgentContext</code> 只有三个字段——它们就是前三样原料；第四样（循环）是消费这个上下文的函数：</p>
+
+  <div class="codewrap"><span class="filetab">pi-agent-core/src/types.ts · AgentContext（0.84.3，节选）</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="cm">/** Context snapshot passed into the low-level agent loop. */</span>
+<span class="kw">export interface</span> <span class="ty">AgentContext</span> {
+  systemPrompt: <span class="ty">string</span>;          <span class="cm">// ① 说明书：你是谁、有哪些工具、守什么规矩</span>
+  messages: <span class="ty">AgentMessage</span>[];      <span class="cm">// ② 记事本：完整对话历史（R/A/O 全在里面）</span>
+  tools?: <span class="ty">AgentTool</span>[];           <span class="cm">// ③ 工具箱：模型可以申请使用的动作</span>
+}
+<span class="cm">// ④ 发动机：agent-loop.ts 的 while 循环，推着 ①②③ 转起来</span></code></pre></div>
+
+  <p>整个 pi-coding-agent——2754 行的 AgentSession、16 个工具文件、扩展系统——都是给这四样原料做的<strong>工业级加强</strong>，而不是发明第五样东西。想验证这一点，最好的办法是把原料一件件拆掉，看 agent 怎么死：</p>
+
+  <div class="parts" id="parts">
+    <div class="parts-head">
+      <span class="pt">拆件实验台 · 场景：「帮我总结这个项目的 README」</span>
+      <button class="sim-btn ghost" id="partsReset">↺ 全部装回</button>
+    </div>
+    <div class="parts-grid">
+      <div class="part" data-part="prompt">
+        <div class="p-top"><span class="rao r">S</span><span class="p-name">① 说明书 systemPrompt</span><span class="p-toggle"></span></div>
+        <div class="p-desc">身份、工具用法、行为守则。拿掉后模型不知道自己该「先看再答」。</div>
+      </div>
+      <div class="part" data-part="tools">
+        <div class="p-top"><span class="rao a">T</span><span class="p-name">② 工具箱 tools[]</span><span class="p-toggle"></span></div>
+        <div class="p-desc">read / bash / edit / write。拿掉后模型的「动手申请」没有对象。</div>
+      </div>
+      <div class="part" data-part="loop">
+        <div class="p-top"><span class="rao a">L</span><span class="p-name">③ 发动机 loop</span><span class="p-toggle"></span></div>
+        <div class="p-desc">while 循环。拿掉后只剩单轮问答，工具申请没人执行。</div>
+      </div>
+      <div class="part" data-part="observe">
+        <div class="p-top"><span class="rao o">O</span><span class="p-name">④ 观察回写 Observe</span><span class="p-toggle"></span></div>
+        <div class="p-desc">把执行结果 push 回 messages。拿掉后模型对现实失明。</div>
+      </div>
+    </div>
+    <div class="parts-run">
+      <button class="sim-btn" id="partsRun">▶ 运行 agent</button>
+      <span class="parts-verdict" id="partsVerdict">四样都在 → 点「运行」看一场正常演出，然后试着拆掉其中一样再跑。</span>
+    </div>
+    <div class="parts-stage">
+      <div class="st-title">执行轨迹</div>
+      <div id="partsStage"><div class="st-line dim">（等待运行……）</div></div>
+    </div>
+  </div>
+
+  <h3>为什么偏偏是这四样</h3>
+  <ul class="plain">
+    <li><strong>说明书和记事本不能合并</strong>——systemPrompt 每次请求都要原样带上，但它不属于「对话」；对话是长的、会压缩的，说明书是短的、常驻的。</li>
+    <li><strong>工具箱必须独立于说明书</strong>——工具的参数 schema 会被 API 单独校验（<code>validateToolArguments</code>），说明书里写错工具名顶多误导，schema 错了直接 400。</li>
+    <li><strong>发动机不持有任何状态</strong>——pi 的 loop 是纯函数，转完即走。状态永远住在记事本（messages）里，所以「持久化一个 session」等价于「把数组写进 JSONL」。</li>
+  </ul>
+
+  <div class="note"><b>✦ 呼应论点</b>
+    后续所有花哨功能——记忆压缩、Skill 加载、子 agent——都没有发明第五样原料，只是在「进入下一次请求之前」对这四样做变换。这正是第 07 章的主题。
+  </div>
+
+  <details class="quiz"><summary>自测：拿掉「观察回写」后，agent 的死法和拿掉「工具箱」有什么不同？</summary>
+    <div class="ans">拿掉工具箱：模型从一开始就<strong>发不出</strong>动作申请（API 不认识任何工具），退化成纯聊天或幻觉编造。拿掉观察回写：模型<strong>发出了</strong>申请、工具也执行了，但结果没进上下文——下一拍模型看不到现实，要么重复申请同一个工具（死循环烧 token），要么只能承认「我看不到结果」。前者是「没有手」，后者是「没有眼睛」。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="2">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r2a"><div class="ckpt-box">✓</div><div class="ckpt-text">在实验台上把四样原料各拆一次，复述四种死法</div></div>
+    <div class="ckpt-item" data-key="r2b"><div class="ckpt-box">✓</div><div class="ckpt-text">能背出 AgentContext 的三个字段，并说出循环为什么不持有状态</div></div>
+  </div>
+</section>
+
+<!-- ======================= 03 解剖 R ======================= -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">解剖 R：模型的一次「想」，到底产出了什么</h2></div>
+  <p class="lede">Reason 不神秘：它就是一次 LLM 调用的返回值——一条 assistant 消息。值得搞清楚的是这条消息<strong>肚子里有几种块</strong>、这些块<strong>什么时候进入上下文</strong>、以及<strong>什么情况下算没说完</strong>。</p>
+
+  <h3>一条 assistant 消息 = 三种块的混排</h3>
+
+  <div class="codewrap"><span class="filetab">一条真实的 AssistantMessage（简化标注版）</span>
+    <button class="copybtn">copy</button>
+<pre><code>{
+  role: <span class="st">"assistant"</span>,
+  content: [
+    { type: <span class="st">"thinking"</span>,  thinking: <span class="st">"用户要总结 README，我得先读到它……"</span> },  <span class="cm">← 草稿纸（可选）</span>
+    { type: <span class="st">"text"</span>,      text: <span class="st">"我先看一下项目根目录。"</span> },              <span class="cm">← 说给你听的话</span>
+    { type: <span class="st">"toolCall"</span>,  id: <span class="st">"call_01"</span>, name: <span class="st">"read"</span>,
+      arguments: { path: <span class="st">"README.md"</span> } }                             <span class="cm">← 动作申请（给循环看）</span>
+  ],
+  stopReason: <span class="st">"toolUse"</span>,   <span class="cm">← 为什么停笔：因为有工具要执行</span>
+  usage: { input: 3122, output: 89, … },
+  timestamp: 1756600000000
+}</code></pre></div>
+
+  <ul class="plain">
+    <li><strong>三种块可以混排在同一条消息里</strong>——先想、再说、再申请工具，是一次流式生成里自然长出来的顺序，不是三个系统。</li>
+    <li><strong>toolCall 块是「申请」不是「执行」</strong>——模型只能提出请求；真去读文件的是 loop 所在的进程。这是 Agent 安全模型的第一根支柱。</li>
+    <li><strong>thinking 块是否回传给模型，由厂商协议决定</strong>——pi 原样保存在 AgentMessage 里，发给 provider 时由 pi-ai 按各协议序列化（例如 Anthropic 的 extended thinking 要求带签名回传才能续写思路）。</li>
+  </ul>
+
+  <h3>「想多深」是一个滑钮，不是一个开关</h3>
+  <table>
+    <tr><th>thinkingLevel（七档）</th><th>含义</th><th>代价</th></tr>
+    <tr><td><code>"off"</code></td><td>不生成思考块，直接作答</td><td>省 token，复杂任务易翻车</td></tr>
+    <tr><td><code>"minimal" / "low" / "medium" / "high"</code></td><td>思考预算逐级放大</td><td>延迟与 token 随档位上升</td></tr>
+    <tr><td><code>"xhigh" / "max"</code></td><td>仅部分模型家族支持</td><td>深思考任务才值得开</td></tr>
+  </table>
+  <p>ReAct 论文里「Thought」要靠提示词逼模型写出来；现代模型把它做成了<strong>计费的官方档位</strong>——reasoning token 也是一种输出 token，按输出价计费。</p>
+
+  <h3>停笔的四种理由（stopReason）</h3>
+  <table>
+    <tr><th>stopReason</th><th>含义</th><td style="border:none"></td></tr>
+    <tr><td><code>"stop"</code> / <code>"toolUse"</code></td><td>正常说完 / 要执行工具——循环的常规燃料</td></tr>
+    <tr><td><code>"length"</code></td><td>输出撞上 token 上限被砍断 → 本批 toolCall 参数不可信，全部判失败（防御细节见 <a href="../pi-agent-loop/a.html#c4">Agent Loop 手册第 04 章</a>）</td></tr>
+    <tr><td><code>"error"</code> / <code>"aborted"</code></td><td>API 出错 / 用户打断 → loop 立刻停机，不吞错</td></tr>
+  </table>
+
+  <div class="note ok"><b>✦ 流式时代的一个小机关</b>
+    流式输出的<strong>第一个增量事件</strong>到达时，半成品 assistant 消息就被 push 进了 <code>context.messages</code>；之后每个 delta 都是「原地替换数组最后一个元素」。好处：任何时刻看上下文它都是完整的。代价：中断时可能留下半成品——pi 用 <code>done/error</code> 的 finalMessage 统一回填来兜底。
+  </div>
+
+  <details class="quiz"><summary>自测：模型在一次回复里能同时「说话」和「申请工具」吗？拆开的好处是什么？</summary>
+    <div class="ans">能，content 数组里 text 块和 toolCall 块本来就允许混排（先解释再动手是常态）。好处是 UI 可以把「说的话」渲染成对话气泡、把「toolCall」渲染成执行卡片——两种块各自独立，展示层不需要解析任何文本；循环层也只挑 <code>type==="toolCall"</code> 的块执行，互不干扰。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="3">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r3a"><div class="ckpt-box">✓</div><div class="ckpt-text">能画出 assistant 消息 content 的三种块，并说出各自给谁看</div></div>
+    <div class="ckpt-item" data-key="r3b"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释「toolCall 是申请不是执行」的安全含义</div></div>
+  </div>
+</section>
+
+<!-- ======================= 04 解剖 A ======================= -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">解剖 A：把 read 工具开膛——动作是可以被类型化的</h2></div>
+  <p class="lede">给模型用的工具，本质是「给模型用的 API」：schema 是文档，execute 是 handler。pi 默认只带四件套（read / bash / edit / write），拿最不起眼的 read 开膛，就能看清一个工具的完整全身像。</p>
+
+  <h3>AgentTool 接口：一个工具的五件套</h3>
+
+  <div class="codewrap"><span class="filetab">pi-agent-core/src/types.ts · AgentTool（节选注释版）</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">export interface</span> <span class="ty">AgentTool</span> {
+  name: <span class="st">"read"</span>;                <span class="cm">// ① 模型看到的函数名</span>
+  label: <span class="st">"Read"</span>;               <span class="cm">// ② UI 显示名</span>
+  description: <span class="st">"Read file contents"</span>;  <span class="cm">// ③ 卖给模型的广告词（直接影响调用质量）</span>
+  parameters: <span class="ty">Type.Object</span>({     <span class="cm">// ④ 参数 schema：JSON Schema + 逐字段 description</span>
+    path:   <span class="ty">Type.String</span>({ description: <span class="st">"Path to the file to read"</span> }),
+    offset: <span class="ty">Type.Optional</span>(<span class="ty">Type.Number</span>({ description: <span class="st">"1-indexed start line"</span> })),
+    limit:  <span class="ty">Type.Optional</span>(<span class="ty">Type.Number</span>({ description: <span class="st">"Max lines"</span> })),
+  }),
+  execute: <span class="kw">async</span> (toolCallId, params, signal, onUpdate) => { … },  <span class="cm">// ⑤ 真正干活的 handler</span>
+  executionMode?: <span class="st">"sequential"</span>,  <span class="cm">// 可选：强制本工具串行执行</span>
+}</code></pre></div>
+
+  <p>read 工具的 <code>execute</code>（359 行源码）去掉 UI 渲染后只干三件事，恰好是一个工具的完整生命周期：</p>
+
+  <div class="codewrap"><span class="filetab">pi-coding-agent/src/core/tools/read.ts · 骨架（节选注释版）</span>
+    <button class="copybtn">copy</button>
+<pre><code>execute: <span class="kw">async</span> (toolCallId, params, signal, onUpdate) => {
+  <span class="kw">await</span> <span class="fn">access</span>(absolutePath);                 <span class="cm">// ① 权限检查：读不到就 throw（循环会接住）</span>
+  <span class="kw">const</span> buffer = <span class="kw">await</span> <span class="fn">readFile</span>(absolutePath); <span class="cm">// ② 真正的「动作」：一行 fs 调用</span>
+  <span class="cm">//    图片文件走另一条路：探测 MIME → 压到 2000×2000 → 返回 image 块</span>
+  <span class="kw">const</span> truncated = <span class="fn">truncateHead</span>(text, {      <span class="cm">// ③ 节流：观察也有成本</span>
+    maxLines: <span class="fn">2000</span>, maxBytes: <span class="fn">50 * 1024</span>,      <span class="cm">//    超出就截头留尾 + 说明被截断</span>
+  });
+  <span class="kw">return</span> {
+    content: [{ type: <span class="st">"text"</span>, text: truncated.text }],  <span class="cm">// 给【模型】看的</span>
+    details: { truncation: truncated },                 <span class="cm">// 给【UI】看的</span>
+  };
+}</code></pre></div>
+
+  <h3>content 和 details：一具尸体，两条通道</h3>
+  <table>
+    <tr><th></th><th>content</th><th>details</th></tr>
+    <tr><td><strong>给谁看</strong></td><td>模型——下一轮原样进上下文，烧 token</td><td>TUI / Web UI——渲染折叠面板、搜索、统计</td></tr>
+    <tr><td><strong>格式</strong></td><td>只有 text 和 image 两种块（provider 协议限制）</td><td>任意 JSON，类型参数 <code>AgentTool&lt;TDetails&gt;</code> 约束</td></tr>
+    <tr><td><strong>裁剪</strong></td><td>必须自律（truncate 2000 行 / 50KB）</td><td>随便塞，不影响上下文</td></tr>
+  </table>
+  <p>这个分流是「观察成本」的第一道闸门：模型只需要知道「文件前 2000 行说了什么」，不需要知道渲染细节。</p>
+
+  <div class="note warn"><b>⚠ description 是最便宜的 Prompt 工程</b>
+    模型选不选这个工具、参数填得对不对，几乎完全由 <code>description</code> 和 schema 逐字段的 description 决定。pi 每个工具都配了一条 <code>readToolSystemPromptContribution</code>（如「Use read to examine files instead of cat or sed」）——<strong>一行提示词省掉几千次错误调用</strong>。你写工具时，一半工作量应该在文案上。
+  </div>
+
+  <table>
+    <tr><th>默认四件套</th><th>一句话职责</th><th>各自的防御性设计</th></tr>
+    <tr><td><code>read</code></td><td>看（文件 / 图片）</td><td>截断节流、图片压缩、非视觉模型的降级注释</td></tr>
+    <tr><td><code>bash</code></td><td>万能后门（执行任意命令）</td><td>输出累计截断、超时、文件变更队列感知</td></tr>
+    <tr><td><code>edit</code></td><td>精确替换字符串</td><td>diff 校验、匹配不上即失败重试</td></tr>
+    <tr><td><code>write</code></td><td>整文件写入</td><td>file-mutation-queue 串行化，防止并发写花</td></tr>
+  </table>
+  <p class="dg-tiny" style="font-family:var(--mono)">另有 find / grep / ls / powershell 等可选工具——注意 pi 刻意只默认装四件：工具越少，模型选择错误率越低。</p>
+
+  <details class="quiz"><summary>自测：为什么工具执行结果要拆成 content 和 details 两条通道，而不是一个 JSON 全给模型？</summary>
+    <div class="ans">因为两边的「消化能力」和「成本结构」完全不同。模型通道（content）按 token 计费、只认 text/image，塞了渲染细节既贵又干扰推理；UI 通道（details）免费、类型自由，缺了它 TUI 就只能显示干巴巴的文本。合在一起意味着「每次都想清楚这个字段模型要不要看」，拆开后两边各自演化，互不牵制。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="4">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r4a"><div class="ckpt-box">✓</div><div class="ckpt-text">能背出 AgentTool 五件套并说出 schema 双重身份（文档 + 校验）</div></div>
+    <div class="ckpt-item" data-key="r4b"><div class="ckpt-box">✓</div><div class="ckpt-text">能给同事讲清 content/details 分流的成本逻辑</div></div>
+  </div>
+</section>
+
+<!-- ======================= 05 解剖 O ======================= -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">解剖 O：观察写回——反馈回路的质量守恒</h2></div>
+  <p class="lede">Observation 是 ReAct 的「现实反馈」：模型上一拍申请了动作，这一拍就要对账。整个自我修正能力都从这里来——所以观察怎么写回、写回什么、以什么顺序写回，值得抠三个细节。</p>
+
+  <h3>细节一：观察是一条正经消息，靠 id 与申请配对</h3>
+
+  <div class="codewrap"><span class="filetab">agent-loop.ts · createToolResultMessage（节选）</span>
+    <button class="copybtn">copy</button>
+<pre><code>{
+  role: <span class="st">"toolResult"</span>,
+  toolCallId: <span class="st">"call_01"</span>,      <span class="cm">← 与 assistant 消息里的 toolCall.id 严格配对</span>
+  toolName: <span class="st">"read"</span>,
+  content: [{ type: <span class="st">"text"</span>, text: <span class="st">"# My Project\n…"</span> }],
+  isError: <span class="kw">false</span>,             <span class="cm">← 错误标记直接长在消息上</span>
+  timestamp: 1756600000123
+}</code></pre></div>
+
+  <p>配对为什么重要？一次回复可以带<strong>多个</strong> toolCall（比如同时 read 三个文件），provider 协议要求结果与申请一一对应——<code>toolCallId</code> 就是那根线。多丢了任何一半，下一次请求都会被 API 拒收。</p>
+
+  <h3>细节二：错误不是异常，是带着 isError 标记的观察</h3>
+  <div class="note ok"><b>✓ 这一条是 ReAct 自我修正的全部秘密</b>
+    文件不存在、命令报错、参数校验失败……在传统程序里是异常上抛；在 ReAct 里全部被捕获、包成 <code>isError:true</code> 的 toolResult <strong>喂回给模型</strong>。模型读到错误文本，下一拍自己换方案。反馈回路里没有「死路」——任何现实都会变成模型看得见的信息。pi 在类型层面贯彻到底：StreamFn 契约明文写着<strong>绝不允许 throw</strong>。
+  </div>
+
+  <h3>细节三：并行执行、乱序完成、按源顺序写回</h3>
+
+  <figure class="diagram">
+  <svg viewBox="0 0 900 330" role="img" aria-label="并行工具执行的乱序与保序">
+    <defs>
+      <marker id="p5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#26221b"/></marker>
+      <marker id="p5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+    </defs>
+    <rect x="40" y="30" width="280" height="88" rx="9" class="dg-accent"/>
+    <text x="180" y="56" text-anchor="middle" class="dg-title">assistant（一次回复）</text>
+    <text x="180" y="80" text-anchor="middle" class="dg-sub">toolCall#1 read(a.ts)</text>
+    <text x="180" y="99" text-anchor="middle" class="dg-sub">toolCall#2 bash(npm test)</text>
+    <text x="180" y="118" text-anchor="middle" class="dg-tiny">申请顺序：1 → 2（源顺序）</text>
+
+    <path d="M320,74 H390" class="dg-flow" marker-end="url(#p5b)"/>
+
+    <rect x="395" y="26" width="200" height="44" rx="7" class="dg-box"/>
+    <text x="495" y="46" text-anchor="middle" class="dg-sub">① 准备阶段·串行</text>
+    <text x="495" y="62" text-anchor="middle" class="dg-tiny">找工具 → 校验参数 → beforeToolCall</text>
+    <rect x="395" y="88" width="200" height="44" rx="7" class="dg-box"/>
+    <text x="495" y="108" text-anchor="middle" class="dg-sub">② 执行阶段·并发</text>
+    <text x="495" y="124" text-anchor="middle" class="dg-tiny">read 20ms 完成，bash 4s 完成</text>
+
+    <path d="M597,108 C640,108 640,80 668,74" class="dg-line" marker-end="url(#p5a)"/>
+    <text x="628" y="70" class="dg-tiny">bash 先完成</text>
+    <path d="M597,48 C640,48 640,66 668,70" class="dg-line" marker-end="url(#p5a)" opacity="0"/>
+    <path d="M597,46 C645,46 648,64 672,68" class="dg-line" marker-end="url(#p5a)"/>
+
+    <rect x="675" y="30" width="195" height="88" rx="9" fill="#e2ecdd" stroke="#3d7a44" stroke-width="1.6"/>
+    <text x="772" y="56" text-anchor="middle" class="dg-title">写回（关键）</text>
+    <text x="772" y="80" text-anchor="middle" class="dg-sub">toolResult#1（a.ts）在前</text>
+    <text x="772" y="99" text-anchor="middle" class="dg-sub">toolResult#2（bash）在后</text>
+    <text x="772" y="118" text-anchor="middle" class="dg-tiny">按 assistant 里的源顺序排列</text>
+
+    <rect x="40" y="160" width="830" height="66" rx="8" fill="#efe9dd" stroke="#d8cfbd" stroke-width="1.2"/>
+    <text x="62" y="186" class="dg-sub" font-weight="bold">为什么要保序：messages 数组是「记事本」——顺序就是时间。</text>
+    <text x="62" y="207" class="dg-sub">执行可以乱序完成（Promise.all 谁快谁先），但历史必须稳定可回放：同样的输入永远得到同样的数组。</text>
+
+    <rect x="40" y="242" width="830" height="66" rx="8" fill="#fffdf8" stroke="#d8cfbd" stroke-width="1.2"/>
+    <text x="62" y="268" class="dg-sub" font-weight="bold">观察节流（回到第 04 章）：read 最多 2000 行 / 50KB，超了截头留尾。</text>
+    <text x="62" y="289" class="dg-sub">观察也是上下文、也烧钱。一个 cat 大日志的工具就能把窗口撑爆——节流是工具作者的纪律，不是循环替你兜的底。</text>
+  </svg>
+  <figcaption>fig.05 — 一批工具调用的完整旅程：串行准备 → 并发执行 → 保序写回。顺序的稳定压倒完成时刻的先后</figcaption>
+  </figure>
+
+  <div class="note danger"><b>✗ 反面教材：观察质量的坍塌</b>
+    ReAct 的上限不取决于模型多聪明，而取决于观察质量。三种典型坍塌：① 观察被截得只剩噪音 → 模型开始瞎猜；② 观察里混入工具内部日志 → 模型把噪音当事实复述给用户；③ 失败被静默吞掉（返回空字符串）→ 模型以为成功了，在错误地基上继续盖楼。<strong>garbage in, garbage reasoned.</strong>
+  </div>
+
+  <details class="quiz"><summary>自测：工具 execute 里 throw 了一个异常，agent 会崩吗？接下来发生什么？</summary>
+    <div class="ans">不会。<code>executePreparedToolCall</code> 把整个 execute 包在 try/catch 里，异常被转成 <code>isError:true</code> 的错误 toolResult（内容是异常 message），照常写回上下文。下一轮 LLM 看到错误说明，自行决定重试、换路径或放弃。唯一会「崩」出循环的是 LLM 调用本身的 error/aborted——那也是优雅停机而非异常。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="5">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r5a"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出保序写回的理由，以及 toolCallId 配对的作用</div></div>
+    <div class="ckpt-item" data-key="r5b"><div class="ckpt-box">✓</div><div class="ckpt-text">能列举观察质量坍塌的三种方式并各举一例</div></div>
+  </div>
+</section>
+
+<!-- ======================= 06 系统提示词 ======================= -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">规则书：系统提示词是一个字符串拼接函数</h2></div>
+  <p class="lede">很多人以为系统提示词是一篇精心写作的「文章」。在 pi 里它没有那么多玄学：<code>buildSystemPrompt()</code> 只有 170 行，是一个<strong>确定性的拼接函数</strong>——输入是「你开了哪些工具、项目里有哪些上下文文件、装了哪些 skill」，输出是一个字符串。拆开看每一块，你会发现全是「上下文管理」。</p>
+
+  <figure class="diagram">
+  <svg viewBox="0 0 900 250" role="img" aria-label="buildSystemPrompt 拼装顺序">
+    <defs>
+      <marker id="p6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c2491d"/></marker>
+    </defs>
+    <g font-family="SF Mono,Menlo,monospace">
+      <rect x="28" y="46" width="120" height="92" rx="8" class="dg-box"/>
+      <text x="88" y="70" text-anchor="middle" class="dg-title">① 身份句</text>
+      <text x="88" y="92" text-anchor="middle" class="dg-tiny">"You are an expert</text>
+      <text x="88" y="107" text-anchor="middle" class="dg-tiny">coding assistant</text>
+      <text x="88" y="122" text-anchor="middle" class="dg-tiny">operating inside pi"</text>
+
+      <rect x="166" y="46" width="120" height="92" rx="8" class="dg-accent"/>
+      <text x="226" y="70" text-anchor="middle" class="dg-title">② 工具清单</text>
+      <text x="226" y="92" text-anchor="middle" class="dg-tiny">- read: Read file…</text>
+      <text x="226" y="107" text-anchor="middle" class="dg-tiny">- bash: …</text>
+      <text x="226" y="122" text-anchor="middle" class="dg-tiny">一行式 snippet</text>
+
+      <rect x="304" y="46" width="120" height="92" rx="8" class="dg-box"/>
+      <text x="364" y="70" text-anchor="middle" class="dg-title">③ Guidelines</text>
+      <text x="364" y="92" text-anchor="middle" class="dg-tiny">- Be concise</text>
+      <text x="364" y="107" text-anchor="middle" class="dg-tiny">- 用 bash 做 ls/rg</text>
+      <text x="364" y="122" text-anchor="middle" class="dg-tiny">（按已有工具生成）</text>
+
+      <rect x="442" y="46" width="120" height="92" rx="8" class="dg-box"/>
+      <text x="502" y="70" text-anchor="middle" class="dg-title">④ pi 自述</text>
+      <text x="502" y="92" text-anchor="middle" class="dg-tiny">docs 路径 + 什么时候</text>
+      <text x="502" y="107" text-anchor="middle" class="dg-tiny">该去读它们</text>
+      <text x="502" y="122" text-anchor="middle" class="dg-tiny">（问 pi 才读）</text>
+
+      <rect x="580" y="46" width="140" height="92" rx="8" class="dg-accent"/>
+      <text x="650" y="70" text-anchor="middle" class="dg-title">⑤ 项目上下文</text>
+      <text x="650" y="92" text-anchor="middle" class="dg-tiny">&lt;project_context&gt;</text>
+      <text x="650" y="107" text-anchor="middle" class="dg-tiny">AGENTS.md 原文包进</text>
+      <text x="650" y="122" text-anchor="middle" class="dg-tiny">&lt;project_instructions&gt;</text>
+
+      <rect x="738" y="46" width="134" height="92" rx="8" class="dg-box"/>
+      <text x="805" y="70" text-anchor="middle" class="dg-title">⑥ Skills 名单</text>
+      <text x="805" y="92" text-anchor="middle" class="dg-tiny">只给名字+触发时机</text>
+      <text x="805" y="107" text-anchor="middle" class="dg-tiny">正文让模型用 read</text>
+      <text x="805" y="122" text-anchor="middle" class="dg-tiny">自己加载</text>
+
+      <path d="M148,92 H162" class="dg-flow" marker-end="url(#p6a)"/>
+      <path d="M286,92 H300" class="dg-flow" marker-end="url(#p6a)"/>
+      <path d="M424,92 H438" class="dg-flow" marker-end="url(#p6a)"/>
+      <path d="M562,92 H576" class="dg-flow" marker-end="url(#p6a)"/>
+      <path d="M720,92 H734" class="dg-flow" marker-end="url(#p6a)"/>
+    </g>
+    <rect x="28" y="166" width="844" height="56" rx="8" fill="#efe9dd" stroke="#d8cfbd" stroke-width="1.2"/>
+    <text x="50" y="190" class="dg-sub" font-weight="bold">尾巴：customPrompt 时 ①–④ 被整体替换、⑤⑥ 照旧追加；最后永远拼上 "Current working directory: …"</text>
+    <text x="50" y="209" class="dg-tiny">—— cwd 是相对路径的锚点，模型所有 read/bash 都拿它解析相对路径</text>
+  </svg>
+  <figcaption>fig.06 — pi 系统提示词的六段拼装。每一段的开关都由「你装了什么」决定，而不是由文采决定</figcaption>
+  </figure>
+
+  <h3>动手拼一次</h3>
+  <p>下面是 <code>buildSystemPrompt</code> 的可运行速记版。勾选/取消组件，右侧实时拼出最终字符串——注意 ⑥ Skills 与 read 工具的联动（pi 规定：<strong>read 工具不可用时，skills 一段直接不注入</strong>，因为名单列了模型也没手段去读正文）：</p>
+
+  <div class="builder" id="builder">
+    <div class="builder-left">
+      <div class="bl-title">组件开关</div>
+      <div class="bpart on" data-seg="identity"><div class="b-box">✓</div><div><div class="b-name">身份句 + pi 自述</div><div class="b-sub">expert coding assistant inside pi + docs 路径</div></div></div>
+      <div class="bpart on" data-seg="tools"><div class="b-box">✓</div><div><div class="b-name">Available tools（read/bash/edit/write）</div><div class="b-sub">每个工具一行 snippet；同时影响 guidelines 措辞</div></div></div>
+      <div class="bpart on" data-seg="guidelines"><div class="b-box">✓</div><div><div class="b-name">Guidelines</div><div class="b-sub">Be concise / 用 bash 做 ls、rg / 展示文件路径</div></div></div>
+      <div class="bpart on" data-seg="context"><div class="b-box">✓</div><div><div class="b-name">AGENTS.md → &lt;project_context&gt;</div><div class="b-sub">项目约定原文，按文件分别包标签</div></div></div>
+      <div class="bpart on" data-seg="skills" id="skillPart"><div class="b-box">✓</div><div><div class="b-name">Skills 名单 <span class="badge mod">依赖 read</span></div><div class="b-sub">commit-helper：当用户要写 commit 时先读正文</div></div></div>
+      <div class="bpart on" data-seg="cwd"><div class="b-box">✓</div><div><div class="b-name">Current working directory</div><div class="b-sub">相对路径的锚点，永远在最后</div></div></div>
+    </div>
+    <div class="builder-right">
+      <div class="br-title">buildSystemPrompt() 实时输出</div>
+      <pre id="builderOut"></pre>
+    </div>
+  </div>
+
+  <div class="note ok"><b>✦ 渐进式披露（progressive disclosure）</b>
+    注意 Skills 段只注入「名字 + 一句话触发时机」（几十 token），正文可能有几千 token——由模型在<strong>判断需要时用 read 自己加载</strong>。这是把「上下文预算」从启动时一次性缴纳，改成了「按需分期支付」。Skill 加载没有任何循环层的新机制：它就是「往系统提示词里写一行目录 + 模型自己用工具取正文」。
+  </div>
+
+  <details class="quiz"><summary>自测：为什么 AGENTS.md 要包进 &lt;project_instructions path="…"&gt; 标签，而不是裸拼进 prompt？</summary>
+    <div class="ans">三个理由：① 分隔——多个上下文文件（AGENTS.md、AGENTS.override.md…）之间界限清晰，模型不会把 A 文件的规矩安到 B 头上；② 溯源——标签里带 path，模型引用规矩时能说出「按 AGENTS.md 的约定」，用户可验证；③ 防注入边界——明确标示「这是项目提供的资料」而不是用户或系统的直接指令，降低提示注入的混淆度。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="6">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r6a"><div class="ckpt-box">✓</div><div class="ckpt-text">在拼装机里复现「关掉 read → skills 消失」的联动并解释原因</div></div>
+    <div class="ckpt-item" data-key="r6b"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出渐进式披露省了什么钱、把成本转移到了哪里</div></div>
+  </div>
+</section>
+
+<!-- ======================= 07 分层：循环之上皆是上下文管理 ======================= -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">分层：循环之上，皆是上下文管理</h2></div>
+  <p class="lede">现在可以回收标题里的论点了。pi 从 0.1 到 0.84 加了几十个功能：记忆压缩、Skill、子 agent、扩展系统、模型热切换……去源码里找，会发现<strong>没有一个是往循环里加的</strong>——它们全部是「进入下一次 LLM 请求之前，对 systemPrompt / messages / tools / model 做一次变换」。循环永远是那个循环，变的只是喂进去的上下文。</p>
+
+  <h3>点一层，看它挂在循环的哪一行</h3>
+
+  <div class="board" id="board">
+    <div class="board-left">
+      <div class="bl-title">功能层（点击查看挂载点）</div>
+      <div class="layer" data-layer="compact"><span class="l-ico">🗜️</span><div><span class="l-name">记忆压缩</span><span class="l-hook">transformContext · 每次 LLM 调用前</span></div></div>
+      <div class="layer" data-layer="skills"><span class="l-ico">🎓</span><div><span class="l-name">Skill 加载</span><span class="l-hook">systemPrompt 注入 + read 工具</span></div></div>
+      <div class="layer" data-layer="subagent"><span class="l-ico">🤖</span><div><span class="l-name">Subagent</span><span class="l-hook">某工具的 execute() 里再跑一个 Agent</span></div></div>
+      <div class="layer" data-layer="extension"><span class="l-ico">🧩</span><div><span class="l-name">扩展系统</span><span class="l-hook">beforeToolCall / afterToolCall / 事件订阅</span></div></div>
+      <div class="layer" data-layer="model"><span class="l-ico">🔀</span><div><span class="l-name">模型热切换</span><span class="l-hook">prepareNextTurn · 每 turn 收尾时</span></div></div>
+      <div class="layer" data-layer="human"><span class="l-ico">🙋</span><div><span class="l-name">人在环（插话/排队）</span><span class="l-hook">getSteeringMessages / getFollowUpMessages</span></div></div>
+    </div>
+    <div class="board-right">
+      <pre id="boardCode"></pre>
+      <div class="board-story" id="boardStory">← 点左侧任意一层。所有层共享同一段循环代码：它们只改 <b>下一拍喂给 LLM 的东西</b>，从不改循环本身。</div>
+    </div>
+  </div>
+
+  <h3>一张表看穿所有功能</h3>
+  <table>
+    <tr><th>功能</th><th>本质</th><th>挂载点（loop 的位置）</th><th>改的是什么</th></tr>
+    <tr><td><strong>记忆压缩</strong></td><td>上下文瘦身</td><td><code>transformContext</code></td><td>messages[]（旧消息 → 摘要）</td></tr>
+    <tr><td><strong>Skill 加载</strong></td><td>知识按需分期</td><td>buildSystemPrompt + read 工具</td><td>systemPrompt（名单）→ messages（正文）</td></tr>
+    <tr><td><strong>Subagent</strong></td><td>循环的递归复用</td><td>某个工具的 <code>execute()</code></td><td>tools[] 多一件工具；其观察 = 子 agent 的最终总结</td></tr>
+    <tr><td><strong>扩展系统</strong></td><td>旁路干预</td><td>beforeToolCall / afterToolCall / subscribe</td><td>拦截、改写工具与结果；注入消息</td></tr>
+    <tr><td><strong>模型热切换</strong></td><td>运行时换脑</td><td><code>prepareNextTurn</code></td><td>model / thinkingLevel（甚至整个 context）</td></tr>
+    <tr><td><strong>人在环</strong></td><td>排队与插话</td><td>getSteering / getFollowUp 队列</td><td>messages[]（两个排水口，见 <a href="../pi-agent-loop/a.html#c6">Agent Loop 第 06 章</a>）</td></tr>
+  </table>
+
+  <div class="note"><b>✦ 用代码体量验证这个论断</b>
+    心脏 <code>agent-loop.ts</code>：797 行（编译后 552）。而产品壳 <code>agent-session.js</code>：2754 行——3.5 倍的差值全部花在「管理上下文」上：组装系统提示词、算 token 水位、触发压缩、重试、自愈、展开 skill、分发扩展事件。<strong>心脏极小，身体全是上下文管理。</strong>这也是为什么同一颗心脏能同时撑起 TUI、RPC、SDK 三种形态。
+  </div>
+
+  <div class="note ok"><b>✦ 生态位互补</b>
+    想继续往下钻，本站另有三本手册分工接手：<a href="../pi-agent-loop/a.html">《pi Agent Loop》</a>拆循环机制本体（双环/流水线/自愈）；<a href="../pi-context-management/a.html">《pi 上下文管理》</a>专攻压缩一层的五派插件；<a href="../subagent-vs-multi-agent/a.html">《Subagent vs 多 Agent》</a>讨论「递归复用循环」的架构边界。本手册给的是它们共同的地基。
+  </div>
+
+  <details class="quiz"><summary>自测：如果让你给 pi 加「每次回答后自动写工作日志」，你会在哪一层实现？</summary>
+    <div class="ans">不碰循环。最少两种正统挂法：① 订阅 <code>agent_end</code> 事件（或 L3 的 post-run 钩子），把 newMessages 追加到日志——纯旁路，零侵入；② 若希望日志「被模型自己知道」，做成扩展往下一轮注入一条 custom 消息，再靠 convertToLlm 控制可见性。判断标准：需要影响模型 → 改上下文；只需影响人 → 订阅事件。两种都不需要给 agent-loop.ts 提 PR。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="7">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r7a"><div class="ckpt-box">✓</div><div class="ckpt-text">能在钉板上指出任意功能的挂载点并说出它改的四样中的哪一样</div></div>
+    <div class="ckpt-item" data-key="r7b"><div class="ckpt-box">✓</div><div class="ckpt-text">能用「797 行 vs 2754 行」向别人论证「循环之上皆是上下文管理」</div></div>
+  </div>
+</section>
+
+<!-- ======================= 08 带走 ======================= -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">带走：五条决策 + 80 行写一个 ReAct Agent</h2></div>
+  <p class="lede">读源码的终点是能自己写。先带走五条可以直接迁移的设计决策，再带走一份 80 行的最小可运行实现——它就是 pi 心脏的素人版，五脏俱全。</p>
+
+  <h3>五条带得走的决策</h3>
+  <table>
+    <tr><th>#</th><th>决策</th><th>一句话理由</th></tr>
+    <tr><td>1</td><td><strong>上下文即数据库</strong>：全部状态就是一个可序列化的 messages 数组</td><td>持久化 = 写 JSONL，恢复 = 读回来，断点续传免费获得</td></tr>
+    <tr><td>2</td><td><strong>工具即 API</strong>：schema 是文档、description 是广告、execute 是 handler</td><td>模型是「读文档写调用」的客户端，文档质量直接决定调用质量</td></tr>
+    <tr><td>3</td><td><strong>错误即观察</strong>：反馈回路里不设异常通道</td><td>任何现实（包括失败）都变成模型可见的信息，自我修正才有原料</td></tr>
+    <tr><td>4</td><td><strong>一切功能皆上下文变换</strong>：新功能先问「改的是四样原料中的哪一样」</td><td>循环保持恒定，产品才能狂奔而不伤心脏</td></tr>
+    <tr><td>5</td><td><strong>先让循环转起来</strong>：压缩、Skill、并发都是转起来之后的优化</td><td>四样原料 + while 就能交付价值；其余按痛感逐步加装</td></tr>
+  </table>
+
+  <h3>最小实现：心脏的素人版</h3>
+  <p>下面这份 TypeScript 对照 pi 的结构写成（省略流式、中断、并行保序等工程件），但骨架一一对应——对照着读，你会发现和 <code>agent-loop.ts</code> 的血缘关系：</p>
+
+  <div class="codewrap"><span class="filetab">minimal-react-agent.ts · 可直接跑（配任意支持 tool-use 的 API）</span>
+    <button class="copybtn">copy</button>
+<pre><code><span class="kw">type</span> <span class="ty">Msg</span> = <span class="ty">any</span>;  <span class="cm">// 简化：实际项目应使用 provider SDK 的消息类型</span>
+
+<span class="kw">async function</span> <span class="fn">runAgent</span>(
+  systemPrompt: <span class="ty">string</span>,                      <span class="cm">// 原料① 说明书</span>
+  tools: { name: <span class="ty">string</span>; description: <span class="ty">string</span>;
+           parameters: <span class="ty">object</span>; execute: (args: <span class="ty">any</span>) =&gt; <span class="ty">Promise</span>&lt;<span class="ty">string</span>&gt; }[],  <span class="cm">// 原料③ 工具箱</span>
+  messages: <span class="ty">Msg</span>[],                           <span class="cm">// 原料② 记事本（外部持有 → 状态即数据库）</span>
+  callLLM: (msgs: <span class="ty">Msg</span>[]) =&gt; <span class="ty">Promise</span>&lt;<span class="ty">Msg</span>&gt;,   <span class="cm">// pi 的 StreamFn 对应物</span>
+): <span class="ty">Promise</span>&lt;<span class="ty">Msg</span>[]&gt; {
+  <span class="kw">while</span> (<span class="kw">true</span>) {                             <span class="cm">// 原料④ 发动机</span>
+    <span class="kw">const</span> reply = <span class="kw">await</span> <span class="fn">callLLM</span>([
+      { role: <span class="st">"system"</span>, content: systemPrompt },
+      ...messages,                           <span class="cm">// ← 无状态模型：每次全量带上历史</span>
+    ]);
+    messages.<span class="fn">push</span>(reply);                    <span class="cm">// R：想法先入账</span>
+
+    <span class="kw">const</span> calls = reply.content.<span class="fn">filter</span>((c: <span class="ty">any</span>) =&gt; c.type === <span class="st">"tool_use"</span>);
+    <span class="kw">if</span> (calls.length === 0) <span class="kw">return</span> messages; <span class="cm">// 没有动作申请 → 模型交卷，循环出口</span>
+
+    <span class="kw">for</span> (<span class="kw">const</span> call <span class="kw">of</span> calls) {
+      <span class="kw">const</span> tool = tools.<span class="fn">find</span>(t =&gt; t.name === call.name);
+      <span class="kw">let</span> result: <span class="ty">string</span>, isError = <span class="kw">false</span>;
+      <span class="kw">try</span> {
+        result = tool
+          ? <span class="kw">await</span> tool.<span class="fn">execute</span>(call.input)   <span class="cm">// A：替模型动手</span>
+          : <span class="fn">throwErr</span>(<span class="st">`Tool ${call.name} not found`</span>);
+      } <span class="kw">catch</span> (e) {
+        result = <span class="fn">String</span>(e); isError = <span class="kw">true</span>; <span class="cm">// 错误即观察：绝不向上抛</span>
+      }
+      messages.<span class="fn">push</span>({                        <span class="cm">// O：结果写回（含错误）</span>
+        role: <span class="st">"tool_result"</span>, tool_use_id: call.id,
+        content: <span class="fn">String</span>(result).<span class="fn">slice</span>(0, 50_000),  <span class="cm">// 节流：观察也要限量</span>
+        is_error: isError,
+      });
+    }                                        <span class="cm">// ↻ 带着观察，回到下一轮 R</span>
+  }
+}
+<span class="kw">function</span> <span class="fn">throwErr</span>(m: <span class="ty">string</span>): <span class="kw">never</span> { <span class="kw">throw new</span> <span class="ty">Error</span>(m); }</code></pre></div>
+
+  <div class="note warn"><b>⚠ 从 80 行到生产，你还欠这些工程件（pi 都有，都能对号入座）</b>
+    流式输出（<code>streamAssistantResponse</code> 的增量回填）· 用户打断（AbortSignal 贯穿全程）· 多工具并发与保序（<code>executeToolCallsParallel</code>）· steering/followUp 双队列 · 参数校验（<code>validateToolArguments</code>）· length 截断防御（整批枪毙）· 持久化与会话恢复（SessionManager）· 上下文压缩（transformContext 钩子）。每补一件，参考对应源码位置即可——这正是「素人版」的用法：<strong>骨架先转，工程件按痛感加装。</strong>
+  </div>
+
+  <details class="quiz"><summary>自测：为什么 runAgent 把 messages 作为参数让外部持有，而不是自己 new 一个？</summary>
+    <div class="ans">这是「上下文即数据库」的直接体现：状态的所有权在调用方。好处①——持久化/恢复/多端同步变成调用方的普通序列化问题；好处②——同一个循环函数可以被 TUI、SDK、测试各自喂不同的数组（pi 的 loop 是纯函数同理）；好处③——压缩、裁剪等上下文变换天然发生在循环之外，循环代码永远不用改。</div>
+  </details>
+
+  <div class="checkpoint" data-ch="8">
+    <div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="r8a"><div class="ckpt-box">✓</div><div class="ckpt-text">把 80 行版抄进自己项目跑通一次真实调用</div></div>
+    <div class="ckpt-item" data-key="r8b"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出工程件清单里自己场景最先需要补的哪两件</div></div>
+  </div>
+</section>
+
+<!-- ======================= 09 终极测验 ======================= -->
+<section class="chapter" id="c9">
+  <div class="chapter-head"><span class="chapter-no">09</span><h2 class="ch">终极测验：5 题验收</h2></div>
+  <p class="lede">覆盖全部章节。答完看总分——4 题以上算出师。</p>
+
+  <div class="quizbox">
+    <div class="quiz-head">
+      <span class="qt">final exam · pi react agent</span>
+      <span class="quiz-score" id="quizScore">0 / 5</span>
+    </div>
+    <div class="quiz-body">
+      <div class="q-no" id="qNo">QUESTION 1 / 5</div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div class="q-exp" id="qExp"></div>
+    </div>
+    <div class="quiz-foot">
+      <button class="sim-btn" id="qSubmit" disabled>确认答案</button>
+      <button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button>
+      <button class="sim-btn ghost" id="qRestart" style="display:none">↺ 重新考</button>
+      <span class="q-verdict" id="qVerdict"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 10 参考资料 ======================= -->
+<section class="chapter" id="c10">
+  <div class="chapter-head"><span class="chapter-no">10</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">本手册所有事实、行号与数据的出处。论文数据均对照原文核对，源码行号来自本机安装版。</p>
+
+  <div class="ref-item">
+    <div class="ref-title"><a href="https://mp.weixin.qq.com/s/T_sYOS11KrOijp_aCEcgnQ" target="_blank" rel="noopener">《从 ReAct 到 Agent Teams：一个工程师视角的 Agent 协作机制思考》</a><span class="badge info">fig.02 信息图出处</span></div>
+    <div class="ref-meta">微信公众号文章</div>
+    <div class="ref-desc">第 01 章「通用智能体：三环分工」的分析视角与 fig.02 配图参考来源。</div>
+  </div>
+
+  <div class="ref-item">
+    <div class="ref-title"><a href="https://arxiv.org/abs/2210.03629" target="_blank" rel="noopener">ReAct: Synergizing Reasoning and Acting in Language Models</a><span class="badge ui">论文 · ICLR 2023</span></div>
+    <div class="ref-meta">Yao et al. · arXiv:2210.03629 · 项目页：<a href="https://react-lm.github.io/" target="_blank" rel="noopener">react-lm.github.io</a></div>
+    <div class="ref-desc">三拍节奏（Thought / Action / Observation）、文本协议版 ReAct、ALFWorld 数据（Act 基线 45% / ReAct 71% / BUTLER 37%）的出处。</div>
+  </div>
+
+  <div class="ref-item">
+    <div class="ref-title"><a href="https://github.com/earendil-works/pi" target="_blank" rel="noopener">earendil-works/pi · 源码仓库</a><span class="badge mod">主要依据</span></div>
+    <div class="ref-meta">Mario Zechner · npm：@earendil-works/pi-agent-core 0.84.3 / @earendil-works/pi-coding-agent 0.84.3 · 本机安装版</div>
+    <div class="ref-desc">全部源码走读与行号出处：pi-agent-core 的 agent-loop.ts 797 行、agent.ts 593 行、types.ts 444 行；pi-coding-agent 的 read.ts 359 行、system-prompt.ts 170 行；agent-session.js 编译后 2754 行。</div>
+  </div>
+
+  <h3>延伸阅读 · 本站姊妹手册</h3>
+  <table>
+    <tr><th>手册</th><th>与本篇的分工</th></tr>
+    <tr><td><a href="../pi-agent-loop/a.html">pi Agent Loop</a></td><td>循环机制本体：双环走读、五段工具流水线、steering/followUp 双队列、自愈决策树</td></tr>
+    <tr><td><a href="../pi-context-management/a.html">pi 上下文管理</a></td><td>第 07 章「记忆压缩」一层的深入：压缩水位线与五派压缩插件的内容哲学</td></tr>
+    <tr><td><a href="../subagent-vs-multi-agent/a.html">Subagent vs 多 Agent</a></td><td>第 07 章「Subagent = 循环的递归复用」的架构级展开</td></tr>
+    <tr><td><a href="../pi-extensions/a.html">pi 扩展开发</a></td><td>把第 07 章「扩展系统」的挂载点写成可运行的 ExtensionAPI 实战</td></tr>
+  </table>
+
+  <footer class="colophon">
+    pi ReAct Agent 实现手册 · 基于 @earendil-works/pi-agent-core 0.84.3 与 @earendil-works/pi-coding-agent 0.84.3 本机安装版源码走读 · know-as-ui collection
+  </footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ---------- TOC 构建 ---------- */
+const chapters=[...document.querySelectorAll("section.chapter")];
+const toc=document.getElementById("toc");
+const names=["ReAct是什么","四样原料","解剖R","解剖A","解剖O","系统提示词","上下文管理","带走最小实现","终极测验","参考资料"];
+chapters.forEach((sec,i)=>{
+  const a=document.createElement("a");
+  a.href="#"+sec.id;
+  a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;
+  toc.appendChild(a);
+});
+
+/* ---------- Scrollspy + 进度条 ---------- */
+const links=[...toc.querySelectorAll("a")];
+const fill=document.getElementById("progFill");
+const label=document.getElementById("progLabel");
+function updateSpy(){
+  const y=scrollY+120;
+  let cur=0;
+  chapters.forEach((sec,i)=>{ if(sec.offsetTop<=y) cur=i; });
+  links.forEach((l,i)=>l.classList.toggle("active",i===cur));
+  const total=chapters.length;
+  const passed=Math.min(cur+1,total);
+  fill.style.width=(passed/total*100)+"%";
+  label.textContent=`${passed} / ${total} 章`;
+}
+addEventListener("scroll",updateSpy,{passive:true});
+addEventListener("resize",updateSpy);
+updateSpy();
+
+/* ---------- 代码复制 ---------- */
+document.querySelectorAll(".copybtn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const code=btn.parentElement.querySelector("pre").innerText;
+    navigator.clipboard.writeText(code).then(()=>{
+      btn.textContent="copied ✓";btn.classList.add("done");
+      setTimeout(()=>{btn.textContent="copy";btn.classList.remove("done");},1400);
+    });
+  });
+});
+
+/* ---------- 打卡（localStorage） ---------- */
+const CKPT_KEY="pi-react-agent-handbook-checkpoints";
+let ckpt={};
+try{ ckpt=JSON.parse(localStorage.getItem(CKPT_KEY)||"{}"); }catch(e){}
+function saveCkpt(){ try{localStorage.setItem(CKPT_KEY,JSON.stringify(ckpt));}catch(e){} }
+document.querySelectorAll(".ckpt-item").forEach(item=>{
+  if(ckpt[item.dataset.key]) item.classList.add("done");
+  item.addEventListener("click",()=>{
+    item.classList.toggle("done");
+    ckpt[item.dataset.key]=item.classList.contains("done");
+    saveCkpt();
+  });
+});
+
+/* ---------- 第02章 · 拆件实验台 ---------- */
+const partState={prompt:true,tools:true,loop:true,observe:true};
+const SCENARIOS={
+  all:[
+    ["dim","user: 「帮我总结这个项目的 README」"],
+    ["act","R · assistant: 「我先读一下 README.md」 → toolCall(read README.md)"],
+    ["ok","O · toolResult: 「# My Project — 一个知识界面集合…」 写回上下文"],
+    ["ok","R · assistant: 「这个项目是……（准确总结，基于真实文件内容）」 → 无 toolCall"],
+    ["ok","✓ 循环自然收敛。想、动、看各就各位。"]
+  ],
+  prompt:[
+    ["dim","user: 「帮我总结这个项目的 README」"],
+    ["bad","R · assistant: 「这个项目是一个现代化全栈解决方案，采用微服务架构……」"],
+    ["bad","⚠ 模型没有申请任何工具，直接凭训练语料里的常见 README 模板开编"],
+    ["bad","✗ 死法：一本正经的幻觉。没有说明书告诉它「先看再答」，它选择了「直接答」"]
+  ],
+  tools:[
+    ["dim","user: 「帮我总结这个项目的 README」"],
+    ["bad","R · assistant: 「我需要读取 README.md……（模型想动，但 API 里没有注册任何工具）」"],
+    ["bad","⚠ 只剩两条路：要么声明无能为力，要么继续编造"],
+    ["bad","✗ 死法：有想法没手脚。Reason 还在，Act 无处安放"]
+  ],
+  loop:[
+    ["dim","user: 「帮我总结这个项目的 README」"],
+    ["act","R · assistant: 「我先读一下」 → toolCall(read README.md)"],
+    ["bad","⚠ 没有循环：没人执行这个申请，也没有下一轮调用"],
+    ["bad","✗ 死法：流程停在「申请」上。用户看到一句计划和一坨 JSON，永远等不到总结"]
+  ],
+  observe:[
+    ["dim","user: 「帮我总结这个项目的 README」"],
+    ["act","R · assistant: toolCall(read README.md)"],
+    ["dim","A · 工具执行成功，文件内容拿到手了……但没有 push 回 messages"],
+    ["act","R · assistant: 「让我先读一下 README.md」 → toolCall(read README.md)（一模一样）"],
+    ["bad","✗ 死法：现实失明。模型看不到任何执行结果，反复申请同一动作，循环烧 token 到天荒地老"]
+  ]
+};
+function verdictFor(){
+  const off=Object.entries(partState).filter(([k,v])=>!v).map(([k])=>k);
+  if(off.length===0) return "四样都在 → 点「运行」看一场正常演出，然后试着拆掉其中一样再跑。";
+  if(off.length>=2) return `已拆掉 ${off.length} 样——多重故障的表现会叠加，建议一次只拆一件，看清单一变量的影响。`;
+  const map={
+    prompt:"拆掉①说明书：模型失去「先看再答」的守则，最可能直接幻觉作答。",
+    tools:"拆掉②工具箱：Reason 还在，但动作申请无处安放——没有手。",
+    loop:"拆掉③发动机：申请被执行的机制都没了——单轮问答，流程冻死在「计划」上。",
+    observe:"拆掉④观察回写：工具干了活但模型看不见——现实失明，无限重复申请。"
+  };
+  return map[off[0]];
+}
+document.getElementById("partsVerdict").textContent=verdictFor();
+document.querySelectorAll(".part").forEach(p=>{
+  p.addEventListener("click",()=>{
+    const k=p.dataset.part;
+    partState[k]=!partState[k];
+    p.classList.toggle("off",!partState[k]);
+    document.getElementById("partsVerdict").textContent=verdictFor();
+  });
+});
+document.getElementById("partsReset").addEventListener("click",()=>{
+  Object.keys(partState).forEach(k=>{partState[k]=true;});
+  document.querySelectorAll(".part").forEach(p=>p.classList.remove("off"));
+  const stage=document.getElementById("partsStage");
+  stage.innerHTML='<div class="st-line dim">（已全部装回，等待运行……）</div>';
+  document.getElementById("partsVerdict").textContent=verdictFor();
+});
+document.getElementById("partsRun").addEventListener("click",()=>{
+  const off=Object.entries(partState).filter(([k,v])=>!v).map(([k])=>k);
+  const key=off.length>=2?"multi":(off[0]||"all");
+  const lines=key==="multi"
+    ?[["bad","⚠ 多重故障：agent 直接瘫在启动阶段。一次拆一件才能看清因果。"]]
+    :SCENARIOS[key];
+  const stage=document.getElementById("partsStage");
+  stage.innerHTML="";
+  lines.forEach((l,i)=>{
+    setTimeout(()=>{
+      const d=document.createElement("div");
+      d.className="st-line "+l[0];
+      d.textContent=l[1];
+      stage.appendChild(d);
+    },i*420);
+  });
+  const v=document.getElementById("partsVerdict");
+  v.textContent=key==="all"?"✓ 正常演出：R→A→O 转了一圈，模型基于真实文件内容交付总结。"
+    :key==="multi"?"多重故障不可诊断。↺ 全部装回，一次只拆一件。"
+    :verdictFor();
+});
+
+/* ---------- 第06章 · 系统提示词拼装机 ---------- */
+const segState={identity:true,tools:true,guidelines:true,context:true,skills:true,cwd:true};
+const SEG_BUILDERS={
+  identity:()=>[
+    'You are an expert coding assistant operating inside pi,',
+    'a coding agent harness. You help users by reading files,',
+    'executing commands, editing code, and writing new files.',
+    '',
+    'Pi documentation (read only when the user asks about pi itself):',
+    '- Main documentation: /…/@earendil-works/pi-coding-agent/README.md',
+    '- Additional docs: …/docs/   - Examples: …/examples/'
+  ],
+  tools:()=>[
+    '',
+    'Available tools:',
+    '- read: Read file contents',
+    '- bash: Execute shell commands',
+    '- edit: Perform exact string replacement in files',
+    '- write: Write a file to the local filesystem',
+    ''
+  ],
+  guidelines:()=>[
+    'Guidelines:',
+    '- Use bash for file operations like ls, rg, find',
+    '- Be concise in your responses',
+    '- Show file paths clearly when working with files',
+    ''
+  ],
+  context:()=>[
+    '<project_context>',
+    '',
+    'Project-specific instructions and guidelines:',
+    '',
+    '<project_instructions path="/Users/me/proj/AGENTS.md">',
+    '# 全局偏好',
+    '1. 复杂问题先用大白话讲清楚……',
+    '2. 单次回复只输出最核心的结论……',
+    '</project_instructions>',
+    '',
+    '</project_context>',
+    ''
+  ],
+  skills:()=>[
+    '<available-skills>',
+    '- commit-helper: Use when the user asks to write a git commit.',
+    '  Read .pi/skills/commit-helper/SKILL.md before proceeding.',
+    '</available-skills>',
+    ''
+  ],
+  cwd:()=>[
+    'Current working directory: /Users/me/proj'
+  ]
+};
+const SEG_ORDER=["identity","tools","guidelines","context","skills","cwd"];
+function renderBuilder(freshSeg){
+  const out=document.getElementById("builderOut");
+  const parts=[];
+  SEG_ORDER.forEach(seg=>{
+    if(!segState[seg]) return;
+    const fresh=freshSeg===seg;
+    const text=SEG_BUILDERS[seg]().join("\n");
+    parts.push(`<span class="seg${fresh?" fresh":""}">${escapeHtml(text)}</span>`);
+  });
+  parts.push(`<span class="seg-note">${
+    segState.skills&&!segState.tools
+      ?"（注：真实 pi 中 read 不可用时 skills 段不会注入——本演示保持手动，联动见下方说明）"
+      :segState.skills?"":"（以上为勾选组件的拼接结果。全部取消时 buildSystemPrompt 只输出空的工具清单骨架。）"
+  }</span>`);
+  out.innerHTML=parts.join("\n");
+}
+function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+document.querySelectorAll(".bpart").forEach(p=>{
+  p.addEventListener("click",()=>{
+    const seg=p.dataset.seg;
+    segState[seg]=!segState[seg];
+    p.classList.toggle("on",segState[seg]);
+    renderBuilder(seg);
+  });
+});
+renderBuilder(null);
+
+/* ---------- 第07章 · 挂载点钉板 ---------- */
+const BOARD_CODE=[
+'async function runLoop(ctx, cfg) {',
+'  while (true) {                          // ── 外环 ──',
+'    let moreTools = true;',
+'    while (moreTools || pending.length) { // ── 内环 ──',
+'      ctx.messages.push(...pending);',
+'      if (cfg.transformContext)           // ◆ 挂载点 A',
+'        msgs = await cfg.transformContext(msgs);',
+'      const msg = await callLLM({',
+'        systemPrompt: ctx.systemPrompt,   // ◆ 挂载点 B',
+'        messages: msgs, tools: ctx.tools, // ◆ 挂载点 C',
+'      });',
+'      if (noToolCalls(msg)) break;',
+'      for (const call of msg.toolCalls) {',
+'        if (await cfg.beforeToolCall(call)) continue; // ◆ 挂载点 D',
+'        const r = await ctx.tools[call.name]',
+'                               .execute(call.args);    // ◆ 挂载点 E',
+'        ctx.messages.push(toolResult(call, r));',
+'      }',
+'      cfg.prepareNextTurn?.({ msg });       // ◆ 挂载点 F',
+'      pending = await cfg.getSteeringMessages();',
+'    }',
+'    pending = await cfg.getFollowUpMessages(); // ◆ 挂载点 G',
+'  }',
+'}'
+];
+const BOARD_LAYERS={
+  compact:{ln:[5,6],story:"<b>记忆压缩</b>：每次把消息发给 LLM 之前（A 行），先跑一遍 transformContext——旧消息换摘要、裁尾巴。循环完全不知道「压缩」这个词的存在，它只是照常发送 transformContext 返回的数组。深入见《pi 上下文管理》。"},
+  skills:{ln:[8],story:"<b>Skill 加载</b>：挂载点其实在循环开始之前——buildSystemPrompt 把 skill 名单写进 systemPrompt（B 行发送的内容），正文则等模型自己用 read 工具来取。两层配合：提示词给目录，工具给正文，成本分期支付。"},
+  subagent:{ln:[14,15,16],story:"<b>Subagent</b>：主 agent 的工具箱里多了一件普通工具（C 行注册），它的 execute()（E 行）内部 new 了另一个完整 Agent 并跑完整个循环——对主循环来说，子 agent 就是一次普通的工具调用，其观察就是子 agent 的最终总结。递归复用，零新机制。"},
+  extension:{ln:[13,14],story:"<b>扩展系统</b>：beforeToolCall（D 行）可拦截/改写工具申请，afterToolCall 可改写结果，事件订阅可旁路监听一切。扩展=把「产品策略」插进循环预留的钩子，而不是改循环代码。机制下沉，策略上浮。"},
+  model:{ln:[18],story:"<b>模型热切换</b>：每个 turn 收尾时（F 行）调 prepareNextTurn，返回值可以替换 model / thinkingLevel 甚至整个 context。想「长任务自动换便宜模型」「溢出换大窗口模型」？都是一个返回值的事，循环照常走下一拍。"},
+  human:{ln:[19,21],story:"<b>人在环</b>：两个排水口——getSteeringMessages（19 行，turn 之间插话改道）和 getFollowUpMessages（21 行，本来要停时排队续单）。用户的话终究也只是「往 messages 里加一条消息」，见《pi Agent Loop》第 06 章。"}
+};
+const boardCodeEl=document.getElementById("boardCode");
+boardCodeEl.innerHTML=BOARD_CODE.map((t,i)=>`<span class="cl" data-ln="${i}">${t.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</span>`).join("");
+document.querySelectorAll(".layer").forEach(l=>{
+  l.addEventListener("click",()=>{
+    document.querySelectorAll(".layer").forEach(x=>x.classList.remove("active"));
+    l.classList.add("active");
+    const data=BOARD_LAYERS[l.dataset.layer];
+    boardCodeEl.querySelectorAll(".cl").forEach(c=>c.classList.remove("hot"));
+    data.ln.forEach(n=>{
+      const el=boardCodeEl.querySelector(`.cl[data-ln="${n}"]`);
+      if(el)el.classList.add("hot");
+    });
+    document.getElementById("boardStory").innerHTML=data.story;
+  });
+});
+
+/* ---------- 第09章 · 终极测验 ---------- */
+const QUESTIONS=[
+ {q:"模型一次回复里同时有 text 块和 toolCall 块。这些 toolCall 由谁执行？",
+  o:["模型在下一轮自己执行","loop 所在的进程执行，结果作为 toolResult 写回","provider 的沙箱自动执行","需要用户手动确认后才由模型执行"],
+  a:1,ex:"toolCall 只是「申请」。真正动手的是 loop 所在的进程（executeToolCalls → tool.execute），执行结果包成 role:\"toolResult\" 消息写回上下文。模型从头到尾只负责说，不负责做——这是 Agent 安全模型的第一根支柱。"},
+ {q:"拆掉「观察回写」（工具结果不 push 回 messages）后，agent 最典型的死法是？",
+  o:["第一轮就报错退出","模型立即幻觉编造结果","无限重复申请同一个工具","上下文窗口溢出"],
+  a:2,ex:"工具执行了但模型看不见 → 模型的上下文里永远没有「已执行」的记录，于是下一拍照旧申请同一动作，死循环烧 token。这就是「现实失明」：ReAct 的自我修正完全依赖观察进入反馈回路。"},
+ {q:"pi 规定：skills 段只在 read 工具可用时才注入系统提示词。原因是？",
+  o:[" skills 和 read 是同一个作者写的，强制绑定","避免系统提示词过长","skill 名单列了正文也没用——模型必须靠 read 自己加载正文，这是渐进式披露","read 工具会自动读取 skill 正文"],
+  a:2,ex:"Skill 的注入只含「名字+触发时机」（几十 token），正文成千上万 token，由模型判断需要时用 read 自己取。read 不可用 = 模型没有「取正文」的手段，名单就是死信。这就是按需分期支付上下文预算的渐进式披露。"},
+ {q:"一批 3 个并行工具调用，bash 跑了 4 秒、两个 read 各 20 毫秒。toolResult 写回的顺序是？",
+  o:["按完成时间：read, read, bash","按 assistant 里的源顺序，与完成时间无关","随机，取决于事件循环","bash 先写回，因为它启动最早"],
+  a:1,ex:"执行可以乱序完成（Promise.all 谁快谁先），tool_execution_end 事件也按完成顺序发；但 toolResult 消息按 assistant 源顺序统一写回——messages 数组是「记事本」，顺序就是时间，必须稳定可回放。"},
+ {q:"「给 pi 加功能时先问改的是四样原料中的哪一样」。记忆压缩改的是哪一样、挂在哪个点？",
+  o:["改 systemPrompt，挂在 buildSystemPrompt","改 tools[]，挂在 registerTool","改 messages[]，挂在 transformContext（每次 LLM 调用前）","改循环本身，挂在 while 条件"],
+  a:2,ex:"压缩的本质是上下文瘦身：每次调用 LLM 前由 transformContext 把旧消息换成摘要——改的是「这一拍喂进去的 messages[]」，循环一行不动。这也是本手册的核心论点：循环之上，皆是上下文管理。"}
+];
+let qi=0,qScore=0,qPicked=-1,qDone=false;
+const $qNo=document.getElementById("qNo"),$qText=document.getElementById("qText"),$qOpts=document.getElementById("qOpts"),
+      $qExp=document.getElementById("qExp"),$qSub=document.getElementById("qSubmit"),$qNxt=document.getElementById("qNext"),
+      $qRst=document.getElementById("qRestart"),$qVer=document.getElementById("qVerdict"),$qScoreEl=document.getElementById("quizScore");
+function loadQ(){
+  qPicked=-1;qDone=false;
+  const Q=QUESTIONS[qi];
+  $qNo.textContent=`QUESTION ${qi+1} / ${QUESTIONS.length}`;
+  $qText.textContent=Q.q;
+  $qExp.classList.remove("show");$qExp.innerHTML="";
+  $qVer.textContent="";$qVer.className="q-verdict";
+  $qSub.disabled=true;$qSub.style.display="";$qNxt.style.display="none";$qRst.style.display="none";
+  $qOpts.innerHTML="";
+  Q.o.forEach((opt,i)=>{
+    const b=document.createElement("div");
+    b.className="q-opt";b.textContent=String.fromCharCode(65+i)+". "+opt;
+    b.onclick=()=>{
+      if(qDone)return;
+      qPicked=i;
+      [...$qOpts.children].forEach((c,j)=>c.classList.toggle("picked",j===i));
+      $qSub.disabled=false;
+    };
+    $qOpts.appendChild(b);
+  });
+}
+$qSub.onclick=()=>{
+  if(qPicked<0||qDone)return;
+  qDone=true;
+  const Q=QUESTIONS[qi],right=qPicked===Q.a;
+  [...$qOpts.children].forEach((c,j)=>{
+    c.classList.remove("picked");c.classList.add("locked");
+    if(j===Q.a)c.classList.add("right");
+    else if(j===qPicked)c.classList.add("wrong");
+  });
+  $qExp.innerHTML=(right?"✓ 答对了。":"✗ 正确答案是 "+String.fromCharCode(65+Q.a)+"。")+Q.ex;
+  $qExp.classList.add("show");
+  if(right)qScore++;
+  $qScoreEl.textContent=`${qScore} / ${QUESTIONS.length}`;
+  $qVer.textContent=right?"正确 ✓":"再想想 ✗";
+  $qVer.className="q-verdict "+(right?"ok":"bad");
+  $qSub.style.display="none";
+  if(qi<QUESTIONS.length-1)$qNxt.style.display="";
+  else{$qRst.style.display="";$qVer.textContent+= qi===QUESTIONS.length-1?(qScore>=4?" · 出师！🎉":" · 建议回去复习 02/07 章"):"";}
+};
+$qNxt.onclick=()=>{qi++;loadQ();};
+$qRst.onclick=()=>{qi=0;qScore=0;$qScoreEl.textContent="0 / 5";loadQ();};
+loadQ();
+</script>
+</body>
+</html>
