@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>GPU 与模型部署 · D 选型与运维</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== d 页专属组件样式（不改 topic.css） ===== */
+.lab-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start}
+@media(max-width:900px){.lab-grid{grid-template-columns:1fr}}
+
+/* D1 曲线图 */
+.tco-chart{border:1.5px solid var(--ink);border-radius:8px;background:var(--paper);padding:10px}
+.tco-chart svg{display:block;width:100%;height:auto}
+.tco-legend{display:flex;gap:14px;flex-wrap:wrap;font:11px var(--mono);color:var(--ink-soft);margin-top:8px}
+.tco-legend i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+
+/* D2 结果面板 */
+.d2-stack-wrap{margin:6px 0 2px}
+.d2-math{font:11.5px var(--mono);color:var(--ink-soft);background:var(--paper-deep);border:1px dashed var(--line);border-radius:7px;padding:9px 12px;margin:10px 0;overflow-wrap:anywhere}
+.rec-row{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--paper)}
+.rec-tag{flex-shrink:0;font:700 10.5px var(--mono);letter-spacing:.06em;border:1.5px solid var(--ink);border-radius:6px;padding:3px 8px;background:var(--ink);color:var(--paper);margin-top:2px;white-space:nowrap}
+.rec-tag.alt{background:transparent;color:var(--ink)}
+.rec-row p{margin:0;max-width:none;font-size:13.5px;width:auto}
+
+/* D3 架构搭建器 */
+.d3-stage{border:1.5px solid var(--ink);border-radius:8px;background:var(--paper);padding:8px}
+.d3-stage svg{display:block;width:100%;height:auto}
+.d3-stage .an{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+.d3-stage .an.on{opacity:1;transform:none}
+.d3-stage .ae{opacity:0;transition:opacity .45s ease .18s}
+.d3-stage .ae.on{opacity:1}
+.d3-panel h4{font:700 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin:14px 0 5px}
+.d3-panel h4:first-child{margin-top:0}
+.d3-panel p{margin-bottom:6px;font-size:14px;max-width:none}
+.d3-cx{font:800 15px var(--mono);letter-spacing:.15em;color:var(--gpu)}
+.signal-box{border-left:3px solid var(--warn);background:var(--paper-deep);padding:10px 12px;font-size:13.5px;margin-top:8px}
+.know-links{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+.know-links a{font:600 11px var(--mono);border:1px solid var(--gpu);color:var(--gpu-deep);border-radius:99px;padding:4px 10px;text-decoration:none;background:var(--gpu-soft)}
+.know-links a:hover{background:var(--gpu);color:#fff}
+.d3-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* 章6 处置卡与决策树 */
+.playbook{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0;max-width:var(--content-rail)}
+.pb-card{border:1.5px solid var(--ink);border-radius:9px;background:#fffdf8;overflow:hidden}
+.pb-card h4{font:700 12.5px var(--mono);background:var(--ink);color:var(--paper);padding:8px 12px;letter-spacing:.05em}
+.pb-card div{padding:7px 12px 0;font-size:13px}
+.pb-card div:last-child{padding-bottom:11px}
+.pb-card .lbl{font:700 9.5px var(--mono);color:var(--ink-faint);text-transform:uppercase;letter-spacing:.12em;display:block;margin-bottom:1px}
+.dtree{max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:9px;background:#fffdf8;padding:6px 16px;margin:14px 0}
+.dtree-step{display:flex;gap:13px;align-items:flex-start;padding:11px 0;border-bottom:1px dashed var(--line)}
+.dtree-step:last-child{border-bottom:none}
+.dtree-no{width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--paper);font:700 12px var(--mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.dtree-step b{display:block}
+.dtree-step p{margin:0;font-size:13.5px;max-width:none;width:auto}
+
+/* 公式块 */
+.formula{font-family:var(--mono);font-size:14.5px;background:var(--paper-deep);border:1.5px solid var(--ink);border-radius:8px;padding:13px 18px;max-width:var(--content-rail);margin:14px 0;overflow-x:auto;line-height:1.9}
+.formula b{color:var(--accent-deep)}
+
+/* 四幕快照表徽标 */
+.act-badge{display:inline-block;font:700 10px var(--mono);border-radius:99px;padding:1px 8px;margin-right:4px}
+.act-badge.b0{background:var(--paper-deep);color:var(--ink-soft);border:1px solid var(--line)}
+.act-badge.b1{background:#dde8dd;color:var(--ok);border:1px solid #bccfbc}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">GPU <em>与模型部署</em> · D 选型与运维</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="四页导航">
+  <span class="sn-label">GPU 与模型部署 · 四部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>底层认知</a>
+  <a class="sn-item" href="b.html"><b>B</b>推理与部署</a>
+  <a class="sn-item" href="c.html"><b>C</b>微调实战</a>
+  <a class="sn-item is-current" href="d.html"><b>D</b>选型与运维</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一个 14B 模型的一生</span>
+  <span class="cs-act done">序幕 · 在个人电脑跑起来</span>
+  <span class="cs-act done">第二幕 · 变成代码助手</span>
+  <span class="cs-act done">第三幕 · 微调成知识助手</span>
+  <span class="cs-act current">第四幕 · 上线 50 人服务</span>
+</div>
+
+<aside class="page-intro">
+  <div class="pi-block prev"><span class="pi-tag">前情 · A / B / C 页</span>
+    <p>公式和零件都齐了：<strong>能不能跑</strong>看显存（A 页），<strong>快不快</strong>看带宽与并发（B 页），<strong>训不训得动</strong>看方法的字节账单（C 页）。</p>
+  </div>
+  <div class="pi-arrow">→</div>
+  <div class="pi-block this"><span class="pi-tag">本页 · D 选型与运维（收官）</span>
+    <p>把零件装成一台「机器」，再算清两笔账：<strong>钱</strong>——自建 / 租卡 / 调 API 三条路、每百万 token 成本；<strong>稳</strong>——监控四件套与降级链。最后用部署架构搭建器，把 14B 模型从个人电脑一路升级到 50 人在线服务，四幕收官。</p>
+  </div>
+</aside>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">钱都花哪了 —— 自建、租卡、调 API 的三本账</h2></div>
+  <p class="lede">先抛一个真实决策：同样是「每天 10 万次问答」，自建、云租卡、商业 API 三条路的月账单能差出<strong>两个数量级</strong>。选错的代价通常不是「贵了」，而是买回来一台 90% 时间在睡觉的机器——以及没人敢提的折旧。</p>
+
+  <h3>三条路，三本账本结构</h3>
+  <table>
+    <thead><tr><th>路径</th><th>账单构成</th><th>藏在水面下的成本</th><th>适合谁</th></tr></thead>
+    <tbody>
+      <tr><td><b>自建</b>（买卡）</td><td>购机一次性投入 + 电费 + 机器折旧（3 年左右归零）</td><td>运维人力、机房/噪音、闲置浪费、卡价跳水</td><td>7×24 满负载、数据不能出门、用满 3 年</td></tr>
+      <tr><td><b>云租卡</b>（按小时）</td><td>时价 × 卡数 × 730 小时/月；spot 可省 50~70% 但会被抢占</td><td>数据出境合规、镜像与环境维护、长期算比买贵</td><td>波峰波谷明显、快速验证、季节性业务</td></tr>
+      <tr><td><b>商业 API</b>（按 token）</td><td>输入价 × 输入量 + 输出价 × 输出量</td><td>供应商锁定、限速、隐私合规、账单随业务线性涨</td><td>低量、快速验证、流量不可预测的起步期</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>决策第一问永远是利用率</b>利用率 = 实际在产出 token 的时间 ÷ 付费时间。满负载 7×24 → 自建/包月最划算；白天忙夜里闲 → 云的弹性赢；一天几百次请求、还在验证需求 → 别碰硬件，直接 API。<strong>买卡之前没算利用率，是「显卡烟花」的第一大引信（章 6 有反面案例）。</strong></div>
+
+  <h3>交互 D1 · TCO 三路对比器</h3>
+  <p>拖动下面的业务参数，三条累计成本曲线会随时间画出来；自建曲线被某条租用曲线「追上」的那个月，就是<span class="act-badge b1">回本点</span>。显存与成本全部调用四页共享的 <code>GPU_CALC</code> 公式库（卡型规格、<code>costPerMTok</code>）。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>D1 · TCO 三路对比器</b><span>业务规模 → 三本账 + 回本点</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>业务剧情</label>
+        <div class="pills" id="d1Preset">
+          <button class="pill" data-preset="team50">50 人内部服务</button>
+          <button class="pill" data-preset="bigapi">每天 10 万次 API</button>
+          <button class="pill" data-preset="night">低量验证 · 3000 次/天</button>
+        </div>
+      </div>
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>日均请求量 <b><em id="d1ReqV">5,000</em> 次</b></label><input type="range" id="d1Req" min="500" max="100000" step="500" value="5000"></div>
+        <div class="ctrl"><label>平均输入 token <b><em id="d1InV">4,000</em></b></label><input type="range" id="d1In" min="256" max="8192" step="128" value="4000"></div>
+        <div class="ctrl"><label>平均输出 token <b><em id="d1OutV">500</em></b></label><input type="range" id="d1Out" min="128" max="2048" step="64" value="500"></div>
+        <div class="ctrl"><label>利用率（产出时间÷付费时间）<b><em id="d1UtilV">30</em>%</b></label><input type="range" id="d1Util" min="5" max="95" step="5" value="30"></div>
+        <div class="ctrl"><label>峰值并发 <b><em id="d1ConcV">8</em> 路</b></label><input type="range" id="d1Conc" min="1" max="32" step="1" value="8"></div>
+      </div>
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>时间跨度</label><div class="pills" id="d1Horizon"><button class="pill" data-h="12">12 个月</button><button class="pill active" data-h="24">24 个月</button><button class="pill" data-h="36">36 个月</button></div></div>
+        <div class="ctrl"><label>自托管卡型</label><div class="pills" id="d1Card"><button class="pill active" data-card="rtx4090">RTX 4090</button><button class="pill" data-card="rtx5090">RTX 5090</button><button class="pill" data-card="a100">A100 80G</button><button class="pill" data-card="h100">H100</button></div></div>
+        <div class="ctrl"><label>API 档位</label><div class="pills" id="d1Tier"><button class="pill" data-tier="flagship">旗舰级</button><button class="pill active" data-tier="mid">中杯</button><button class="pill" data-tier="budget">性价比</button></div></div>
+      </div>
+
+      <div class="lab-grid">
+        <div class="tco-chart" id="d1Svg"></div>
+        <div>
+          <div class="kpi-grid">
+            <div class="kpi"><span>API 月账单</span><b id="d1ApiMo">—</b></div>
+            <div class="kpi"><span>云租卡月账单</span><b id="d1RentMo">—</b></div>
+            <div class="kpi"><span>自建月固定（电+维）</span><b id="d1SelfMo">—</b></div>
+            <div class="kpi"><span>自建前期投入</span><b id="d1Upfront">—</b></div>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi gpu"><span>自托管 $/1M 输出</span><b id="d1SelfPerM">—</b></div>
+            <div class="kpi gpu"><span>API 折合 $/1M 输出</span><b id="d1ApiPerM">—</b></div>
+            <div class="kpi"><span>需要卡数</span><b id="d1Cards">—</b></div>
+          </div>
+          <div class="note ok" style="margin:6px 0 0" id="d1Verdict">—</div>
+          <div class="note warn" style="margin:10px 0 0" id="d1VramNote">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">自托管 $/1M = GPU_CALC.costPerMTok(卡时价, 聚合吞吐, 利用率)；聚合吞吐为 14B 级模型 vLLM 量级估算（查证 2026-09）。硬件购价与电价为市场量级假设，页面内已标注。</div>
+  </div>
+
+  <div class="note"><b>怎么读回本点</b>回本点只对「自建 vs 租用」有意义：自建先付一大笔，之后每月只掏电费，租用方每月全额付。曲线交叉得越早，越值得买卡；36 个月都不交叉，就老老实实租或调 API。把利用率滑条从 80% 拉到 10%，你会亲眼看着回本点飞出图表——这就是「买卡前先算利用率」的数学版。</div>
+
+  <details class="quiz"><summary>自测：公司业务每天只有 3000 次请求（利用率约 8%），有人提议「买两张 H100，两年就回本了」。漏洞在哪？</summary><div class="ans">回本点的分母是「租用月成本 − 自建月固定成本」，利用率 8% 意味着需要的卡数其实只要 1 张甚至更少——买两张本身就已经算错容量；且低利用率下 API 月账单可能只有几百美元，自建几十万的投入绝大多数月份在还电费。先用 D1 拉一遍参数再谈「回本」。</div></details>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d1"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出三条路各自的钱花在哪，并被「决策第一问是利用率」说服</div></div></div>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">GPU 档位速查 —— 一张表，一堆坑</h2></div>
+  <p class="lede">打开购物车之前，先把这张表存下来。它是本手册<strong>全部硬件数字的唯一出处</strong>：下面这张表和三个交互组件的每一个显存、带宽、时价，都从四页共享的 <code>GPU_CALC.GPUS</code> 现场读出——a/b/c 页说你该信谁，d 页说你去哪查。</p>
+
+  <h3>规格总表（数字截至 2026-09）</h3>
+  <table>
+    <thead><tr><th>卡</th><th>显存</th><th>带宽</th><th>BF16 算力</th><th>TDP</th><th>云租参考</th><th>一句话定位</th></tr></thead>
+    <tbody id="gpuTableBody"><tr><td colspan="7">正在从 calc.js 读取…</td></tr></tbody>
+  </table>
+  <p style="font-size:13px;color:var(--ink-soft)">云租为 on-demand 常见量级（社区云/市场价低档、大厂溢价高档）。查证 2026-09 的实拍区间：RTX 4090 <b>$0.32~0.69/hr</b>（Vast ~ RunPod）、RTX 5090 约 <b>$0.5~0.9/hr</b>（各平台差异大）、A100 80G <b>$1.0~1.8/hr</b>、H100 <b>$2.1~4.0/hr</b>（Vast 中位 ~$2.1、RunPod $2.7~3.2、Lambda $3.3~4.0）、H200 <b>$3.1~4.4/hr</b>、B200 <b>$3.5~5.9/hr</b>。<strong>GPU 价格波动剧烈，下单前务必看当日价目页（章 8 给了链接）。</strong></p>
+
+  <h3>避坑清单：三种最常见的「以为能跑」</h3>
+  <ul class="plain">
+    <li><strong>游戏卡当数据中心卡用</strong>：RTX 4090/5090 没有 ECC、没有 NVLink（多卡走 PCIe，张量并行通信是心梗高发区）、驱动 EULA 不允许数据中心部署；FP8 精度与稳定性也不如数据中心卡。单人/小团队推理无妨，认真做多卡训练别选它。</li>
+    <li><strong>Mac 训练吞吐的坑</strong>：M4 Max 统一内存 128GB「装得下 70B」，但带宽 ≈546GB/s 且 MLX 训练生态吞吐远低于 CUDA——跑得动推理、微调 7B 勉强、更大就只是「能等」。拿它当推理终端可以，当训练机是煎熬。</li>
+    <li><strong>「云上 4090」超售</strong>：市场价 $0.3/hr 档的 4090 常见超售与限功率（锁 300W 以下、显存被宿主分走）。跑批前先跑 10 分钟压力测试看吞吐是否对得上标称；低于预期立刻换实例。</li>
+    <li><strong>B200 显存的两种口径</strong>：官方标称 192GB HBM3e，部分云商标「180GB」是可用显存口径——量级一致，对比参数表时注意是标称还是可用。</li>
+  </ul>
+
+  <h3>交互 D2 · GPU 选型对比器</h3>
+  <p>选一个任务，组件会用与 a/c 页完全一致的公式<strong>反推显存需求区间</strong>（推理走 <code>inferenceGB</code>，训练走 <code>trainBreakdownGB</code>），再从档位表里挑出装得下的最小卡，给理由和避坑提示。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>D2 · GPU 选型对比器</b><span>任务 → 显存区间 → 档位推荐</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>任务</label>
+        <div class="pills" id="d2Task">
+          <button class="pill" data-task="chat">本地陪聊</button>
+          <button class="pill" data-task="code">个人代码助手</button>
+          <button class="pill" data-task="finetune7">微调 7B</button>
+          <button class="pill" data-task="finetune14">微调 14B</button>
+          <button class="pill" data-task="api">线上 API（小团队）</button>
+          <button class="pill" data-task="batch">离线批量</button>
+        </div>
+      </div>
+      <div class="ctrl" id="d2MethodWrap" hidden><label>训练方法 —— <b>选 LoRA 还是全量，直接改变买 24GB 还是 4×80GB</b></label>
+        <div class="pills" id="d2Method">
+          <button class="pill" data-method="qlora">QLoRA</button>
+          <button class="pill" data-method="lora">LoRA</button>
+          <button class="pill" data-method="full">全量 SFT</button>
+        </div>
+      </div>
+
+      <div class="d2-stack-wrap">
+        <div class="vram-legend"><span><i class="weight"></i>权重/主干</span><span><i class="kv"></i>KV 或 增量+梯度</span><span><i class="act"></i>开销/优化器/激活</span><span><i class="free"></i>剩余</span></div>
+        <div class="vram-stack" id="d2Stack"></div>
+      </div>
+      <div class="d2-math" id="d2Math">—</div>
+      <div><span class="verdict ok" id="d2Verdict">—</span></div>
+      <div id="d2Rec" style="margin-top:14px"></div>
+      <div class="note warn" style="margin-bottom:0" id="d2Pit">—</div>
+    </div>
+    <div class="lab-foot">显存公式与 a 页估算器、c 页沙盘同源（GPU_CALC）；吞吐口径：14B 级 vLLM 单卡聚合 tok/s 量级（查证 2026-09，2×4090 实测 939 tok/s 折算）。</div>
+  </div>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d2"><div class="ckpt-box">✓</div><div class="ckpt-text">拿到任务会先用公式反推显存区间，再对档位表选卡，而不是看博主推荐</div></div></div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">每 100 万 token 的成本账 —— 自托管什么时候反超 API</h2></div>
+  <p class="lede">「每月账单」会随业务量起伏，「每 100 万 token 多少钱」才是把自托管和 API 放上同一把尺子的口径。这一章只讲一条公式链和一个对照表。</p>
+
+  <div class="formula">$/1M 输出 token = <b>卡每小时价</b> ÷（<b>聚合吞吐 tok/s</b> × 3600 × <b>利用率</b>）× 1,000,000</div>
+  <p>三个变量各管一件事：<strong>卡时价</strong>是你付出多少钱（对应章 2 的表）、<strong>聚合吞吐</strong>是这张卡一小时能吐多少 token（对应 b 页的连续批处理——单流 decode 只有百来 tok/s，批起来才能翻几倍）、<strong>利用率</strong>是这些吞吐有多少真的在卖（对应章 1 的第一问）。</p>
+
+  <h3>算例：14B 级模型，vLLM，利用率 50%（现算）</h3>
+  <p>吞吐取公开实测的量级：2×RTX 4090 跑 Qwen2.5-14B 聚合吞吐 939 tok/s（databasemart 基准，查证 2026-09），按卡折算出下表的单卡口径。下表由页面调用 <code>GPU_CALC.costPerMTok</code> 现场计算。</p>
+  <table>
+    <thead><tr><th>卡</th><th>云时价</th><th>聚合吞吐（量级）</th><th>利用率 50%</th><th>利用率 20%</th></tr></thead>
+    <tbody id="costTableBody"><tr><td colspan="5">正在计算…</td></tr></tbody>
+  </table>
+  <p style="font-size:13px;color:var(--ink-soft)">读法：利用率从 50% 掉到 20%，每 token 成本直接 ×2.5——<strong>同一张卡，「值不值」完全由利用率决定</strong>。另注意：消费卡每 token 成本常常低于 H100，前提是你只需要 14B 量级的模型；模型再往上，单卡放不下，账就另算了。此口径只含卡钱，不含冗余副本、流量与运维。</p>
+
+  <h3>对照：商业 API 定价（查证 2026-09，随时会变）</h3>
+  <table>
+    <thead><tr><th>档位</th><th>输入 $/1M</th><th>输出 $/1M</th><th>备注</th></tr></thead>
+    <tbody>
+      <tr><td>OpenAI GPT-5 mini</td><td>$0.25</td><td>$2.00</td><td>缓存命中输入 $0.025；Batch 再半价（<a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener">官网</a>）</td></tr>
+      <tr><td>DeepSeek V4 Flash</td><td>$0.14（缓存未命中）</td><td>$0.28 非高峰 ~ $1.32 高峰</td><td>2026-08 起分峰谷计价（<a href="https://api-docs.deepseek.com/quick_start/pricing" target="_blank" rel="noopener">官网</a>）</td></tr>
+      <tr><td>Qwen-Flash（阿里云）</td><td>$0.05 ~ 0.15</td><td>≈$0.40</td><td>按时段/上下文分档（<a href="https://www.alibabacloud.com/help/en/model-studio/model-pricing" target="_blank" rel="noopener">官网</a>）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><b>结论往往是：低利用率时 API 便宜，满负载时自托管反超</b>——但注意 API 档位自身就差 10~20 倍：拿旗舰模型的价格对比自托管小模型没有意义。真正的临界点让 D1 的曲线给你；另外三件事 API 折不进价格：数据的隐私边界、你微调过的行为（通用 API 给不了你的 LoRA）、以及被限速锁死的吞吐上限。</div>
+
+  <h3>容量规划：从峰值 QPS 到卡数的一条线</h3>
+  <p>把 a/b 页的公式串起来就是一条链：<strong>峰值 QPS × 平均响应时长 ≈ 峰值并发</strong>（比如 0.16 QPS × 50s ≈ 8 路）→ <strong>并发 × 上下文 × 每 token KV 字节 = KV 显存</strong>（a 页第 5~6 章的乘法，<a href="a.html#c6">用 a 页显存估算器现场验一遍</a>）→ <strong>总显存需求 ÷ 单卡可用显存 = 卡数下限</strong> → 再用<strong>日 token 量 ÷ (86400 × 利用率) ÷ 单卡聚合吞吐</strong>验一遍吞吐卡数，取两个下限的较大者。吞吐与排队的行为，见 <a href="b.html#c4">b 页第 4 章并发模拟器</a>。</p>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d3"><div class="ckpt-box">✓</div><div class="ckpt-text">会用 $/1M 公式把自托管和 API 放在同一把尺子上，并说出利用率在公式里的位置</div></div></div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">14B 案例四幕收官 —— 从个人电脑到 50 人在线服务</h2></div>
+  <p class="lede">四页书讲完，回到主角：Qwen2.5-14B。同一个模型，在公司里过完了一生——每一幕撞上的墙，恰好是每一页讲的知识点。这一章把四幕的状态快照摊在一张表里，然后给第四幕一个能落地的部署形态。</p>
+
+  <h3>四幕状态快照</h3>
+  <table>
+    <thead><tr><th>幕</th><th>精度</th><th>硬件</th><th>显存占用</th><th>成本量级</th><th>撞上的墙</th></tr></thead>
+    <tbody>
+      <tr><td><span class="act-badge b0">序幕</span>个人电脑跑起来</td><td>BF16 装不下 → INT4</td><td>RTX 4090 / M4 Max</td><td>权重 ≈7.4GB，合计 ≈10GB</td><td>≈$0（已有设备）</td><td>28GB 权重 vs 24GB 显存 → 量化（a 页）</td></tr>
+      <tr><td><span class="act-badge b0">第二幕</span>变成代码助手</td><td>Q4_K_M（GGUF）</td><td>本机 Ollama</td><td>≈10GB</td><td>电费几块钱</td><td>8 个朋友同时用就崩 → KV×并发（b 页）</td></tr>
+      <tr><td><span class="act-badge b0">第三幕</span>微调成知识助手</td><td>QLoRA（NF4 主干）</td><td>1×RTX 4090 过夜</td><td>≈10~14GB</td><td>一夜电费 ≈$0.5</td><td>全量要 224GB → LoRA/QLoRA（c 页）</td></tr>
+      <tr><td><span class="act-badge b1">第四幕</span>上线 50 人服务</td><td>INT4 + vLLM</td><td>2×24GB（云或自建）</td><td>单副本 ≈13GB（下行现场算）</td><td>云租 ≈$580/月</td><td>并发、冗余、监控、兜底（本页）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>第四幕：目标形态的账，现场算一遍</h3>
+  <p>目标：50 人内部使用，每天约 5000 次请求，峰值并发 ~8 路，平均 4K 输入 / 500 输出。把数字交给公式（调用 <code>GPU_CALC.inferenceGB</code>，KV 字节按 14B 的 GQA 配置 48 层 × kvDim 1024）：</p>
+  <div class="kpi-grid">
+    <div class="kpi"><span>权重（INT4）</span><b id="a4Weight">—</b></div>
+    <div class="kpi"><span>KV Cache（8 路 × 4.5K）</span><b id="a4Kv">—</b></div>
+    <div class="kpi"><span>运行开销</span><b id="a4Over">—</b></div>
+    <div class="kpi gpu"><span>单副本合计</span><b id="a4Total">—</b></div>
+  </div>
+  <div><span class="verdict ok" id="a4Verdict">—</span></div>
+  <p style="margin-top:14px"><strong>结论：单张 24GB 就装得下峰值负载</strong>（KV 是大户但 8 路还咬不动 22.8GB 可用显存），但生产形态仍取 <strong>2×24GB（或 1×48GB 档）</strong>：第二张卡不是为了显存，是为了<strong>冗余</strong>（一张卡挂了服务还在）和<strong>吞吐余量</strong>（聚合 ~940 tok/s，对照章 3 的公式，868 tok/s 的容量需求在 30% 利用率下刚好要两张）。流量入口加 least-loaded 路由，两副本互为热备——这就是下一章的 L2。</p>
+  <div class="note"><b>为什么第四幕不一定选自托管</b>按 D1 默认参数，这套 2×24GB 云租 ≈$580/月，而「中杯 API」跑同样的量只要 ≈$300/月——<strong>这个规模下 API 更便宜</strong>。第四幕仍然成立的三个理由：知识助手带公司私有数据（不出域）、模型带着第三幕微调的行为（通用 API 复制不了）、以及把数据留自己在合规上睡得着觉。钱不是唯一变量，但必须先算清楚再谈其他。</div>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d4"><div class="ckpt-box">✓</div><div class="ckpt-text">能复述 14B 四幕每一幕的精度、硬件、显存、成本，并说出第四幕「2 张卡不是为了显存」</div></div></div>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">部署架构搭建器 —— 四级演进，亲手升级（压轴）</h2></div>
+  <p class="lede">b/c 页的所有零件在这里拼成一台完整的「机器」。点「升级」，看架构图逐节点生长；每一级右侧都会告诉你：<strong>能力涨了多少、钱涨了多少、新引入了什么风险</strong>，以及「出现什么现象说明你该升级了」。每升一级用到的知识点，恰好是前面某一章——全手册在这里闭环。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>D3 · 部署架构搭建器</b><span>L0 个人本地 → L3 生产级</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>当前等级</label>
+        <div class="pills" id="d3Lvl">
+          <button class="pill active" data-lvl="0">L0 个人本地</button>
+          <button class="pill" data-lvl="1">L1 单卡服务</button>
+          <button class="pill" data-lvl="2">L2 多副本</button>
+          <button class="pill" data-lvl="3">L3 生产级</button>
+        </div>
+      </div>
+      <div class="lab-grid">
+        <div class="d3-stage" id="d3Svg">
+          <svg viewBox="0 0 480 300" role="img" aria-label="部署架构演进图">
+            <defs>
+              <marker id="arrD3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#26221b"/></marker>
+            </defs>
+            <!-- edges -->
+            <g id="eCS" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M118,42 h22 v96 h16"/></g>
+            <g id="eCG" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M118,42 H156"/></g>
+            <g id="eGS" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M220,66 V126"/></g>
+            <g id="eGR" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M280,42 H318"/></g>
+            <g id="eRR1" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M381,66 V88 H220 V126"/></g>
+            <g id="eRR2" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M381,66 V126"/></g>
+            <g id="eSM" class="ae"><path class="dg-line" marker-end="url(#arrD3)" d="M381,196 V232"/></g>
+            <g id="eSF" class="ae"><path class="dg-dim dg-dash" marker-end="url(#arrD3)" d="M220,196 V232"/></g>
+            <!-- nodes -->
+            <g id="anClients" class="an">
+              <rect class="dg-box" x="14" y="18" width="104" height="48" rx="7"/>
+              <text class="dg-title" x="66" y="39" text-anchor="middle">客户端</text>
+              <text class="dg-tiny" x="66" y="55" text-anchor="middle">50 人 · Web / CLI</text>
+            </g>
+            <g id="anGateway" class="an">
+              <rect class="dg-accent" x="160" y="18" width="120" height="48" rx="7"/>
+              <text class="dg-title" x="220" y="35" text-anchor="middle">网关</text>
+              <text class="dg-tiny" x="220" y="49" text-anchor="middle">限流 + API Key</text>
+              <text class="dg-tiny" id="gwScale" x="220" y="61" text-anchor="middle" opacity="0">自动扩缩</text>
+            </g>
+            <g id="anRouter" class="an">
+              <rect class="dg-accent" x="322" y="18" width="118" height="48" rx="7"/>
+              <text class="dg-title" x="381" y="35" text-anchor="middle">负载路由</text>
+              <text class="dg-tiny" x="381" y="49" text-anchor="middle">least-loaded · 队列+超时</text>
+            </g>
+            <g id="anServe" class="an">
+              <rect class="dg-green" x="160" y="132" width="120" height="60" rx="7"/>
+              <text class="dg-title" id="serveLabel" x="220" y="152" text-anchor="middle">Ollama 单机</text>
+              <text class="dg-tiny" id="serveSub" x="220" y="167" text-anchor="middle">本机 · 1~2 人</text>
+              <text class="dg-tiny" id="serveCache" x="220" y="182" text-anchor="middle" opacity="0">KV 显存水位 90%</text>
+            </g>
+            <g id="anServe2" class="an">
+              <rect class="dg-green" x="322" y="132" width="118" height="60" rx="7"/>
+              <text class="dg-title" x="381" y="152" text-anchor="middle">vLLM 副本 ×2</text>
+              <text class="dg-tiny" x="381" y="167" text-anchor="middle">各 1×24GB GPU</text>
+              <text class="dg-tiny" x="381" y="182" text-anchor="middle">前缀缓存复用</text>
+            </g>
+            <g id="anMonitor" class="an">
+              <rect class="dg-box" x="322" y="238" width="118" height="48" rx="7"/>
+              <text class="dg-title" x="381" y="259" text-anchor="middle">监控告警</text>
+              <text class="dg-tiny" x="381" y="275" text-anchor="middle">TTFT · 显存 · 错误率</text>
+            </g>
+            <g id="anFallback" class="an">
+              <rect class="dg-red" x="160" y="238" width="120" height="48" rx="7"/>
+              <text class="dg-title" x="220" y="259" text-anchor="middle">商业 API 兜底</text>
+              <text class="dg-tiny" x="220" y="275" text-anchor="middle">降级链最后一环</text>
+            </g>
+          </svg>
+        </div>
+        <div class="d3-panel">
+          <h4 id="d3Name">—</h4>
+          <p id="d3Desc">—</p>
+          <h4>能力</h4><p id="d3Cap">—</p>
+          <h4>月成本量级</h4><p id="d3Cost">—</p>
+          <h4>复杂度</h4><p class="d3-cx" id="d3Cx">—</p>
+          <h4>新引入的风险</h4><p id="d3Risk">—</p>
+          <div class="signal-box"><b>该升级了，当：</b><span id="d3Signal">—</span></div>
+          <h4>这一级用到的知识</h4><div class="know-links" id="d3Know"></div>
+          <div class="d3-btns">
+            <button class="sim-btn" id="d3Up">⬆ 升级到 L1</button>
+            <button class="sim-btn ghost" id="d3Reset">↺ 回到 L0</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">成本量级基于章 2 云价表（查证 2026-09）；架构只画到「该上多副本、该有监控」的决策层，Kubernetes 编排不在本手册范围。</div>
+  </div>
+
+  <h3>L4 · 知道即可：再往上的两件事</h3>
+  <p>生产级再往上还有两层，本手册不展开，你只需要在别人提起来时知道它们解决什么：<strong>prefill/decode 分离</strong>——b 页讲过 prefill 吃算力、decode 吃带宽，规模大到两种负载互相打架时，把两幕拆到不同的机器池、中间传 KV；<strong>多区容灾</strong>——同一个服务在两个可用区各跑一套，全局路由兜单区故障。</p>
+  <div class="diagram">
+    <svg viewBox="0 0 640 170" role="img" aria-label="L4 概念图：prefill/decode 分离与多区容灾">
+      <defs><marker id="arrL4" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#c2491d"/></marker></defs>
+      <text class="dg-sub" x="20" y="22">可用区 A</text>
+      <rect class="dg-accent" x="20" y="34" width="150" height="44" rx="7"/>
+      <text class="dg-title" x="95" y="53" text-anchor="middle">Prefill 节点池</text>
+      <text class="dg-tiny" x="95" y="68" text-anchor="middle">吃算力 · 批大</text>
+      <path class="dg-flow" marker-end="url(#arrL4)" d="M170,56 H235"/>
+      <text class="dg-lbl" x="202" y="48" text-anchor="middle">传 KV</text>
+      <rect class="dg-green" x="240" y="34" width="150" height="44" rx="7"/>
+      <text class="dg-title" x="315" y="53" text-anchor="middle">Decode 节点池</text>
+      <text class="dg-tiny" x="315" y="68" text-anchor="middle">吃带宽 · 逐 token</text>
+      <text class="dg-sub" x="430" y="22">可用区 B（镜像一套）</text>
+      <rect class="dg-box dg-dash" x="430" y="34" width="190" height="44" rx="7"/>
+      <text class="dg-title" x="525" y="61" text-anchor="middle">同样的 Prefill + Decode</text>
+      <rect class="dg-box" x="170" y="110" width="300" height="40" rx="7"/>
+      <text class="dg-title" x="320" y="135" text-anchor="middle">全局路由 · 健康检查 · 单区故障自动切换</text>
+      <path class="dg-dim dg-dash" d="M315,78 V110"/>
+      <path class="dg-dim dg-dash" d="M525,78 C525,100 480,100 470,110"/>
+    </svg>
+    <figcaption>Fig · L4 —— Prefill/Decode 分离与多区容灾（知道即可，规模不到不折腾）</figcaption>
+  </div>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d5"><div class="ckpt-box">✓</div><div class="ckpt-text">能画出 L0→L3 的架构演进，说出每级的能力、成本和升级信号</div></div></div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">运维与降级 —— 监控什么、什么时候慌、怎么兜底</h2></div>
+  <p class="lede">上线只是开始。这一章回答三个值班问题：<strong>盯哪几个数？什么数值该慌？慌了按什么顺序动手？</strong>全部内容围绕一个原则：与其全链路一起崩，不如主动拒绝一部分、降级一部分。</p>
+
+  <h3>监控四件套与「该慌阈值」</h3>
+  <p>vLLM 自带 Prometheus 指标端点（<code>/metrics</code>），四个关键旋钮的官方默认值：`gpu_memory_utilization` 默认 <b>0.9</b>（模型 + KV + 激活的显存上限），`max_num_seqs` 默认 <b>256</b>（并发上限，不是实际并发——实际批量由 KV 剩余空间动态决定）。查证 2026-09，出处见章 8。</p>
+  <table>
+    <thead><tr><th>指标</th><th>看什么</th><th>该慌阈值（14B 级参考）</th><th>慌了先查</th></tr></thead>
+    <tbody>
+      <tr><td><b>TTFT p95</b></td><td>用户体验的下限</td><td>&gt; 5s，或持续 30 分钟上涨</td><td>队列是否堆积（并发 &gt; 单副本容量）、前缀缓存命中率是否下跌</td></tr>
+      <tr><td><b>tokens/s（吞吐/TPOT）</b></td><td>产能是否缩水</td><td>单流 decode &lt; 10 tok/s</td><td>是否被超售/限功率、批处理是否退化、卡温是否降频</td></tr>
+      <tr><td><b>显存水位</b></td><td>容量余量</td><td>&gt; 90%（vLLM 0.9 上限附近）</td><td>KV 占比：该限流、缩 max_model_len，还是加卡</td></tr>
+      <tr><td><b>错误率</b></td><td>健康底线</td><td>5xx/OOM &gt; 1%</td><td>最近一次变更、OOM 日志、上游依赖</td></tr>
+    </tbody>
+  </table>
+
+  <h3>告警分级</h3>
+  <table>
+    <thead><tr><th>级别</th><th>触发</th><th>动作</th></tr></thead>
+    <tbody>
+      <tr><td><b>P1</b></td><td>服务不可用：错误率 &gt; 10% 或全部超时</td><td>电话叫醒；先执行降级链（下方），再查根因</td></tr>
+      <tr><td><b>P2</b></td><td>体验劣化：TTFT p95 超阈值 30 分钟 / 显存水位 &gt; 90%</td><td>工作时间告警；限流或扩一个副本</td></tr>
+      <tr><td><b>P3</b></td><td>趋势预警：利用率/账单/缓存命中率周环比异常</td><td>日报里出现，排期处理</td></tr>
+    </tbody>
+  </table>
+
+  <h3>三个故障剧本 · 处置卡</h3>
+  <div class="playbook">
+    <div class="pb-card"><h4>剧本 1 · 拔卡（GPU 掉线）</h4>
+      <div><span class="lbl">现象</span>nvidia-smi 少卡；dmesg 刷 Xid 错误；vLLM 崩溃重启</div>
+      <div><span class="lbl">处置</span>网关摘掉该副本流量 → 重启机器 → 跑 10 分钟压力测试再放回</div>
+      <div><span class="lbl">预防</span>不超频、控温度；多副本本来就是为此准备的</div>
+    </div>
+    <div class="pb-card"><h4>剧本 2 · OOM</h4>
+      <div><span class="lbl">现象</span>CUDA out of memory；vLLM 反复重启；长上下文请求集中出现</div>
+      <div><span class="lbl">处置</span>调低 gpu_memory_utilization 或 max_num_seqs / 缩 max_model_len → 重启</div>
+      <div><span class="lbl">预防</span>显存水位 90% 告警（P2）；长上下文单独限流</div>
+    </div>
+    <div class="pb-card"><h4>剧本 3 · 流量洪峰</h4>
+      <div><span class="lbl">现象</span>队列堆积、TTFT 飙升，但 GPU 利用率早已打满</div>
+      <div><span class="lbl">处置</span>立刻限流保住已接入请求 → 有余量就扩副本 → 不够就进降级链</div>
+      <div><span class="lbl">预防</span>压测知道单副本容量天花板；告警阈值设在天花板 70%</div>
+    </div>
+  </div>
+
+  <h3>降级决策树：五步，从限流到 API</h3>
+  <div class="dtree">
+    <div class="dtree-step"><span class="dtree-no">1</span><div><b>限流</b><p>并发上限 / 排队 + 超时 / 按用户配额。先保证「已接入的人被服务好」，拒绝是止损不是失败（b 页章 5）。</p></div></div>
+    <div class="dtree-step"><span class="dtree-no">2</span><div><b>缩上下文</b><p>长输入直接拒或引导截断——KV 显存最大的杠杆，往往一步就缓过来（a 页章 5）。</p></div></div>
+    <div class="dtree-step"><span class="dtree-no">3</span><div><b>降精度档</b><p>FP8/INT8 副本顶上：权重减半，KV 字节也减，吞吐与容量同时改善（b 页章 2）。</p></div></div>
+    <div class="dtree-step"><span class="dtree-no">4</span><div><b>切小模型</b><p>14B → 7B：质量降级但服务活着；用户侧通常对「慢」比对「略笨」敏感得多。</p></div></div>
+    <div class="dtree-step"><span class="dtree-no">5</span><div><b>兜底商业 API</b><p>最后防线。提前接好、提前测过，并给兜底账单设独立预算告警——别让救火动作烧出第二场火灾。</p></div></div>
+  </div>
+
+  <h3>反面案例集 · 把钱烧成显卡烟花</h3>
+  <div class="note danger"><b>烟花 1 · 买卡前没算利用率</b>团队日请求几千次（利用率 ~8%），拍板买 4×A100「三年 ownership 划算」。实际每月产出 token 用 API 只要几百美元，机器在工位下替公司保值的方式只有散热。D1 拉一遍参数就能避免。</div>
+  <div class="note danger"><b>烟花 2 · 长上下文没算 KV</b>16K 上下文全量放开，8 个并发就把 80GB 的卡吃穿——KV = 并发 × 上下文 × 每 token 字节，乘法不会因为「模型才 14B」而手下留情。a 页章 5 的生长器玩五分钟就能记住这个教训。</div>
+  <div class="note danger"><b>烟花 3 · 微调用全量上 4×A100</b>只是想教模型「用我们的格式回答」，却按全量 SFT 租了一周 4×A100：224GB 的权重账单（c 页章 2）。同样的活 QLoRA 一张 4090 一夜搞定，成本差两个数量级。买卡之前先定训练方法。</div>
+
+  <details class="quiz"><summary>自测：显存水位 93%、TTFT p95 缓慢上涨、错误率 0%。按本章的顺序，第一个动作是什么？</summary><div class="ans">限流（第一步）。显存已越过 90% 该慌线而错误率还没起来，正是「主动拒绝一部分好过全部一起 OOM」的窗口期；同时查 KV 占比决定是缩 max_model_len 还是扩副本。直接重启或换模型都是越级动作。</div></details>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d6"><div class="ckpt-box">✓</div><div class="ckpt-text">背得出监控四件套的该慌阈值，以及降级链「限流→缩上下文→降精度→小模型→API」的顺序</div></div></div>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">决策速查卡 + 终极测验</h2></div>
+  <p class="lede">整部手册压缩成五问。以后每一次「要不要买卡 / 租卡 / 上线」，都从这张表开始。</p>
+
+  <h3>五问速查卡</h3>
+  <table>
+    <thead><tr><th>问题</th><th>看什么</th><th>公式 / 阈值</th><th>出处</th></tr></thead>
+    <tbody>
+      <tr><td><b>能不能跑？</b></td><td>显存三件套 vs 可用显存</td><td>权重 + KV + 开销 ≤ 标称 × 0.9（再留 10~20% 余量）</td><td>A 页章 3~6</td></tr>
+      <tr><td><b>快不快？</b></td><td>带宽 vs 权重量</td><td>tokens/s ≈ 带宽 ÷ 权重 GB（打 5~7 折）；TTFT 看 prefill 算力</td><td>A 页章 7 · B 页章 1</td></tr>
+      <tr><td><b>训得动吗？</b></td><td>方法 × 字节账单</td><td>全量 16 B/参数；LoRA 主干 2 B；QLoRA 主干 0.5 B + 激活</td><td>C 页章 2~5</td></tr>
+      <tr><td><b>值不值？</b></td><td>利用率与 $/1M tok</td><td>卡时价 ÷（聚合吞吐 × 3600 × 利用率）× 1e6，对照 API 价</td><td>本页章 1~3</td></tr>
+      <tr><td><b>稳不稳？</b></td><td>限流 + 监控 + 降级链</td><td>四件套阈值；限流→缩上下文→降精度→小模型→API</td><td>B 页章 5 · 本页章 5~6</td></tr>
+    </tbody>
+  </table>
+
+  <h3>终极测验 · 5 题</h3>
+  <p>全手册毕业考。答对 4 题以上，你已经有资格在采购会上拍桌子了。</p>
+  <div class="quizbox"><div class="quiz-head"><span>FINAL EXAM · GPU &amp; DEPLOYMENT</span><span>历史最佳 <b id="quizBest">—</b> · 本轮 <strong id="quizScore">0 / 5</strong></span></div><div class="quiz-body"><div class="q-no" id="qNo"></div><div class="q-text" id="qText"></div><div id="qOpts"></div><div class="q-exp" id="qExp"></div></div><div class="quiz-foot"><button class="sim-btn" id="qSubmit" disabled>确认答案</button><button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button><button class="sim-btn ghost" id="qRestart" style="display:none">↺ 重新考</button><span class="q-verdict" id="qVerdict"></span></div></div>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d7"><div class="ckpt-box">✓</div><div class="ckpt-text">五问速查卡能脱稿回答，终测拿到 4/5 以上</div></div></div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">价格与规格的时效性最强，全部原始出处集中在这里。<strong>每条都标注了核对日期；引用数字前先点开看现价。</strong></p>
+
+  <h3>云 GPU 时价（查证 2026-09，波动剧烈）</h3>
+  <ul class="plain source-list">
+    <li><a href="https://www.runpod.io/pricing" target="_blank" rel="noopener">RunPod · GPU Cloud Pricing</a> —— 4090 ~$0.69、A100 80G ~$1.09~1.76、H100 ~$2.69~3.20、H200 ~$3.14~4.39、B200 ~$5.87/hr</li>
+    <li><a href="https://lambda.ai/pricing" target="_blank" rel="noopener">Lambda · GPU Cloud Pricing</a> —— H100 on-demand $3.29~3.99/hr</li>
+    <li><a href="https://vast.ai/pricing" target="_blank" rel="noopener">Vast.ai · Live Pricing</a> —— 市场价：4090 $0.32~0.44、H100 SXM 中位 ~$2.08、B200 $3.50~5.50/hr（超售风险自担）</li>
+    <li><a href="https://aws.amazon.com/ec2/pricing/on-demand/" target="_blank" rel="noopener">AWS · EC2 On-Demand Pricing</a>（P5/H100 类大厂溢价档，另见 GCP/CoreWeave 同类页）</li>
+  </ul>
+
+  <h3>推理引擎与部署文档（查证 2026-09）</h3>
+  <ul class="plain source-list">
+    <li><a href="https://docs.vllm.ai/en/stable/" target="_blank" rel="noopener">vLLM · 官方文档</a>；<a href="https://docs.vllm.ai/en/stable/design/metrics/" target="_blank" rel="noopener">Metrics（Prometheus/Grafana）</a>；引擎参数默认值：gpu_memory_utilization=0.9、max_num_seqs=256</li>
+    <li><a href="https://docs.sglang.ai/" target="_blank" rel="noopener">SGLang · 官方文档</a>（RadixAttention 前缀缓存复用）</li>
+    <li><a href="https://qwen.readthedocs.io/en/v2.5/benchmark/speed_benchmark.html" target="_blank" rel="noopener">Qwen2.5 · 官方速度基准</a>（vLLM 吞吐与显存口径）</li>
+    <li><a href="https://www.databasemart.com/blog/vllm-gpu-benchmark-dual-rtx4090" target="_blank" rel="noopener">vLLM GPU Benchmark · 2×RTX 4090</a> —— Qwen2.5-14B 聚合吞吐 939.54 tok/s（本页吞吐量级的实测依据）</li>
+  </ul>
+
+  <h3>硬件规格与 API 定价（查证 2026-09）</h3>
+  <ul class="plain source-list">
+    <li><a href="https://www.nvidia.com/en-us/data-center/h100/" target="_blank" rel="noopener">NVIDIA H100</a> · <a href="https://www.nvidia.com/en-us/data-center/blackwell/" target="_blank" rel="noopener">Blackwell / B200</a> —— datasheet 口径（B200 标称 192GB，部分云商标可用 180GB）</li>
+    <li><a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener">OpenAI · Pricing</a> —— GPT-5 mini $0.25 / $2.00 per 1M</li>
+    <li><a href="https://api-docs.deepseek.com/quick_start/pricing" target="_blank" rel="noopener">DeepSeek · Models &amp; Pricing</a> —— V4 Flash 峰谷计价</li>
+    <li><a href="https://www.alibabacloud.com/help/en/model-studio/model-pricing" target="_blank" rel="noopener">Alibaba Cloud Model Studio · Model Pricing</a> —— Qwen-Flash / Qwen3.5 系列</li>
+  </ul>
+
+  <h3>系列回顾</h3>
+  <p>四页书到此收线：<a href="a.html">A 页</a>回答「能不能跑」——显存里的住户与三档判定；<a href="b.html">B 页</a>回答「快不快、多人用崩不崩」——两幕戏、量化与并发；<a href="c.html">C 页</a>回答「训得动吗」——16 字节账单与并行切法；本页回答「值不值、稳不稳」——三条路的账本与降级链。</p>
+  <p>如果只带走一句话：<strong>所有部署决策的第一问都是利用率，所有崩溃的第一现场都是显存，所有兜底的第一动作都是限流。</strong>建议隔段时间<a href="a.html">回 A 页再走一遍</a>——带着这次上线踩过的坑重读，公式会变成直觉。</p>
+
+  <div class="checkpoint"><div class="ckpt-item" data-key="d8"><div class="ckpt-box">✓</div><div class="ckpt-text">收藏了参考资料，知道下次查现价该去哪几个页面</div></div></div>
+
+  <footer class="colophon">资料核对日期：2026-09-02 · 硬件规格/价格/吞吐均为量级并随市场波动，请以链接中的官方页面为准 · 硬件与成本公式统一来自 calc.js（四页共享） · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="calc.js"></script>
+<script>
+/* ============ 基础 ============ */
+function $id(x){return document.getElementById(x)}
+function fmtUsd(x){if(!isFinite(x))return '—';return x>=1000?'$'+Math.round(x).toLocaleString():x>=100?'$'+Math.round(x):x>=1?'$'+x.toFixed(1):'$'+x.toFixed(2)}
+function fmtK(x){return x>=1000?(x/1000).toFixed(x>=10000?0:1)+'k':String(Math.round(x))}
+var G=window.GPU_CALC;
+var HAS_G=!!G;
+
+/* ============ TOC + scrollspy ============ */
+var chapters=[].slice.call(document.querySelectorAll("section.chapter")),toc=$id("toc"),names=["三条路的账本","GPU 档位速查","百万 token 成本账","四幕收官","部署架构搭建器","运维与降级","速查卡与终测","参考资料"];
+chapters.forEach(function(sec,i){var a=document.createElement("a");a.href="#"+sec.id;a.innerHTML='<span class="no">'+String(i+1).padStart(2,"0")+'</span>'+names[i]||"";toc.appendChild(a)});
+var tocLinks=[].slice.call(toc.querySelectorAll("a")),progFill=$id("progFill"),progLabel=$id("progLabel");
+function updateSpy(){var y=scrollY+140,cur=0;chapters.forEach(function(s,i){if(s.offsetTop<=y)cur=i});tocLinks.forEach(function(a,i){a.classList.toggle("active",i===cur)});progFill.style.width=((cur+1)/chapters.length*100)+"%";progLabel.textContent=(cur+1)+" / "+chapters.length+" 章"}
+addEventListener("scroll",updateSpy,{passive:true});addEventListener("resize",updateSpy);updateSpy();
+
+/* ============ checkpoints（localStorage 前缀 gpu-deploy-d-） ============ */
+var CK="gpu-deploy-d-checkpoints",ck={};
+try{ck=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){ck={}}
+[].slice.call(document.querySelectorAll(".ckpt-item")).forEach(function(el){
+  if(ck[el.dataset.key])el.classList.add("done");
+  el.onclick=function(){el.classList.toggle("done");ck[el.dataset.key]=el.classList.contains("done");try{localStorage.setItem(CK,JSON.stringify(ck))}catch(e){}};
+});
+
+/* ============ 页面级常量（附出处；卡规格一律走 GPU_CALC） ============ */
+// 自购硬件价（市场量级，查证 2026-09：H100 整卡 ~$25,000 起；4090 停产后二手 ~$1,600-2,000）
+var HW_USD={rtx4090:2000,rtx5090:2600,a100:10000,h100:26000};
+var SERVER_USD=2500;            // 主机/主板/网络一次性 量级
+var ELEC_USD_KWH=0.15,PUE=1.3;  // 电价与能耗比 量级
+var MAINT_USD_MO=30;            // 每卡带宽/运维分摊 量级
+// API 档位（$/1M tokens，查证 2026-09，波动大）
+var API_TIERS={
+  flagship:{name:"旗舰级（GPT-5.5 类）",inp:5.0,out:30.0},
+  mid:{name:"中杯（GPT-5 mini 类）",inp:0.25,out:2.0},
+  budget:{name:"性价比（DeepSeek Flash / Qwen-Flash 类）",inp:0.14,out:0.6}
+};
+// 14B 级模型 vLLM 单卡聚合吞吐量级（tok/s）：2×4090 实测 939 tok/s（databasemart，查证 2026-09）按卡折算，其余按带宽比例外推
+var AGG_TPS={rtx4090:470,rtx5090:750,a100:950,h100:1700};
+var GPU_POS={
+  m4max:"Mac 路线：能装下、安静省电；带宽天花板低，decode 慢一档",
+  rtx4090:"个人 / 小团队性价比王",
+  rtx5090:"消费卡新旗舰；注意多卡无 NVLink",
+  a100:"上一代主力，二手 / 租价友好",
+  h100:"当家主力",
+  h200:"长上下文 / 大 KV 的解药",
+  b200:"FP8 / FP4 时代新王"
+};
+
+if(!HAS_G){
+  document.querySelectorAll(".lab-foot").forEach(function(el){el.textContent="⚠ calc.js 未加载，交互组件停用（请检查同目录 calc.js）"});
+}else{
+
+/* ============ 章2：规格总表（全部数字来自 GPU_CALC.GPUS） ============ */
+(function(){
+  var tb=$id("gpuTableBody"),rows="";
+  G.GPUS.forEach(function(g){
+    rows+="<tr><td><b>"+g.name+"</b></td><td>"+(g.kind==="apple"?("≤"+g.vramGB+"GB 可用"):(g.vramGB+"GB"))+"</td><td>"+(g.bwGBs>=1000?(g.bwGBs/1000).toFixed(1)+"TB/s":g.bwGBs+"GB/s")+"</td><td>"+(g.bf16Tflops?("≈"+g.bf16Tflops+" TFLOPS"):"—")+"</td><td>"+(g.tdpW?(g.tdpW+"W"):"—")+"</td><td>"+(g.cloudUsdHr?("≈$"+g.cloudUsdHr.toFixed(2)+"/hr"):"—（自有设备）")+"</td><td>"+(GPU_POS[g.id]||g.note||"")+"</td></tr>";
+  });
+  tb.innerHTML=rows;
+})();
+
+/* ============ 章3：算例表（GPU_CALC.costPerMTok 现算） ============ */
+(function(){
+  var tb=$id("costTableBody"),rows="";
+  ["rtx4090","a100","h100"].forEach(function(id){
+    var g=G.gpuById(id),tps=AGG_TPS[id];
+    var c50=G.costPerMTok(g.cloudUsdHr,tps,0.5),c20=G.costPerMTok(g.cloudUsdHr,tps,0.2);
+    rows+="<tr><td><b>"+g.name+"</b></td><td>≈$"+g.cloudUsdHr.toFixed(2)+"/hr</td><td>≈"+tps+" tok/s</td><td>≈$"+c50.toFixed(2)+"/1M</td><td>≈$"+c20.toFixed(2)+"/1M</td></tr>";
+  });
+  tb.innerHTML=rows;
+})();
+
+/* ============ 章4：第四幕现场算（GPU_CALC.inferenceGB） ============ */
+(function(){
+  var m=G.modelById("qwen14b"),est=G.inferenceGB(m,"int4",8,4608);
+  $id("a4Weight").textContent=G.fmtGB(est.weight);
+  $id("a4Kv").textContent=G.fmtGB(est.kv);
+  $id("a4Over").textContent=G.fmtGB(est.overhead);
+  $id("a4Total").textContent=G.fmtGB(est.total);
+  var v=G.verdict(est.total,G.usableVRAM(24));
+  var el=$id("a4Verdict");
+  if(v.level==="ok"){el.className="verdict ok";el.textContent="✅ 24GB 卡装得下（占用 "+Math.round(v.ratio*100)+"% 可用显存）"}
+  else if(v.level==="tight"){el.className="verdict tight";el.textContent="⚠️ 24GB 勉强（占用 "+Math.round(v.ratio*100)+"% 可用显存）"}
+  else{el.className="verdict over";el.textContent="❌ 装不下"}
+})();
+
+/* ============ D1 · TCO 三路对比器 ============ */
+var d1={req:5000,inTok:4000,outTok:500,util:30,conc:8,horizon:24,card:"rtx4090",tier:"mid"};
+function d1Sync(){
+  $id("d1ReqV").textContent=d1.req.toLocaleString();
+  $id("d1InV").textContent=d1.inTok.toLocaleString();
+  $id("d1OutV").textContent=d1.outTok.toLocaleString();
+  $id("d1UtilV").textContent=d1.util;
+  $id("d1ConcV").textContent=d1.conc;
+}
+function d1Plan(){
+  var gpu=G.gpuById(d1.card),perCard=AGG_TPS[d1.card],u=d1.util/100;
+  var dailyTok=d1.req*(d1.inTok+d1.outTok);
+  var requiredAgg=dailyTok/86400/u;                 // 需要的聚合吞吐容量
+  var cards=Math.max(1,Math.ceil(requiredAgg/perCard));
+  // 显存校验：峰值并发 × (输入+输出) 上下文
+  var est=G.inferenceGB(G.modelById("qwen14b"),"int4",d1.conc,d1.inTok+d1.outTok);
+  var avail=G.usableVRAM(gpu.vramGB),v=G.verdict(est.total,avail),vramNote;
+  if(v.level!=="ok"){cards=Math.max(cards,2);vramNote="峰值并发下单卡显存吃紧（需 "+G.fmtGB(est.total)+" / 可用 "+G.fmtGB(avail)+"）→ 按 ≥2 副本分摊 KV"}
+  else if(cards===1){vramNote="单卡装得下峰值 KV（需 "+G.fmtGB(est.total)+" / 可用 "+G.fmtGB(avail)+"）；但无冗余，卡崩即停服"}
+  else{vramNote="单副本显存余量充足（需 "+G.fmtGB(est.total)+" / 可用 "+G.fmtGB(avail)+"）；多卡为吞吐与冗余"}
+  var hrUsd=gpu.cloudUsdHr||0;
+  var rentMo=cards*hrUsd*730;                        // 云租卡：730h 全月付费
+  var upfront=cards*HW_USD[d1.card]+SERVER_USD;      // 自建：卡 + 主机
+  var elec=cards*(gpu.tdpW||450)/1000*24*30*ELEC_USD_KWH*PUE;
+  var selfMo=elec+cards*MAINT_USD_MO;
+  var tier=API_TIERS[d1.tier];
+  var apiMo=(d1.req*d1.inTok*tier.inp + d1.req*d1.outTok*tier.out)*30/1e6;
+  var selfPerM=G.costPerMTok(cards*hrUsd,cards*perCard,u);   // 自托管/租卡 $/1M 输出
+  var apiPerM=tier.out+tier.inp*(d1.inTok/d1.outTok);        // API 折合 $/1M 输出
+  var mRent=(rentMo-selfMo)>0?upfront/(rentMo-selfMo):Infinity;
+  var mApi=(apiMo-selfMo)>0?upfront/(apiMo-selfMo):Infinity;
+  return {gpu:gpu,cards:cards,rentMo:rentMo,upfront:upfront,selfMo:selfMo,apiMo:apiMo,
+          selfPerM:selfPerM,apiPerM:apiPerM,mRent:mRent,mApi:mApi,vramNote:vramNote,
+          est:est,tier:tier};
+}
+function d1Draw(p){
+  var H=d1.horizon,W=640,HT=300,L=58,R=14,T=16,B=30,iw=W-L-R,ih=HT-T-B;
+  var sApi=[],sRent=[],sSelf=[];
+  for(var m=0;m<=H;m++){sApi.push(p.apiMo*m);sRent.push(p.rentMo*m);sSelf.push(p.upfront+p.selfMo*m)}
+  var yMax=Math.max(sApi[H],sRent[H],sSelf[H])*1.06||1;
+  function X(m){return L+iw*m/H}
+  function Y(v){return T+ih*(1-v/yMax)}
+  var g="";
+  for(var i=0;i<=4;i++){var vv=yMax*i/4;g+='<line x1="'+L+'" y1="'+Y(vv)+'" x2="'+(W-R)+'" y2="'+Y(vv)+'" stroke="#d8cfbd" stroke-width="1"/><text x="'+(L-6)+'" y="'+(Y(vv)+3)+'" text-anchor="end" font-size="9" fill="#8a8172" font-family="monospace">$'+fmtK(vv)+'</text>'}
+  [0,H/2,H].forEach(function(m){g+='<text x="'+X(m)+'" y="'+(HT-10)+'" text-anchor="middle" font-size="9" fill="#8a8172" font-family="monospace">'+Math.round(m)+' 月</text>'});
+  function line(vals,color){var pts=vals.map(function(v,m){return X(m)+","+Y(v)}).join(" ");return '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2.2"/>'}
+  g+=line(sApi,"#a83232")+line(sRent,"#a8681c")+line(sSelf,"#3d7a44");
+  [[p.mRent,p.rentMo],[p.mApi,p.apiMo]].forEach(function(b){
+    if(isFinite(b[0])&&b[0]<=H){g+='<circle cx="'+X(b[0])+'" cy="'+Y(b[1]*b[0])+'" r="4.5" fill="#8f3512"/><text x="'+X(b[0])+'" y="'+(Y(b[1]*b[0])-8)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="#8f3512" font-family="monospace">回本 '+b[0].toFixed(1)+' 月</text>'}
+  });
+  $id("d1Svg").innerHTML='<svg viewBox="0 0 '+W+' '+HT+'" role="img" aria-label="三条路径累计成本曲线">'+g+"</svg>"+
+    '<div class="tco-legend"><span><i style="background:#a83232"></i>商业 API（'+p.tier.name+'）</span><span><i style="background:#a8681c"></i>云租卡 ×'+p.cards+"</span><span><i style=\"background:#3d7a44\"></i>自建 ×"+p.cards+"（含前期投入）</span></div>";
+}
+function d1Render(){
+  d1Sync();
+  var p=d1Plan();
+  $id("d1ApiMo").textContent=fmtUsd(p.apiMo);
+  $id("d1RentMo").textContent=fmtUsd(p.rentMo);
+  $id("d1SelfMo").textContent=fmtUsd(p.selfMo);
+  $id("d1Upfront").textContent=fmtUsd(p.upfront);
+  $id("d1SelfPerM").textContent="$"+p.selfPerM.toFixed(2);
+  $id("d1ApiPerM").textContent="$"+p.apiPerM.toFixed(2);
+  $id("d1Cards").textContent=p.cards+"×"+d1.card.replace("rtx","RTX ").toUpperCase();
+  $id("d1VramNote").innerHTML="<b>显存校验（14B INT4 · 峰值 "+d1.conc+" 路）</b>"+p.vramNote;
+  var opts=[{k:"api",mo:p.apiMo,l:"商业 API"},{k:"rent",mo:p.rentMo,l:"云租卡"},{k:"self",mo:p.selfMo+p.upfront/d1.horizon,l:"自建（含摊销）"}].sort(function(a,b){return a.mo-b.mo});
+  function bs(m){return isFinite(m)?(m<=d1.horizon?m.toFixed(1)+" 个月":"超出 "+d1.horizon+" 个月跨度"):"不回本"}
+  var msg="按当前参数，月账单排序：<b>"+opts[0].l+"（"+fmtUsd(opts[0].mo)+"）</b> &lt; "+opts[1].l+"（"+fmtUsd(opts[1].mo)+"）&lt; "+opts[2].l+"（"+fmtUsd(opts[2].mo)+"）。自建对租卡回本点："+bs(p.mRent)+"；对 API 回本点："+bs(p.mApi)+"。利用率 "+d1.util+"% ——把它当第一个调的旋钮。";
+  var el=$id("d1Verdict");el.innerHTML="<b>三条路怎么选</b>"+msg;
+  d1Draw(p);
+}
+["d1Req","d1In","d1Out","d1Util","d1Conc"].forEach(function(id){
+  var key={d1Req:"req",d1In:"inTok",d1Out:"outTok",d1Util:"util",d1Conc:"conc"}[id];
+  $id(id).oninput=function(){d1[key]=+$id(id).value;d1Render()};
+});
+function pillGroup(containerId,attr,setter){
+  var box=$id(containerId);
+  [].slice.call(box.querySelectorAll(".pill")).forEach(function(b){
+    b.onclick=function(){[].slice.call(box.querySelectorAll(".pill")).forEach(function(x){x.classList.remove("active")});b.classList.add("active");setter(b.dataset[attr]);d1Render()};
+  });
+}
+pillGroup("d1Horizon","h",function(v){d1.horizon=+v});
+pillGroup("d1Card","card",function(v){d1.card=v});
+pillGroup("d1Tier","tier",function(v){d1.tier=v});
+[].slice.call($id("d1Preset").querySelectorAll(".pill")).forEach(function(b){
+  b.onclick=function(){
+    [].slice.call($id("d1Preset").querySelectorAll(".pill")).forEach(function(x){x.classList.remove("active")});b.classList.add("active");
+    var p=b.dataset.preset;
+    if(p==="team50"){d1.req=5000;d1.inTok=4000;d1.outTok=500;d1.conc=8;d1.util=30;d1.card="rtx4090";d1.tier="mid"}
+    if(p==="bigapi"){d1.req=100000;d1.inTok=800;d1.outTok=300;d1.conc=32;d1.util=60;d1.card="h100";d1.tier="mid"}
+    if(p==="night"){d1.req=3000;d1.inTok=2000;d1.outTok=400;d1.conc=2;d1.util=10;d1.card="rtx4090";d1.tier="budget"}
+    $id("d1Req").value=d1.req;$id("d1In").value=d1.inTok;$id("d1Out").value=d1.outTok;$id("d1Util").value=d1.util;$id("d1Conc").value=d1.conc;
+    ["d1Horizon","d1Card","d1Tier"].forEach(function(cid){
+      var attr=cid==="d1Horizon"?"h":(cid==="d1Card"?"card":"tier");
+      var cur=String(cid==="d1Horizon"?d1.horizon:(cid==="d1Card"?d1.card:d1.tier));
+      [].slice.call($id(cid).querySelectorAll(".pill")).forEach(function(x){x.classList.toggle("active",x.dataset[attr]===cur)});
+    });
+    d1Render();
+  };
+});
+d1Render();
+
+/* ============ D2 · GPU 选型对比器 ============ */
+var D2_TASKS={
+  chat:{label:"本地陪聊",model:"qwen7b",precision:"int4",conc:1,ctx:8192,
+    pit:"避坑：Mac 路线安静省心但 decode 慢一档（带宽 546GB/s）；4090 路线注意机箱散热与功耗峰值 450W。",
+    why:"单人 8K 上下文，INT4 7B 权重不到 4GB，16GB 档即可舒适"},
+  code:{label:"个人代码助手",model:"qwen14b",precision:"int4",conc:2,ctx:16384,
+    pit:"避坑：16K 上下文的 KV 已是权重的小一倍量级——代码助手吃的是上下文不是参数，别为「更大模型」牺牲上下文余量。",
+    why:"14B INT4 + 2 路 × 16K 上下文，KV 开始抬头，24GB 档稳"},
+  finetune7:{label:"微调 7B",trainable:true,model:"qwen7b",
+    pit:"避坑：全量 7B 也要 ~123GB → 2×80GB 起步；99% 的「教格式」需求 QLoRA 一张卡过夜搞定，别按全量租卡。训练并行策略见 C 页章 7。",
+    why:"方法决定档位：QLoRA/LoRA 单卡，全量直接进多卡世界"},
+  finetune14:{label:"微调 14B",trainable:true,model:"qwen14b",
+    pit:"避坑：这就是第三幕的账——QLoRA 一张 24GB 过夜；LoRA 建议 48GB 档；全量 ~241GB 要 4×80GB。买卡之前先定方法，一步差出 16 倍预算。",
+    why:"LoRA 还是全量，直接改变买 24GB 还是 4×80GB"},
+  api:{label:"线上 API（小团队）",model:"qwen14b",precision:"int4",conc:8,ctx:4608,
+    pit:"避坑：单卡装得下也要上双副本——生产看冗余不看极限；云上 4090 注意超售与限功率，先压测再付月费。",
+    why:"峰值 8 路 × 4.5K，14B INT4 单副本 ≈13GB，双 24GB 副本 + 路由（本页章 4 的形态）"},
+  batch:{label:"离线批量",model:"qwen14b",precision:"int4",conc:16,ctx:4096,
+    pit:"避坑：离线批量按 $/1M tok 选卡而不是按档次——下表是各卡在 50% 利用率下的每百万 token 成本（GPU_CALC.costPerMTok 现算，吞吐为 14B 级量级）：",
+    why:"离线不在乎延迟只在乎单价，选 $/1M 最低的装得下的卡"}
+};
+var d2={task:"api",method:"qlora"};
+function d2Segment(cls,pct,label){return '<div class="vram-seg '+cls+'" style="width:'+Math.min(100,pct)+'%" title="'+label+'">'+(pct>12?label:"")+"</div>"}
+function d2Render(){
+  var t=D2_TASKS[d2.task],m=G.modelById(t.model),segs=[],total=0,mathTxt="",isTrain=!!t.trainable;
+  $id("d2MethodWrap").hidden=!isTrain;
+  if(isTrain){
+    var bd=G.trainBreakdownGB(m.paramsB,d2.method,{hidden:m.hidden,layers:m.layers,batchTokens:8192,withCheckpointing:true});
+    total=bd.total;
+    segs=[{c:"weight",v:bd.frozen+(bd.weights||0),l:"主干权重"},{c:"kv",v:bd.gradients,l:"增量+梯度"},{c:"act",v:bd.optimizer+bd.activations,l:"优化器+激活"}];
+    mathTxt="GPU_CALC.trainBreakdownGB("+m.name+", "+d2.method+", batchTokens=8192, ckpt=on) → 冻结 "+G.fmtGB(bd.frozen)+" + 增量/梯度 "+G.fmtGB(bd.gradients)+" + 优化器/激活 "+G.fmtGB(bd.optimizer+bd.activations)+" = 合计 "+G.fmtGB(total)+"（可训练 "+bd.trainableParamsB.toFixed(2)+"B 参数）";
+  }else{
+    var est=G.inferenceGB(m,t.precision,t.conc,t.ctx);
+    total=est.total;
+    segs=[{c:"weight",v:est.weight,l:"权重"},{c:"kv",v:est.kv,l:"KV Cache"},{c:"act",v:est.overhead,l:"运行开销"}];
+    mathTxt="GPU_CALC.inferenceGB("+m.name+", "+t.precision+", 并发 "+t.conc+", 上下文 "+t.ctx+") → 权重 "+G.fmtGB(est.weight)+" + KV "+G.fmtGB(est.kv)+" + 开销 "+G.fmtGB(est.overhead)+" = 合计 "+G.fmtGB(total);
+  }
+  var cands=G.GPUS.filter(function(g){return g.kind!=="apple"}).slice().sort(function(a,b){return a.vramGB-b.vramGB});
+  var fitOk=null,fitAny=null;
+  cands.forEach(function(g){var a=G.usableVRAM(g.vramGB);if(total<=a*0.85&&!fitOk)fitOk=g;if(total<=a&&!fitAny)fitAny=g});
+  var rec=fitOk||fitAny,multi=false;
+  if(!rec){rec=cands[cands.length-1];multi=true}
+  var v=G.verdict(total,G.usableVRAM(rec.vramGB));
+  var stack=$id("d2Stack");stack.innerHTML="";
+  var acc=0;
+  segs.forEach(function(s){acc+=s.v;stack.innerHTML+=d2Segment(s.c,s.v/rec.vramGB*100,s.l+" "+G.fmtGB(s.v))});
+  stack.innerHTML+=d2Segment("free",Math.max(0,(rec.vramGB-acc)/rec.vramGB*100),"剩余 "+G.fmtGB(Math.max(0,rec.vramGB-acc)));
+  var vel=$id("d2Verdict");
+  if(multi){vel.className="verdict over";vel.textContent="❌ 单卡无解（"+G.fmtGB(total)+"）→ 多卡切分"}
+  else if(v.level==="ok"){vel.className="verdict ok";vel.textContent="✅ "+rec.name+" 可用（合计 "+G.fmtGB(total)+"，占可用 "+Math.round(v.ratio*100)+"%）"}
+  else{vel.className="verdict tight";vel.textContent="⚠️ "+rec.name+" 勉强（合计 "+G.fmtGB(total)+"，占可用 "+Math.round(v.ratio*100)+"%）"}
+  $id("d2Math").textContent=mathTxt;
+  // 推荐行
+  var html="";
+  if(multi){
+    html+='<div class="rec-row"><span class="rec-tag">多卡</span><p>单卡装不下 <b>'+G.fmtGB(total)+"</b>。按 C 页章 7 的切法：<b>4×80GB（A100/H100，张量并行或 ZeRO）</b>起步；或先回到 QLoRA 把账单砍两个数量级。</p></div>";
+  }else{
+    var alt=cands.filter(function(g){return g.vramGB>rec.vramGB})[0];
+    html+='<div class="rec-row"><span class="rec-tag">首选</span><p><b>'+rec.name+"</b> —— "+t.why+"。"+(rec.cloudUsdHr?"云租参考 ≈$"+rec.cloudUsdHr.toFixed(2)+"/hr（查证 2026-09）。":"")+"</p></div>";
+    if(alt){html+='<div class="rec-row"><span class="rec-tag alt">升档备选</span><p><b>'+alt.name+"</b> —— 需要更长上下文 / 更高并发 / 冗余时选它，或按本页章 5 的 L2 直接上双副本。</p></div>"}
+    if(!isTrain&&(d2.task==="chat"||d2.task==="code")){
+      html+='<div class="rec-row"><span class="rec-tag alt">Mac 备选</span><p><b>M4 Max（统一内存）</b> —— 装得下且安静；带宽 546GB/s 意味着 decode 慢一档，适合个人不适合服务。</p></div>';
+    }
+    if(d2.task==="batch"){
+      var rows=cands.filter(function(g){return total<=G.usableVRAM(g.vramGB)}).map(function(g){
+        var c=G.costPerMTok(g.cloudUsdHr,AGG_TPS[g.id],0.5);
+        return "<b>"+g.name+"</b> ≈$"+c.toFixed(2)+"/1M";
+      }).join(" · ");
+      html+='<div class="rec-row"><span class="rec-tag alt">单价对比</span><p>'+rows+"（利用率 50%；越闲置越贵，见章 3 公式）</p></div>";
+    }
+  }
+  $id("d2Rec").innerHTML=html;
+  $id("d2Pit").textContent=t.pit;
+}
+[].slice.call($id("d2Task").querySelectorAll(".pill")).forEach(function(b){
+  b.onclick=function(){[].slice.call($id("d2Task").querySelectorAll(".pill")).forEach(function(x){x.classList.remove("active")});b.classList.add("active");d2.task=b.dataset.task;d2Render()};
+});
+[].slice.call($id("d2Method").querySelectorAll(".pill")).forEach(function(b){
+  b.onclick=function(){[].slice.call($id("d2Method").querySelectorAll(".pill")).forEach(function(x){x.classList.remove("active")});b.classList.add("active");d2.method=b.dataset.method;d2Render()};
+});
+d2Render();
+
+/* ============ D3 · 部署架构搭建器 ============ */
+var D3_LEVELS=[
+  {name:"L0 · 个人本地",desc:"模型在本地进程里直接起：Ollama 一条命令，没有网关、没有副本概念。",
+   cap:"1~2 人 · 并发 ≤2 · 单流 ~20-40 tok/s（14B INT4）",cost:"≈$0/月（电费几块钱）",cx:"★☆☆☆",
+   risk:"没有任何隔离与监控：崩了只有你自己知道，慢了也没有指标解释为什么。",
+   signal:"自己用没信号——这是起点。",
+   know:[],nodes:0},
+  {name:"L1 · 单卡服务",desc:"vLLM 容器化 + 限流参数 + 简单 API Key：从「本机玩具」变成「同事能调的服务」。",
+   cap:"≤10 人 · 单副本 ~8 并发 · 聚合 ~470 tok/s · 日承载数千请求",cost:"1×24GB 云卡 ≈$290/月（$0.4/hr × 730h，查证 2026-09）",cx:"★★☆☆",
+   risk:"单点故障：一张卡崩，全组断服；没有监控 = 盲飞，出问题靠用户报障。",
+   signal:"高峰期开始排队，TTFT 从 2s 涨到 10s+ ——单副本容量到顶了。先回去看 b 页并发模拟器确认是容量问题。",
+   know:[{t:"限流三件套 → B 页 章5",href:"b.html#c5"}],nodes:1},
+  {name:"L2 · 多副本",desc:"2×GPU 副本 + least-loaded 路由 + 前缀缓存 + 带超时的队列：部门级形态，一张卡挂了服务还在。",
+   cap:"≤50 人 · 2 副本 16 并发 · 聚合 ~940 tok/s · 前缀缓存命中时等效吞吐再上浮",cost:"2×24GB ≈$580/月 + 一台普通网关",cx:"★★★☆",
+   risk:"副本负载不均；前缀缓存命中率没人看等于白部署；队列没上限会拖垮两个副本一起雪崩。",
+   signal:"一次静默 OOM 把两个同配置副本同时带崩（同流量同配置，同病同命）——你需要发现问题比用户早。",
+   know:[{t:"前缀缓存 → B 页 章5",href:"b.html#c5"},{t:"缓存计费与命中 → 缓存手册",href:"../llm-prompt-caching/a.html"}],nodes:2},
+  {name:"L3 · 生产级",desc:"监控告警 + 自动扩缩 + 降级链（本地 → 商业 API 兜底）：从「部门工具」到「对外服务」的分水岭。",
+   cap:"对外服务级：自动扩缩 + 兜底，能力不再有硬顶（预算有）",cost:"卡钱同 L2 + 监控栈 ~$0-50/月 + API 兜底预留（设独立预算告警）",cx:"★★★★",
+   risk:"配置漂移；兜底 API 账单失控；告警疲劳让人开始无视报警——运维本身就是新风险源。",
+   signal:"没有下一级信号了——这是本手册的终点，再往上见下方 L4 概念图。",
+   know:[{t:"显存水位 → A 页 章6",href:"a.html#c6"},{t:"降级决策树 → 本页 章6",href:"#c6"}],nodes:3}
+];
+var d3lvl=0;
+function d3Show(n){
+  d3lvl=Math.max(0,Math.min(3,n));
+  var on={clients:true,serve:true,gw:d3lvl>=1,router:d3lvl>=2,serve2:d3lvl>=2,mon:d3lvl>=3,fb:d3lvl>=3};
+  [["anClients",on.clients],["anServe",on.serve],["anGateway",on.gw],["anRouter",on.router],["anServe2",on.serve2],["anMonitor",on.mon],["anFallback",on.fb]].forEach(function(p){var el=$id(p[0]);if(el)el.classList.toggle("on",!!p[1])});
+  var edges={eCS:d3lvl===0,eCG:d3lvl>=1,eGS:d3lvl===1,eGR:d3lvl>=2,eRR1:d3lvl>=2,eRR2:d3lvl>=2,eSM:d3lvl>=3,eSF:d3lvl>=3};
+  Object.keys(edges).forEach(function(id){var el=$id(id);if(el)el.classList.toggle("on",edges[id])});
+  var sl=$id("serveLabel"),ss=$id("serveSub"),sc=$id("serveCache"),gs=$id("gwScale");
+  if(d3lvl===0){sl.textContent="Ollama 单机";ss.textContent="本机 · 1~2 人"}
+  else{sl.textContent="vLLM 副本";ss.textContent="1×24GB GPU · PagedAttention"}
+  sc.style.opacity=d3lvl>=2?"1":"0";
+  gs.style.opacity=d3lvl>=3?"1":"0";
+  [].slice.call($id("d3Lvl").querySelectorAll(".pill")).forEach(function(b,i){b.classList.toggle("active",i===d3lvl)});
+  var L=D3_LEVELS[d3lvl];
+  $id("d3Name").textContent=L.name;
+  $id("d3Desc").textContent=L.desc;
+  $id("d3Cap").textContent=L.cap;
+  $id("d3Cost").textContent=L.cost;
+  $id("d3Cx").textContent=L.cx;
+  $id("d3Risk").textContent=L.risk;
+  $id("d3Signal").textContent=L.signal;
+  $id("d3Know").innerHTML=L.know.length?L.know.map(function(k){return '<a href="'+k.href+'">'+k.t+"</a>"}).join(""):"<span style='font:11px var(--mono);color:var(--ink-faint)'>（这一级还用不到前面的知识）</span>";
+  $id("d3Up").textContent=d3lvl<3?("⬆ 升级到 L"+(d3lvl+1)):"✅ 已到 L3";
+  $id("d3Up").disabled=d3lvl>=3;
+}
+$id("d3Up").onclick=function(){d3Show(d3lvl+1)};
+$id("d3Reset").onclick=function(){d3Show(0)};
+[].slice.call($id("d3Lvl").querySelectorAll(".pill")).forEach(function(b){b.onclick=function(){d3Show(+b.dataset.lvl)}});
+d3Show(0);
+
+} /* end HAS_G */
+
+/* ============ 章7 · 终极测验 ============ */
+var QUESTIONS=[
+ {q:"团队利用率只有 10%（每天几千次请求，其余时间机器在睡觉），有人提议「买两张 H100 自建，两年就回本」。最可能的问题出在哪？",
+  o:["计算里漏了电费","忽略了利用率：低利用率下需要的卡数和月账单都撑不起自建，租云卡或 API 更划算","H100 对 14B 模型太慢了","应该一步到位买 8 张而不是 2 张"],a:1,
+  x:"利用率进在 $/1M 公式的分母：10% 利用率让每 token 成本放大 10 倍，且容量需求本身只要 1 张卡甚至更少。回本点比较的是「自建 vs 每月全额付租用费」，低利用率下租用费太低，自建永远追不上。用 D1 拉 10% 利用率亲眼验证。"},
+ {q:"自托管「每 100 万输出 token 成本」的正确公式是？",
+  o:["卡每小时价 ÷（聚合吞吐 tok/s × 3600 × 利用率）× 1,000,000","参数量(B) × 每参数字节 ÷ 显存带宽","API 单价 × (1 − 折扣率)","卡时价 × 24 × 30 ÷ 日请求量"],a:0,
+  x:"分子是每小时付出多少钱，分母是每小时实际产出多少 token（聚合吞吐 × 3600 × 利用率）。注意吞吐要用「批处理后的聚合吞吐」而不是单流 decode 速度。"},
+ {q:"50 人内部服务、每天 ~5000 次请求、峰值并发 ~8 路、平均 4K 输入 + 500 输出，跑 14B INT4 + vLLM。按本手册公式，最合理的生产起步配置是？",
+  o:["1×24GB —— 显存刚好够，省钱第一","2×24GB —— 单副本 ≈13GB 装得下，双副本为冗余与吞吐余量","4×80GB —— 显存越多越安全","1×H200 —— 一步到位"],a:1,
+  x:"inferenceGB(14B, INT4, 8路, 4.5K) ≈ 7.4GB 权重 + 3.6GB KV + 1.7GB 开销 ≈ 12.7GB，24GB 装得下；但生产要冗余（卡崩不停服）和吞吐余量（30% 利用率下需要 ~870 tok/s 容量 ≈ 两张 4090）。"},
+ {q:"TTFT p95 连续一小时持续上涨，GPU 利用率很高，错误率正常。第一个该查的是？",
+  o:["立刻重启所有副本","队列堆积 / 并发超过单副本容量——看排队深度与 KV 显存水位是否顶到 gpu_memory_utilization 上限","马上把全部流量切到商业 API","把模型换成 7B"],a:1,
+  x:"延迟上涨 + 高利用率 + 低错误率是典型的容量信号：请求在排队而不是失败。先确认 KV 水位与队列深度，然后限流或扩副本；重启和切 API 是越级动作（章 6 的降级链有顺序）。"},
+ {q:"流量洪峰把服务打崩，正确的降级顺序是？",
+  o:["直接切商业 API，一步到位","限流保住已接入请求 → 缩上下文 → 降精度档 → 切小模型 → 兜底商业 API","先买新卡加上再说","关掉监控减少告警噪音"],a:1,
+  x:"降级链按「代价从小到大」排序：限流是止损不是失败，每一步都比下一步便宜且可逆；API 兜底是最后防线且要设预算告警。全程对应章 6 的决策树。"}
+];
+var qi=0,qs=0,picked=-1,locked=false;
+var qNo=$id("qNo"),qText=$id("qText"),qOpts=$id("qOpts"),qExp=$id("qExp"),qSubmit=$id("qSubmit"),qNext=$id("qNext"),qRestart=$id("qRestart"),qVerdict=$id("qVerdict"),quizScore=$id("quizScore");
+var QBEST="gpu-deploy-d-quiz-best";
+try{var b=localStorage.getItem(QBEST);if(b)$id("quizBest").textContent=b+" / 5"}catch(e){}
+function loadQ(){
+  picked=-1;locked=false;var Q=QUESTIONS[qi];
+  qNo.textContent="QUESTION "+(qi+1)+" / "+QUESTIONS.length;qText.textContent=Q.q;qOpts.innerHTML="";
+  Q.o.forEach(function(o,i){var d=document.createElement("div");d.className="q-opt";d.textContent=String.fromCharCode(65+i)+". "+o;
+    d.onclick=function(){if(locked)return;picked=i;[].slice.call(qOpts.children).forEach(function(x,j){x.classList.toggle("picked",j===i)});qSubmit.disabled=false};qOpts.appendChild(d)});
+  qExp.classList.remove("show");qVerdict.textContent="";qSubmit.style.display="";qSubmit.disabled=true;qNext.style.display="none";qRestart.style.display="none";
+}
+qSubmit.onclick=function(){
+  if(picked<0)return;locked=true;var Q=QUESTIONS[qi],ok=picked===Q.a;if(ok)qs++;
+  [].slice.call(qOpts.children).forEach(function(x,i){x.classList.remove("picked");x.classList.add("locked");if(i===Q.a)x.classList.add("right");else if(i===picked)x.classList.add("wrong")});
+  qExp.textContent=(ok?"✓ ":"✗ ")+Q.x;qExp.classList.add("show");
+  quizScore.textContent=qs+" / "+QUESTIONS.length;
+  qVerdict.textContent=ok?"正确":"再想想";qVerdict.className="q-verdict "+(ok?"ok":"bad");
+  qSubmit.style.display="none";
+  if(qi<QUESTIONS.length-1)qNext.style.display="";
+  else{qRestart.style.display="";qVerdict.textContent+=qs>=4?" · 出师！":" · 建议复习 章1 / 章6";
+    try{var prev=+(localStorage.getItem(QBEST)||0);if(qs>prev){localStorage.setItem(QBEST,String(qs));$id("quizBest").textContent=qs+" / 5"}}catch(e){}}
+};
+qNext.onclick=function(){qi++;loadQ()};
+qRestart.onclick=function(){qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};
+loadQ();
+</script>
+</body>
+</html>

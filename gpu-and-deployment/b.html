@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>GPU 与模型部署 · B 推理与部署</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== b.html 页面专属组件样式（不改 topic.css） ===== */
+
+/* B1 推理时间线 */
+.b1-lab{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px;align-items:start}
+.b1-track{position:relative;height:56px}
+.b1-deco{display:flex;align-items:stretch;gap:2px;flex:1;padding:5px 4px}
+.b1-cell{flex:1;border-radius:3px;background:var(--c-kv);opacity:.18;transition:opacity .12s}
+.b1-cell.on{opacity:1}
+.b1-playhead{position:absolute;top:-7px;bottom:-7px;width:2.5px;background:var(--accent);border-radius:2px;left:0;transition:left .05s linear}
+.b1-playhead::after{content:"";position:absolute;top:-5px;left:-3.5px;border:5px solid transparent;border-top-color:var(--accent)}
+.b1-tick{font:10px var(--mono);color:var(--ink-faint);display:flex;justify-content:space-between;margin-top:5px}
+.b1-phase{font:700 11px var(--mono);letter-spacing:.06em;margin-bottom:2px}
+.b1-phase .pf{color:var(--gpu)} .b1-phase .dc{color:#8a6420}
+.b1-side{border-left:1px dashed var(--line);padding-left:16px}
+@media(max-width:860px){.b1-lab{grid-template-columns:1fr}.b1-side{border-left:none;padding-left:0;border-top:1px dashed var(--line);padding-top:12px}}
+
+/* B2 量化权衡器 */
+.b2-grid{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}
+.b2-gauges{display:grid;gap:12px}
+.b2-gauge{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:10px 13px}
+.b2-gauge span{display:block;font:10px var(--mono);letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase}
+.b2-gauge b{display:block;font:800 22px/1.3 var(--mono)}
+.b2-gauge small{font:11.5px var(--mono);color:var(--ink-soft)}
+.qbar{height:16px;border:1.5px solid var(--ink);border-radius:99px;overflow:hidden;background:var(--paper-deep);margin-top:8px}
+.qbar-fill{height:100%;transition:width .35s cubic-bezier(.16,1,.3,1)}
+.b2-warn{display:none;margin-top:10px}
+.b2-warn.show{display:block}
+@media(max-width:860px){.b2-grid{grid-template-columns:1fr}}
+
+/* 深挖框 */
+.deep{width:100%;max-width:var(--content-rail);border:1.5px dashed var(--ink-soft);border-radius:9px;background:var(--paper-deep);padding:14px 18px;margin:16px 0;font-size:14.5px}
+.deep h4{font:700 13px var(--mono);letter-spacing:.06em;margin-bottom:6px;color:var(--accent-deep)}
+
+/* B3 决策树 */
+.decide{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:10px;margin:14px 0}
+.decide-col{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:9px}
+.decide-col h5{font:10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+.decide-cell{border:1px solid var(--line);border-radius:6px;padding:6px 9px;font:12px var(--mono);color:var(--ink-soft);margin-bottom:5px;background:#fffdf8;transition:.15s}
+.decide-cell.on{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:700}
+.decide-cell.on small{color:#e8b04a}
+.decide-cell small{display:block;font:10.5px var(--mono);opacity:.75}
+.decide-arrow{align-self:center;text-align:center;color:var(--accent);font:800 18px var(--mono)}
+@media(max-width:860px){.decide{grid-template-columns:1fr}.decide-arrow{transform:rotate(90deg)}}
+.cmdbox{margin:10px 0}
+.cmdbox summary{cursor:pointer;font:600 12px var(--mono);color:var(--accent-deep);padding:6px 2px;list-style:none}
+.cmdbox summary::before{content:"▸ ";color:var(--accent)}
+.cmdbox[open] summary::before{content:"▾ "}
+.cmdbox pre{margin-top:4px}
+
+/* B4 并发模拟器 */
+.b4-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}
+.b4-chart{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:8px}
+.b4-chart h6{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px}
+.b4-chart svg{display:block;width:100%;height:120px}
+.b4-legend{display:flex;gap:14px;flex-wrap:wrap;font:10.5px var(--mono);color:var(--ink-soft);margin:2px 0 8px}
+.b4-legend i{display:inline-block;width:16px;height:0;border-top:2.5px solid;vertical-align:middle;margin-right:5px}
+.b4-legend .ser{border-top-color:var(--bad);border-top-style:dashed}
+.b4-legend .cb{border-top-color:var(--ok)}
+.b4-compare{width:100%;max-width:none;font-size:13px;margin:10px 0}
+.oom-banner{display:none;border:1.5px solid var(--bad);background:#f6dede;border-radius:8px;padding:11px 14px;margin:10px 0;font-size:13.5px}
+.oom-banner.show{display:block}
+.oom-banner b{color:var(--bad)}
+.b4-note{font:11.5px var(--mono);color:var(--ink-soft);margin-top:6px}
+@media(max-width:860px){.b4-charts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">GPU <em>与模型部署</em> · B 推理与部署</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 7 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="四页导航">
+  <span class="sn-label">GPU 与模型部署 · 四部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>底层认知</a>
+  <a class="sn-item is-current" href="b.html"><b>B</b>推理与部署</a>
+  <a class="sn-item" href="c.html"><b>C</b>微调实战</a>
+  <a class="sn-item" href="d.html"><b>D</b>选型与运维</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一个 14B 模型的一生</span>
+  <span class="cs-act done">序幕 · 在个人电脑跑起来</span>
+  <span class="cs-act current">第二幕 · 变成代码助手</span>
+  <span class="cs-act">第三幕 · 微调成知识助手</span>
+  <span class="cs-act">第四幕 · 上线 50 人服务</span>
+</div>
+
+<aside class="page-intro">
+  <div class="pi-block prev"><span class="pi-tag">前情 · A 页</span>
+    <p>你已经会回答「<strong>这张卡跑不跑得动这个模型</strong>」：显存里住着谁（权重、KV Cache、开销），<strong>参数量 × 精度</strong>怎么口算，「上下文 × 并发」为什么是显存大户，还有那台随开随用的显存估算器。</p>
+  </div>
+  <div class="pi-arrow">→</div>
+  <div class="pi-block this"><span class="pi-tag">本页 · B 推理与部署</span>
+    <p>把模型真正<strong>用起来</strong>：搞懂一次生成为什么分「读题 Prefill」和「逐字写 Decode」两幕，量化为什么显存省一半、效果却几乎不掉，用什么工具在 Mac / N 卡 / 云上跑起来；最后兑现 A 页埋的钩子——<strong>自己用很流畅，为什么 8 个人一起用就崩？崩了先动哪个旋钮？</strong></p>
+  </div>
+</aside>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">一次推理是两幕戏 —— 先读题，再逐字写</h2></div>
+  <p class="lede">同一个问题，提示词贴了 3 万字就等得心焦，可一旦第一个字蹦出来，后面就哗哗地流。这不是错觉，也不玄学：<strong>一次推理其实是两幕戏，两幕的瓶颈根本不是同一种资源。</strong>看懂这一章，后面量化的「为什么压完反而快」才有因果落点。</p>
+
+  <p>用后厨打比方：用户的问题是一张订单。<strong>Prefill 是读题审菜</strong>——把订单上所有要求一次性看完、备好料；<strong>Decode 是颠勺出菜</strong>——一道菜一道菜地往外端，端一道才能准备下一道。</p>
+
+  <div class="diagram">
+  <svg viewBox="0 0 760 250" role="img" aria-label="Prefill 与 Decode 两阶段示意">
+    <rect x="14" y="16" width="330" height="88" rx="8" class="dg-accent"/>
+    <text x="30" y="40" class="dg-title">第一幕 · Prefill（读题）</text>
+    <text x="30" y="60" class="dg-sub">整个 prompt 的 N 个 token 一次并行算完</text>
+    <text x="30" y="78" class="dg-sub">产出 KV Cache（草稿纸）</text>
+    <text x="30" y="96" class="dg-lbl">瓶颈：算力 compute-bound → 决定 TTFT</text>
+    <g>
+      <rect x="392" y="16" width="354" height="88" rx="8" class="dg-box"/>
+      <text x="408" y="40" class="dg-title">第二幕 · Decode（逐字写）</text>
+      <text x="408" y="60" class="dg-sub">自回归：一步只生成 1 个 token</text>
+      <text x="408" y="78" class="dg-sub">每步都要回读全部权重 + 已有 KV</text>
+      <text x="408" y="96" class="dg-lbl">瓶颈：显存带宽 memory-bound → 决定 tokens/s</text>
+    </g>
+    <rect x="30" y="130" width="80" height="34" rx="5" class="dg-box"/><text x="70" y="152" class="dg-sub" text-anchor="middle">tok₁</text>
+    <rect x="118" y="130" width="80" height="34" rx="5" class="dg-box"/><text x="158" y="152" class="dg-sub" text-anchor="middle">tok₂</text>
+    <rect x="206" y="130" width="80" height="34" rx="5" class="dg-box"/><text x="246" y="152" class="dg-sub" text-anchor="middle">tok₃</text>
+    <text x="303" y="152" class="dg-sub" text-anchor="middle">…N 个一起算</text>
+    <text x="30" y="190" class="dg-tiny">并行度高：几百个 token 填满几千个 CUDA 核心，Tensor Core 吃满</text>
+    <g>
+      <rect x="420" y="130" width="60" height="34" rx="5" class="dg-green"/><text x="450" y="152" class="dg-sub" text-anchor="middle">w₁</text>
+      <rect x="488" y="130" width="60" height="34" rx="5" class="dg-green"/><text x="518" y="152" class="dg-sub" text-anchor="middle">w₂</text>
+      <rect x="556" y="130" width="60" height="34" rx="5" class="dg-green"/><text x="586" y="152" class="dg-sub" text-anchor="middle">w₃</text>
+      <path d="M630,147 L700,147" class="dg-dim dg-dash" marker-end="url(#arr)"/>
+      <defs><marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="none" stroke="#8a8172" stroke-width="1.4"/></marker></defs>
+      <text x="420" y="190" class="dg-tiny">每写一个字都要把整套权重从显存搬一遍 → 大部分时间在等数据</text>
+    </g>
+    <text x="30" y="230" class="dg-tiny">粗算：prefill 速度 ≈ TFLOPS × MFU ÷ (2×参数量/词)；decode 速度 ≈ 显存带宽 ÷ 权重大小（见下方动画实时计算）</text>
+  </svg>
+  <figcaption>PREFILL vs DECODE · 两幕的并行度差几百倍，瓶颈因此不同</figcaption>
+  </div>
+
+  <h3>两个时间指标，各归各的幕</h3>
+  <p><strong>TTFT（Time To First Token，首 token 延迟）</strong>由第一幕 Prefill 决定——题越长，读题越久，等你感觉就是「按了回车半天没动静」。<strong>每 token 间隔（其倒数即 decode 速度 tokens/s）</strong>由第二幕决定——只跟「权重要读多少字节」和「显存带宽多粗」有关，跟你 prompt 有多长基本无关。下面的直觉表由本页脚本按共享公式（14B 量化到 4-bit、RTX 4090）实时算出：</p>
+  <table>
+    <tr><th>提示词长度</th><th>TTFT（理论量级）</th><th>之后的 decode 速度</th><th>体感</th></tr>
+    <tbody id="b1Intuition"></tbody>
+  </table>
+  <div class="note"><b>一句话记住：</b>首字慢，慢在<strong>算力</strong>（读题）；后字稳，稳在<strong>带宽</strong>（写字）。优化 TTFT 要动算力侧（更快的卡、更短的 prompt、前缀缓存），优化流式速度要动字节侧（量化、更宽带的卡）。</div>
+
+  <div class="lab">
+    <div class="lab-head"><b>B1 · 推理时间线动画</b><span style="font:11px var(--mono);color:var(--ink-faint)">14B · 4-bit · RTX 4090（数字由 GPU_CALC 实时计算）</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>提示词长度 <b><em id="b1PromptVal">2,048</em> tok</b></label><input type="range" id="b1Prompt" min="512" max="16384" step="512" value="2048"></div>
+        <div class="ctrl"><label>生成长度 <b><em id="b1GenVal">256</em> tok</b></label><input type="range" id="b1Gen" min="64" max="1024" step="64" value="256"></div>
+        <div class="ctrl"><label>播放速度</label><div class="pills" id="b1Speed"><button class="pill" data-s="1">1×</button><button class="pill active" data-s="2">2×</button><button class="pill" data-s="4">4×</button></div></div>
+      </div>
+      <div class="b1-lab">
+        <div>
+          <div class="b1-phase" id="b1Phase">待播放 —— 请求到达</div>
+          <div class="tl-track b1-track" id="b1Track">
+            <div class="tl-block prefill" id="b1Pre" style="width:0%">PREFILL</div>
+            <div class="b1-deco" id="b1Deco"></div>
+            <div class="b1-playhead" id="b1Playhead"></div>
+          </div>
+          <div class="b1-tick"><span>请求到达</span><span id="b1Clock">t = 0.00 s</span><span>完成</span></div>
+          <div style="margin-top:12px;display:flex;gap:9px;flex-wrap:wrap">
+            <button class="sim-btn" id="b1Play">▶ 播放</button>
+            <button class="sim-btn ghost" id="b1Reset">↺ 重置</button>
+            <span id="b1Status" style="font:11.5px var(--mono);color:var(--ink-soft);align-self:center">拖动参数或直接播放</span>
+          </div>
+        </div>
+        <div class="b1-side">
+          <div class="kpi-grid" style="grid-template-columns:1fr 1fr">
+            <div class="kpi"><span>TTFT（prefill）</span><b id="b1Ttft">—</b></div>
+            <div class="kpi"><span>每 token 间隔</span><b id="b1Gap">—</b></div>
+            <div class="kpi gpu"><span>decode 速度</span><b id="b1Tps">—</b></div>
+            <div class="kpi"><span>总耗时</span><b id="b1Total">—</b></div>
+          </div>
+          <div style="font:11px var(--mono);color:var(--ink-soft)" id="b1Formula"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">啊哈点：把提示词从 512 拉到 16384 —— 蓝色 prefill 块吃掉整条时间线，TTFT 飙升；再把生成长度拉满 —— 解码区只是格子变多，每个格子的节奏（每 token 间隔）纹丝不动。</div>
+  </div>
+
+  <div class="deep">
+    <h4>深挖 · 为什么两幕的瓶颈不同？</h4>
+    并行度是根。Prefill 一次有几百上千个 token 同时进矩阵乘法，几千个 GPU 核心都有活干，此时<strong>算力（FLOPS）是稀缺品</strong>；Decode 一步只有 1 个 token，算它只需要极小的算力，但注意力要回看全部历史 KV、前馈要读全部权重——<strong>时间都花在「把数据从显存搬过来」的路上</strong>。这就是 roofline 模型里 compute-bound 与 memory-bound 的分界，也是 FlashAttention、Tensor Core 这些优化主要惠及 prefill、而 decode 更吃带宽的原因。出处：vLLM 论文 §2（arXiv:2309.06180）对此有标准论述。
+  </div>
+
+  <details class="quiz"><summary>章内小自测：为什么把 prompt 缩短能明显加快「第一个字」，却几乎不影响「后面每个字」的节奏？</summary><div class="ans">缩短 prompt 减少的是 Prefill 要并行处理的 token 数 → TTFT 直接变短。而 Decode 每步的时间由「读全部权重 + 已有 KV」决定，少一点 prompt 只让 KV 略小，每 token 间隔几乎不变。所以「答案出来后流得快不快」基本与 prompt 长度无关。</div></details>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b1"><div class="ckpt-box">✓</div><div class="ckpt-text">能说清 TTFT 由 Prefill（算力瓶颈）决定、流式速度由带宽÷权重量决定</div></div></div>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">量化 —— 把精装菜谱压成口袋本</h2></div>
+  <p class="lede">14B 模型 BF16 要 ≈29.6GB 显存（按 config 的 14.8B 参数 × 2 字节，共享公式库口径），一张 4090 装不下；压到 4-bit 只剩约四分之一，还顺手变快了。天底下没有免费的午餐——<strong>效果掉了多少？掉的速度值不值？</strong>这一章给你一套能拍板的判断框架。</p>
+
+  <h3>精度谱系：质量、显存、速度的取舍三角</h3>
+  <p>把参数从「精装版」抄成「缩印口袋本」，字变小、本子变薄，但极端情况下会抄错字。每参数字节数来自共享公式库 <code>GPU_CALC.PRECISIONS</code>：</p>
+  <table>
+    <tr><th>精度</th><th>字节/参数</th><th>14B 权重</th><th>一句话画像</th></tr>
+    <tr><td>FP32</td><td>4 B</td><td id="b2w32">—</td><td>训练主权重口径；推理几乎不用，纯浪费</td></tr>
+    <tr><td>BF16 / FP16</td><td>2 B</td><td id="b2w16">—</td><td>开源模型发布的主流精度；质量基准线</td></tr>
+    <tr><td>FP8 / INT8</td><td>1 B</td><td id="b2w8">—</td><td>数据中心推理新贵（H 系卡原生支持），几乎无损</td></tr>
+    <tr><td>INT4 / NF4</td><td>0.5 B</td><td id="b2w4">—</td><td>本地部署与 QLoRA 的主力档；质量损失通常很小（经验值）</td></tr>
+  </table>
+
+  <p>4-bit 也分门派——都是「训练后量化（PTQ）」，压法不同：</p>
+  <ul class="plain">
+    <li><strong>GGUF（K-quants，如 Q4_K_M）</strong>：llama.cpp 生态通用格式，按块混合位宽，Q4_K_M 实际平均约 4.8 bit/参数，是本地部署的事实标准。</li>
+    <li><strong>GPTQ</strong>：逐层最小化重构误差的校准式量化，GPU 服务端老牌选择（Frantar et al., 2022）。</li>
+    <li><strong>AWQ</strong>：激活感知——只精确保护对输出影响大的少数关键权重，其余狠压（Lin et al., 2023），vLLM 服务端常见。</li>
+    <li><strong>bitsandbytes NF4</strong>：QLoRA 的存放格式（信息论上 4-bit 的优分布），c 页微调时再细讲。</li>
+  </ul>
+
+  <div class="note ok"><b>经验结论（标注为经验值，非严格基准）</b>① 14B 这个量级的模型，4-bit 量化在常见任务上的质量损失通常很小，多数场景值得；② <strong>模型越小，量化伤害越大</strong>——0.5B/1.5B 压到 4-bit 容易明显变笨，小模型建议 Q5/Q6 起步；③ 权重变小 → decode 每 token 读的字节变少 → 流式输出变快，这正是章 1「带宽÷权重量」公式的直接推论。</div>
+
+  <div class="lab">
+    <div class="lab-head"><b>B2 · 量化四方权衡器</b><span style="font:11px var(--mono);color:var(--ink-faint)">显存 / 速度由 GPU_CALC 计算 · 质量条为示意非基准</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>精度档位</label>
+        <div class="pills" id="b2Pills">
+          <button class="pill active" data-lv="0">FP16</button>
+          <button class="pill" data-lv="1">Q8</button>
+          <button class="pill" data-lv="2">Q4</button>
+          <button class="pill" data-lv="3">Q2</button>
+        </div>
+      </div>
+      <div class="b2-grid">
+        <div class="b2-gauges">
+          <div class="b2-gauge"><span>14B 权重显存</span><b id="b2Vram">—</b><small id="b2Bytes">—</small></div>
+          <div class="b2-gauge"><span>理论 decode 上限（4090）</span><b id="b2Speed">—</b><small>带宽 ÷ 权重量，实际打 5~7 折</small></div>
+          <div class="b2-gauge"><span>回答质量（示意）</span>
+            <div class="qbar"><div class="qbar-fill" id="b2QBar" style="width:100%"></div></div>
+            <small id="b2QualityTxt">—</small>
+          </div>
+        </div>
+        <div>
+          <div class="kpi" style="margin-bottom:12px"><span>适用建议</span><b id="b2Advice" style="font-size:15px;font-weight:650;font-family:var(--sans)">—</b></div>
+          <div class="note danger b2-warn" id="b2Warn"><b>⚠ 能跑但答非所问</b>Q2 已越过实用底线：权重平均只剩 2 bit，模型会流畅地胡说。仅用于极限显存下的玩具验证，<strong>不要用于任何要交付答案的场景</strong>。</div>
+          <p style="font-size:14px" id="b2Note"></p>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">对照查证：GGUF Q4_K_M 的实际文件 ≈ 9.0 GB（Ollama `qwen2.5:14b` 默认档，查证 2026-09），比纯 4-bit 理论值 7.4 GB 大两成——K-quants 部分层用更高位宽，文件里还有 embedding、词表与元数据。</div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b2"><div class="ckpt-box">✓</div><div class="ckpt-text">能给一个 14B 模型选精度档位，并说出显存 / 速度 / 质量三方面的代价</div></div></div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">跑起来 —— Ollama / llama.cpp / vLLM / SGLang 怎么选</h2></div>
+  <p class="lede">教程一会儿让你 <code>ollama run</code>，一会儿让你装 vLLM，它们是同类东西吗？<strong>不是——它们处在不同楼层：</strong>底下是引擎，中间是开箱即用的封装，上面是生产级服务框架。选错楼层不会报错，但会让你在错误的战场上挣扎。</p>
+
+  <h3>工具定位分层（口径核对 2026-09）</h3>
+  <table>
+    <tr><th>层级</th><th>工具</th><th>定位一句话</th></tr>
+    <tr><td>引擎层</td><td><strong>llama.cpp</strong></td><td>C/C++ 推理引擎，GGUF 格式发源地，CPU/GPU 混合，Ollama 与 LM Studio 的底层后端（查证 2026-09，官方仓库口径）</td></tr>
+    <tr><td>开箱即用层</td><td><strong>Ollama / LM Studio</strong></td><td>Ollama = 一条命令的 CLI；LM Studio = 给非命令行同事的 GUI。个人本地首选，但服务并发能力弱</td></tr>
+    <tr><td>生产服务层</td><td><strong>vLLM</strong></td><td>在线服务引擎主力：continuous batching + PagedAttention（章 4 主角），单卡/多卡生产部署的事实标准</td></tr>
+    <tr><td>生产服务层</td><td><strong>SGLang</strong></td><td>与 vLLM 同层竞争：RadixAttention 前缀缓存自动复用（基准命中 50~99%），结构化输出性能突出（查证 2026-09，SGLang 论文 arXiv:2312.07104 及官方仓库）</td></tr>
+    <tr><td>极限优化层</td><td><strong>TensorRT-LLM</strong></td><td>NVIDIA 深度优化，追极限吞吐再用；代价是构建链路重、绑 NVIDIA 生态（查证 2026-09，官方 README 口径）</td></tr>
+  </table>
+
+  <p><strong>硬件路线同样分层：</strong>Mac（统一内存当显存使，14B 4-bit 装得下，带宽 546GB/s 量级 → 理论 decode ≈74 tok/s、实际打 5~7 折，安静省电，但服务生态弱）；NVIDIA 消费卡（生态全、快，24GB 是 14B 的甜点）；云 GPU（免持有成本、按时计费，个人长年开机反而贵）。带宽/显存数字均取自共享公式库 <code>GPU_CALC.GPUS</code>。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>B3 · 部署工具决策树</b><span style="font:11px var(--mono);color:var(--ink-faint)">选任务 × 选硬件 → 高亮路径 + 起步命令</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>你的任务</label><div class="pills" id="b3Task"></div></div>
+      <div class="ctrl"><label>你的硬件</label><div class="pills" id="b3Hw"></div></div>
+      <div class="decide">
+        <div class="decide-col"><h5>① 任务</h5><div id="b3ColTask"></div></div>
+        <div class="decide-arrow">→</div>
+        <div class="decide-col"><h5>② 硬件</h5><div id="b3ColHw"></div></div>
+        <div class="decide-arrow">→</div>
+        <div class="decide-col"><h5>③ 推荐工具</h5><div id="b3ColTool"></div></div>
+      </div>
+      <div class="kpi" style="margin:6px 0 4px"><span>一句话理由</span><b id="b3Why" style="font-size:14.5px;font-weight:650;font-family:var(--sans)">—</b></div>
+      <details class="cmdbox" id="b3CmdBox"><summary>起步命令</summary><pre><code id="b3Cmd"></code></pre></details>
+    </div>
+    <div class="lab-foot">命令以各官方文档为准（2026-09 口径核对）；换了模型/卡型后参数需相应调整。</div>
+  </div>
+
+  <h3>贯穿案例第二幕落地：把 14B 变成你的代码助手</h3>
+  <p>现在主角登场。在自己的机器上把它跑起来，全程三条命令：</p>
+  <div class="codewrap"><span class="filetab">terminal · 14B 第二幕</span><pre><code><span class="cm"># 1. 拉模型并对话（默认即 Q4_K_M 量化，下载约 9.0 GB，查证 2026-09）</span>
+ollama run qwen2.5:14b        <span class="cm"># 想要代码特化：ollama run qwen2.5-coder:14b</span>
+
+<span class="cm"># 2. 看它此刻的真实占用（权重 + KV + 运行时开销，一并列在 SIZE）</span>
+ollama ps                     <span class="cm"># SIZE 约 10~12 GB、PROCESSOR 显示 100% GPU 即全程在卡上</span>
+
+<span class="cm"># 3. 打开本地 API（默认 11434 端口，OpenAI 兼容接口）</span>
+ollama serve</code></pre></div>
+  <div class="note"><b>对照 A 页估算器</b>理论账：权重（4-bit）7.4 GB + 单人 4K 上下文 KV ≈0.8 GB + 运行时开销 ≈1.7 GB ≈ <strong>9.9 GB</strong>（`GPU_CALC.inferenceGB` 口径）——和 <code>ollama ps</code> 看到的量级一致。自己用（并发 1）24GB 卡绰绰有余。至于快不快：理论 decode ≈136 tok/s（1008GB/s ÷ 7.4GB），打 5~7 折即 70~95；社区实测 4090 跑 14B Q4 约 <strong>80~110 tok/s</strong>（查证 2026-09，llama.cpp 社区基准）。<a href="a.html">回 A 页显存估算器亲手验一遍 →</a></div>
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b3"><div class="ckpt-box">✓</div><div class="ckpt-text">能按「任务 × 硬件」选出对的工具楼层，并说出 llama.cpp / Ollama / vLLM / SGLang / TensorRT-LLM 各自的定位</div></div></div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">单人能用，为什么 8 个人就崩 —— 并发、批处理与显存排队</h2></div>
+  <p class="lede">自己用行云流水，拉个群里 8 个人同时提问，全都转圈，<code>nvidia-smi</code> 一看 GPU 利用率还不高——机器没满载却集体卡死，这是新手服务化的第一课。<strong>三个原因叠加，一个比一个隐蔽。</strong></p>
+
+  <h3>原因一：并发 × 上下文，KV Cache 的乘法爆雷</h3>
+  <p>A 页讲过：每 token 的 KV ≈ 0.19 MB（14B 的 GQA 配置，BF16）。单人 4K 上下文才 0.8 GB，无感；但 KV 是<strong>乘法</strong>——总 KV = 并发数 × 上下文 × 每 token 开销。下表由本页脚本调 <code>GPU_CALC.kvTotalGB</code> 实时计算，目标是「24GB 卡、14B 4-bit」的 KV 预算 ≈13.7 GB（可用显存 22.8 − 权重 7.4 − 开销 1.7）：</p>
+  <table>
+    <tr><th>场景</th><th>总 KV</th><th>占 KV 预算</th><th>判定</th></tr>
+    <tbody id="kvMultTbody"></tbody>
+  </table>
+  <p>「代码助手」恰恰是长上下文场景（贴一整个文件、repo map），8 个人 × 32K 就要 ≈51 GB KV——三张 4090 都填不满。<strong>崩的种子在 A 页就埋下了，这里只是爆雷。</strong></p>
+
+  <h3>原因二：逐个处理，GPU 大部分时间在等</h3>
+  <p>朴素做法是排队：一个请求做完再做下一个。可 decode 阶段每步只算 1 个 token 却要读一遍全部权重——<strong>带宽被一个请求独占，算力闲得发慌</strong>。与其一人一份单独炒，不如大锅一起炒：把多个请求的 decode 步<strong>拼成一个批次</strong>，读一遍权重同时给 8 个人各算一个 token，几乎不花额外时间。</p>
+  <div class="diagram">
+  <svg viewBox="0 0 760 240" role="img" aria-label="静态批与连续批对比">
+    <text x="20" y="26" class="dg-title">静态批：凑一批 → 等最慢的做完 → 换班</text>
+    <g>
+      <rect x="20" y="40" width="180" height="22" rx="4" class="dg-green"/><text x="110" y="55" class="dg-tiny" text-anchor="middle">请求A（短）</text>
+      <rect x="20" y="66" width="330" height="22" rx="4" class="dg-green"/><text x="185" y="81" class="dg-tiny" text-anchor="middle">请求B（长）—— A 早就完了也在陪跑</text>
+      <rect x="204" y="40" width="146" height="22" rx="4" class="dg-red" opacity=".55"/><text x="277" y="55" class="dg-tiny" text-anchor="middle">A 空转等待</text>
+      <rect x="356" y="40" width="120" height="22" rx="4" class="dg-box" opacity=".4"/><rect x="356" y="66" width="120" height="22" rx="4" class="dg-box" opacity=".4"/>
+      <text x="416" y="55" class="dg-tiny" text-anchor="middle">空窗：等新批凑齐</text><text x="416" y="81" class="dg-tiny" text-anchor="middle">空窗</text>
+    </g>
+    <text x="20" y="128" class="dg-title">连续批（Orca，OSDI'22）：按「生成一步」为单位随时进出</text>
+    <g>
+      <rect x="20" y="142" width="300" height="20" rx="4" class="dg-green"/><text x="170" y="156" class="dg-tiny" text-anchor="middle">A：完成后立即腾位</text>
+      <rect x="20" y="166" width="456" height="20" rx="4" class="dg-green"/><text x="248" y="180" class="dg-tiny" text-anchor="middle">B：一直算到自然结束</text>
+      <rect x="176" y="190" width="300" height="20" rx="4" class="dg-accent"/><text x="326" y="204" class="dg-tiny" text-anchor="middle">C：中途到达，下一步就插进来</text>
+      <line x1="176" y1="136" x2="176" y2="214" class="dg-line dg-dash"/><text x="176" y="230" class="dg-tiny" text-anchor="middle">C 到达</text>
+      <line x1="320" y1="136" x2="320" y2="214" class="dg-line dg-dash"/><text x="330" y="230" class="dg-tiny">A 完成 · 位子给 C</text>
+    </g>
+  </svg>
+  <figcaption>STATIC BATCH vs CONTINUOUS BATCHING · 迭代级调度，短请求不再陪跑（Orca 论文思想）</figcaption>
+  </div>
+
+  <h3>原因三：显存分配的长尾与 OOM</h3>
+  <p>就算算力够，KV 显存的分配方式还能再坑你一次：传统做法给每个请求预留「最长序列」的连续显存，实际平均只用三四成，剩下的全部碎片化浪费——「明明还剩 3GB 却分配不出 2GB」。vLLM 的 <strong>PagedAttention</strong> 像操作系统管理内存分页一样把 KV 切成小块按需分配，把浪费压到近零（原论文口径：KV 显存浪费 &lt;4%，对比原系统的实际利用率仅 20~38%；查证 2026-09，arXiv:2309.06180）。</p>
+
+  <div class="note"><b>服务端三个旋钮（vLLM 默认值查证 2026-09，官方 Engine Args 文档）</b>① <code>max_num_seqs</code>：同时处理的序列上限，默认 <strong>256</strong>——显存紧就调小；② <code>gpu_memory_utilization</code>：允许引擎吃掉的显存比例，默认 <strong>0.9</strong>；③ 队列与超时：排队的上限和等待超时，配合章 5 的限流一起用。</div>
+
+  <div class="lab">
+    <div class="lab-head"><b>B4 · 压轴 · 并发模拟器：逐个处理 vs 连续批处理</b><span style="font:11px var(--mono);color:var(--ink-faint)">离散事件模拟 · 数字来自 GPU_CALC</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>并发负载（到达强度）</label><div class="pills" id="b4Conc"><button class="pill" data-c="1">1 路</button><button class="pill" data-c="4">4 路</button><button class="pill" data-c="16">16 路</button><button class="pill active" data-c="32">32 路</button></div></div>
+        <div class="ctrl"><label>处置动作（OOM 之后）</label><div class="pills" id="b4Fix"><button class="pill active" data-f="none">不处置</button><button class="pill" data-f="limit">限流准入</button><button class="pill" data-f="ctx">缩上下文</button><button class="pill" data-f="hw">加卡（48GB）</button></div></div>
+      </div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="sim-btn" id="b4Run">▶ 重新模拟（90 秒窗口）</button>
+        <span class="b4-note" id="b4Scenario"></span>
+      </div>
+      <div class="b4-legend"><span><i class="ser"></i>逐个处理（串行）</span><span><i class="cb"></i>连续批处理</span></div>
+      <div class="b4-charts">
+        <div class="b4-chart"><h6>聚合吞吐（tok/s）</h6><svg id="b4ChTps" viewBox="0 0 300 120" preserveAspectRatio="none"></svg></div>
+        <div class="b4-chart"><h6>平均 TTFT（s）</h6><svg id="b4ChTtft" viewBox="0 0 300 120" preserveAspectRatio="none"></svg></div>
+        <div class="b4-chart"><h6>显存水位（% of 24GB）</h6><svg id="b4ChVram" viewBox="0 0 300 120" preserveAspectRatio="none"></svg></div>
+      </div>
+      <table class="b4-compare">
+        <tr><th></th><th>逐个处理</th><th>连续批处理</th></tr>
+        <tbody id="b4Compare"></tbody>
+      </table>
+      <div class="oom-banner" id="b4Oom"></div>
+      <div class="b4-note" id="b4Foot"></div>
+    </div>
+    <div class="lab-foot">啊哈时刻：并发从 1 拉到 4、再到 16 —— 连续批的吞吐近乎线性涨、平均 TTFT 只略增；再往上撞到的墙是<strong>显存</strong>（KV 装不下 → 拒新请求），而不是算力。吞吐的墙是显存，不是算力。</div>
+  </div>
+
+  <div class="deep">
+    <h4>深挖 · 模拟器做了哪些简化？</h4>
+    为了在浏览器里跑出干净的对比，本模拟做了取舍：① prefill 与 decode 各走各的流水线，未模拟 chunked prefill 与两阶段争抢算力；② 批内每请求吞吐取 min(单流速度, 聚合算力上限/批大小)，未细化注意力随上下文的二次项；③ OOM 建模为「KV 达到预算即拒绝新请求」，真实 vLLM 会先排队、再抢占（preempt）重算，最终表现相近：都是显存墙在限流。定性结论（吞吐墙在显存准入、连续批碾压串行）与论文一致；要精确数字请以 vLLM/SGLang 实测为准。
+  </div>
+
+  <details class="quiz"><summary>章内小自测：同样是 24GB 卡跑 14B 4-bit，为什么「8 人 × 4K」能活、「8 人 × 32K」必死？</summary><div class="ans">权重与开销固定 ≈9.1GB，剩下 KV 预算 ≈13.7GB。每路 4K 上下文的 KV ≈0.8GB，8 路共 ≈6.4GB，装得下；每路 32K 则是 8 倍 ≈6GB/路、8 路共 ≈51GB，连一张卡都装不下——KV 随上下文线性涨、随并发乘性涨（GPU_CALC.kvTotalGB）。</div></details>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b4"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释并发 × 上下文如何打爆显存，以及连续批处理 + PagedAttention 分别救了什么</div></div></div>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">限流与降级 —— 崩之前的工程动作</h2></div>
+  <p class="lede">章 4 的结论有点反直觉：<strong>高明的服务不是不拒绝，而是拒绝得漂亮。</strong>与其让所有人一起卡死、让显存爆掉把整组进程带走，不如主动拦住一部分请求——被拒绝的用户重试就好，崩掉的进程会连没被请求的无辜者也一起拖下水。</p>
+
+  <h3>限流三件套</h3>
+  <ul class="plain">
+    <li><strong>并发上限</strong>：同时处理的请求数封顶（服务端 <code>max_num_seqs</code> + 应用层信号量双重保险），超出直接快速失败。</li>
+    <li><strong>排队 + 超时</strong>：峰量先排队缓冲，但队列要有长度上限和等待超时——「排 30 秒还没到就明确告诉他再试」，好过让人盯着转圈两分钟。</li>
+    <li><strong>按用户配额</strong>：防止单个用户（或一个失控脚本）吃光全部容量；按 API key / 租户分桶计数。</li>
+  </ul>
+
+  <h3>降级路径：一条预演好的撤退路线</h3>
+  <p>降级不是临时拍脑袋，而是提前写进代码的分支。按代价从小到大依次退：</p>
+  <table>
+    <tr><th>触发</th><th>动作</th><th>用户感知</th></tr>
+    <tr><td>请求带超长上下文</td><td>引导缩短/摘要后再来，或服务端截断</td><td>几乎无感</td></tr>
+    <tr><td>高峰（水位 &gt; 阈值）</td><td>临时切更小的量化档 / 更小的模型</td><td>回答略变笨，但还在流式出字</td></tr>
+    <tr><td>本地集群濒临崩</td><td>兜底转发商业 API</td><td>无感（成本变高，钱包有感）</td></tr>
+  </table>
+
+  <h3>省算力的正道：前缀缓存复用</h3>
+  <p>限流是「少花钱」，缓存是「少干活」。如果所有请求共享同一段很长的 system prompt（代码助手几乎都是这样），那这段前缀的 prefill 结果——KV Cache——本可以跨请求复用，不必每个请求都重读一遍题。vLLM 的 automatic prefix caching、SGLang 的 RadixAttention（用基数树管理前缀复用，基准命中率 50~99%，查证 2026-09）都是服务端实现；托管 API 的 prompt caching 则把同一机制反映到账单上（命中部分按一折左右计费）。</p>
+  <div class="note ok"><b>交叉阅读</b>本仓库另一部手册 <a href="../llm-prompt-caching/a.html">《LLM Prompt Caching · 前缀缓存实验室》</a> 从 API 计费与规则侧讲同一件事（怎么组织 prompt 才能命中、各厂商写/读价与断点规则）；本页关心的是服务端 KV 复用机制。两边对照读，「省 TTFT」和「省钱」是一体两面。</div>
+
+  <h3>监控最小集（d 页细化）</h3>
+  <p>限流和降级都要靠指标触发。最小四件套先记住名字：<strong>TTFT p95</strong>（体验崩没崩）、<strong>tokens/s</strong>（吞吐够不够）、<strong>显存水位</strong>（离墙多远）、<strong>错误率</strong>（是不是已经在拒绝）。阈值怎么定、告警发给谁、崩了怎么演练，留到 <a href="d.html">D 页 · 选型与运维</a> 收官。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b5"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出限流三件套与「缩上下文 → 降档 → 商业 API」的降级顺序</div></div></div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">终极测验：推理与部署，你过关了吗？</h2></div>
+  <p class="lede">5 题验收。答对 4 题以上，你就有资格去谈「给我们团队部署一个模型」了。</p>
+  <div class="quizbox">
+    <div class="quiz-head"><span>FINAL EXAM · INFERENCE &amp; DEPLOYMENT</span><strong><span id="quizScore">0 / 5</span><span style="color:var(--ink-faint);font-weight:400" id="quizBest"></span></strong></div>
+    <div class="quiz-body">
+      <div class="q-no" id="qNo"></div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div class="q-exp" id="qExp"></div>
+    </div>
+    <div class="quiz-foot">
+      <button class="sim-btn" id="qSubmit" disabled>确认答案</button>
+      <button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button>
+      <button class="sim-btn ghost" id="qRestart" style="display:none">↺ 重新考</button>
+      <span class="q-verdict" id="qVerdict"></span>
+    </div>
+  </div>
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b6"><div class="ckpt-box">✓</div><div class="ckpt-text">终极测验 ≥ 4 题（答到 4 题会自动打勾）</div></div></div>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">本页所有关键数字的出处。带「查证 2026-09」的条目为写作时逐一核对过的事实；硬件量级来自共享公式库 calc.js（a/b/c/d 四页唯一数据源）。</p>
+  <ul class="plain source-list">
+    <li>vLLM / PagedAttention：Kwon et al., <em>Efficient Memory Management for LLM Serving with PagedAttention</em>, SOSP'23 — <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">arxiv.org/abs/2309.06180</a>（KV 浪费 &lt;4%、对比系统利用率 20~38%）· 查证 2026-09</li>
+    <li>Orca：Yu et al., <em>A Distributed Serving System for Transformer-Based Generative Models</em>, OSDI'22（迭代级/连续批调度出处）— <a href="https://www.usenix.org/conference/osdi22/presentation/yu" target="_blank" rel="noopener">usenix.org/conference/osdi22/presentation/yu</a> · 查证 2026-09</li>
+    <li>vLLM 官方文档 · Engine Arguments（<code>gpu_memory_utilization</code> 默认 0.9、<code>max_num_seqs</code> 默认 256）— <a href="https://docs.vllm.ai/en/stable/configuration/engine_args/" target="_blank" rel="noopener">docs.vllm.ai/en/stable/configuration/engine_args</a> · 查证 2026-09</li>
+    <li>SGLang：Zheng et al., <em>SGLang: Efficient Execution of Structured Language Model Programs</em>（RadixAttention）— <a href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener">arxiv.org/abs/2312.07104</a> · 仓库 <a href="https://github.com/sgl-project/sglang" target="_blank" rel="noopener">github.com/sgl-project/sglang</a>（前缀缓存命中 50~99% 为论文及社区基准口径）· 查证 2026-09</li>
+    <li>GPTQ：Frantar et al., 2022 — <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">arxiv.org/abs/2210.17323</a>；AWQ：Lin et al., 2023 — <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">arxiv.org/abs/2306.00978</a> · 查证 2026-09</li>
+    <li>llama.cpp（GGUF / K-quants）— <a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="noopener">github.com/ggml-org/llama.cpp</a>；Ollama（<code>qwen2.5:14b</code> 默认 Q4_K_M、约 9.0 GB）— <a href="https://ollama.com/library/qwen2.5" target="_blank" rel="noopener">ollama.com/library/qwen2.5</a> · 查证 2026-09</li>
+    <li>LM Studio（llama.cpp 后端的桌面 GUI）— <a href="https://lmstudio.ai/" target="_blank" rel="noopener">lmstudio.ai</a>；TensorRT-LLM（NVIDIA 极限优化引擎）— <a href="https://github.com/NVIDIA/TensorRT-LLM" target="_blank" rel="noopener">github.com/NVIDIA/TensorRT-LLM</a> · 查证 2026-09</li>
+    <li>消费卡 14B Q4 实测量级（4090 约 80~110 tok/s）为 r/LocalLLaMA 等社区基准汇总，非官方数字 · 查证 2026-09</li>
+    <li>本仓库：<a href="../llm-prompt-caching/a.html">llm-prompt-caching/a.html</a>（前缀缓存 API 侧）· <a href="a.html">A 页</a>（显存公式与估算器）· calc.js（四页共享公式）</li>
+  </ul>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:26px 0 6px">
+    <a class="sim-btn ghost" href="a.html" style="text-decoration:none">← 上一页 · A 底层认知</a>
+    <a class="sim-btn" href="c.html" style="text-decoration:none">下一页 · C 微调实战 →</a>
+  </div>
+  <footer class="colophon">《AI 工程师的 GPU 与模型部署实战》四部曲 · 之二 · 数据截至 2026-09 · 硬件/价格/吞吐均为量级估算，请以官方现价与实测为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="calc.js"></script>
+<script>
+/* ============ TOC + scrollspy + progress ============ */
+const chapters=[...document.querySelectorAll("section.chapter")],toc=document.getElementById("toc"),
+  tocNames=["两幕戏","量化","跑起来","并发与批处理","限流与降级","终极测验","参考资料"];
+chapters.forEach((sec,i)=>{const a=document.createElement("a");a.href="#"+sec.id;
+  a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${tocNames[i]}`;toc.appendChild(a)});
+const tocLinks=[...toc.querySelectorAll("a")],progFill=document.getElementById("progFill"),progLabel=document.getElementById("progLabel");
+function updateSpy(){const y=scrollY+140;let cur=0;chapters.forEach((s,i)=>{if(s.offsetTop<=y)cur=i});
+  tocLinks.forEach((a,i)=>a.classList.toggle("active",i===cur));
+  progFill.style.width=((cur+1)/chapters.length*100)+"%";progLabel.textContent=`${cur+1} / ${chapters.length} 章`}
+addEventListener("scroll",updateSpy,{passive:true});addEventListener("resize",updateSpy);updateSpy();
+
+/* ============ checkpoints（localStorage 前缀 gpu-deploy-b-） ============ */
+const CK_KEY="gpu-deploy-b-checkpoints";let ck={};
+try{ck=JSON.parse(localStorage.getItem(CK_KEY)||"{}")}catch(e){ck={}}
+function ckSave(){try{localStorage.setItem(CK_KEY,JSON.stringify(ck))}catch(e){}}
+document.querySelectorAll(".ckpt-item").forEach(el=>{
+  if(ck[el.dataset.key])el.classList.add("done");
+  el.onclick=()=>{el.classList.toggle("done");ck[el.dataset.key]=el.classList.contains("done");ckSave()};
+});
+function ckMark(key,on){const el=document.querySelector(`.ckpt-item[data-key="${key}"]`);
+  if(el&&on&&!el.classList.contains("done")){el.classList.add("done");ck[key]=true;ckSave()}}
+
+/* ============ 共享公式库 ============ */
+const G=window.GPU_CALC;
+const CARD=G.gpuById("rtx4090"),MODEL=G.modelById("qwen14b");
+const W_BF16=G.weightGB(MODEL.paramsB,"bf16");      // ≈29.6 GB
+const W_4BIT=G.weightGB(MODEL.paramsB,"int4");      // ≈7.4 GB
+const OH=G.overheadGB(W_4BIT);                       // ≈1.71 GB
+const KV_B=G.kvBytesPerToken(MODEL.layers,MODEL.kvDim,2); // ≈196,608 B/token
+const USABLE=G.usableVRAM(CARD.vramGB);              // 22.8 GB
+const KV_BUDGET=USABLE-W_4BIT-OH;                    // ≈13.7 GB
+const EFF=0.65;                                      // decode 实际效率折扣（5~7 折取中）
+const SINGLE_TPS=G.decodeTps(CARD.bwGBs,W_4BIT)*EFF; // ≈88 tok/s 单流
+const MFU=0.4;
+const FLOPS_TOK=2*MODEL.paramsB*1e9;                 // 每 token ≈2N FLOPs
+const PREFILL_TPS=CARD.bf16Tflops*1e12*MFU/FLOPS_TOK;// ≈2,200 tok/s
+const AGG_CAP=1/(FLOPS_TOK/(CARD.bf16Tflops*1e12*MFU)/EFF); // 连续批聚合吞吐上限 ≈1,450 tok/s
+
+/* ============ B1 推理时间线 ============ */
+(function(){
+  const rP=document.getElementById("b1Prompt"),rG=document.getElementById("b1Gen"),
+    speedBox=document.getElementById("b1Speed"),pre=document.getElementById("b1Pre"),
+    deco=document.getElementById("b1Deco"),head=document.getElementById("b1Playhead"),
+    phase=document.getElementById("b1Phase"),clock=document.getElementById("b1Clock"),
+    btn=document.getElementById("b1Play"),reset=document.getElementById("b1Reset"),
+    status=document.getElementById("b1Status");
+  let speed=2,playing=false,raf=null,t0=0,simT=0,cfg=null;
+  const PLAY_BASE=9000;
+  function derive(){
+    const p=+rP.value,g=+rG.value;
+    const ttft=p/PREFILL_TPS,genTime=g/SINGLE_TPS,total=ttft+genTime;
+    return{p,g,ttft,genTime,total,gap:1000/SINGLE_TPS};
+  }
+  function intuitionTable(){
+    const rows=[1024,4096,16384,32768].map(p=>{
+      const ttft=p/PREFILL_TPS;
+      return `<tr><td>${p.toLocaleString()} tok</td><td>≈ ${ttft<1?(ttft*1000).toFixed(0)+" ms":ttft.toFixed(1)+" s"}</td><td>≈ ${Math.round(SINGLE_TPS)} tok/s（不变）</td><td>${p<=4096?"无感":"明显等待"}</td></tr>`;
+    }).join("");
+    document.getElementById("b1Intuition").innerHTML=rows;
+  }
+  function kpis(c){
+    document.getElementById("b1Ttft").textContent=c.ttft<1?(c.ttft*1000).toFixed(0)+" ms":c.ttft.toFixed(2)+" s";
+    document.getElementById("b1Gap").textContent=c.gap.toFixed(1)+" ms";
+    document.getElementById("b1Tps").textContent="≈"+Math.round(SINGLE_TPS)+" tok/s";
+    document.getElementById("b1Total").textContent=c.total.toFixed(2)+" s";
+    document.getElementById("b1Formula").innerHTML=
+      `prefill ≈ ${Math.round(PREFILL_TPS).toLocaleString()} tok/s<br>（= ${CARD.bf16Tflops} TFLOPS × ${MFU} ÷ 2×${MODEL.paramsB}B）<br>decode ≈ ${Math.round(SINGLE_TPS)} tok/s（= ${CARD.bwGBs}GB/s ÷ ${W_4BIT.toFixed(1)}GB × ${EFF}）`;
+  }
+  function buildCells(c){
+    deco.innerHTML="";
+    const n=Math.min(40,Math.max(8,Math.round(c.g/64)));
+    for(let i=0;i<n;i++){const d=document.createElement("div");d.className="b1-cell";deco.appendChild(d)}
+  }
+  function staticLayout(c){
+    pre.style.width=(c.ttft/c.total*100)+"%";
+    head.style.left="0%";clock.textContent="t = 0.00 s";
+    phase.innerHTML=`<span class="pf">第一幕 PREFILL</span> 读取 ${c.p.toLocaleString()} tok → 产出 KV`;
+    [...deco.children].forEach(x=>x.classList.remove("on"));
+  }
+  function apply(){cfg=derive();document.getElementById("b1PromptVal").textContent=cfg.p.toLocaleString();
+    document.getElementById("b1GenVal").textContent=cfg.g;buildCells(cfg);staticLayout(cfg);kpis(cfg);
+    stop();}
+  function stop(){playing=false;btn.textContent="▶ 播放";if(raf)cancelAnimationFrame(raf);raf=null}
+  function frame(ts){
+    if(!t0)t0=ts;
+    const PLAY_MS=PLAY_BASE/speed;
+    simT=Math.min(cfg.total,(ts-t0)/PLAY_MS*cfg.total);
+    const preW=Math.min(simT/cfg.ttft,1)*cfg.ttft/cfg.total*100;
+    pre.style.width=preW+"%";
+    head.style.left=(simT/cfg.total*100)+"%";
+    clock.textContent="t = "+simT.toFixed(2)+" s";
+    const cells=[...deco.children],frac=Math.max(0,(simT-cfg.ttft)/cfg.genTime);
+    const lit=Math.floor(frac*cells.length);
+    cells.forEach((x,i)=>x.classList.toggle("on",i<lit));
+    if(simT<cfg.ttft){phase.innerHTML=`<span class="pf">第一幕 PREFILL</span> 并行读题（算力瓶颈）… 已算 ${Math.round(Math.min(simT/cfg.ttft,1)*cfg.p).toLocaleString()} / ${cfg.p.toLocaleString()} tok`}
+    else if(simT<cfg.total){phase.innerHTML=`<span class="dc">第二幕 DECODE</span> 逐字生成（带宽瓶颈）… ${Math.round(frac*cfg.g)} / ${cfg.g} tok`}
+    else{phase.textContent="✔ 完成：总耗时 "+cfg.total.toFixed(2)+" s（TTFT "+cfg.ttft.toFixed(2)+" s + decode "+cfg.genTime.toFixed(2)+" s）";stop();return}
+    raf=requestAnimationFrame(frame);
+  }
+  btn.onclick=()=>{if(playing){stop();staticLayout(cfg);simT=0;t0=0;return}
+    playing=true;simT=0;t0=0;btn.textContent="⏸ 暂停";raf=requestAnimationFrame(frame)};
+  reset.onclick=()=>{stop();simT=0;t0=0;staticLayout(cfg)};
+  rP.oninput=apply;rG.oninput=apply;
+  speedBox.querySelectorAll(".pill").forEach(b=>b.onclick=()=>{speed=+b.dataset.s;
+    if(playing)t0=performance.now()-simT/cfg.total*(PLAY_BASE/speed);
+    speedBox.querySelectorAll(".pill").forEach(x=>x.classList.toggle("active",x===b))});
+  apply();intuitionTable();
+})();
+
+/* ============ 章4 KV 乘法表（GPU_CALC 实时计算） ============ */
+(function(){
+  const scenes=[[1,4096],[8,4096],[8,32768],[16,8192],[32,8192]];
+  document.getElementById("kvMultTbody").innerHTML=scenes.map(([c,ctx])=>{
+    const kv=G.kvTotalGB(c,ctx,KV_B),ratio=kv/KV_BUDGET;
+    const [cls,txt]=ratio>1?["over","❌ 爆"]:(ratio>0.85?["tight","⚠️ 贴顶"]:["ok","✅ 装下"]);
+    return `<tr><td>${c} 人并发 × ${ctx.toLocaleString()} tok 上下文</td><td>≈ ${kv.toFixed(1)} GB</td><td>${Math.round(ratio*100)}%</td><td><span class="verdict ${cls}">${txt}</span></td></tr>`;
+  }).join("");
+})();
+
+/* ============ B2 量化四方权衡器 ============ */
+(function(){
+  const box=document.getElementById("b2Pills");
+  const W_Q2=W_4BIT/2; // Q2 = 0.25 B/参数（int4 档位的一半，口径注释见 calc.js PRECISIONS）
+  const LV=[
+    {name:"FP16",w:W_BF16,q:100,qc:"var(--ok)",adv:"训练对齐、评测复现、显存管够时的基准档。生产推理很少用它。",
+     note:`质量 100%（基准）。4090 单卡已装不下 ≈${W_BF16.toFixed(0)} GB 权重。`},
+    {name:"Q8",w:G.weightGB(MODEL.paramsB,"fp8"),q:99.5,qc:"#7aa860",adv:"几乎无损（≈99.5%），显存减半。数据中心 FP8 的新宠；本地想稳可用 Q8_K_M。",
+     note:"对大多数任务与 FP16 无可感知差别；H 系列卡有原生 FP8 加速。"},
+    {name:"Q4",w:W_4BIT,q:97,qc:"var(--warn)",adv:"本地部署与中小服务的默认甜点档：显存 1/4、decode 提速约 4 倍，质量损失通常很小（经验值）。",
+     note:`GGUF Q4_K_M 实际文件 ≈9.0 GB（查证 2026-09），理论值 ${W_4BIT.toFixed(1)} GB。14B 级推荐从这一档起步。`},
+    {name:"Q2",w:W_Q2,q:68,qc:"var(--bad)",adv:"应急/玩具档。速度与显存再赚一档，但模型会流畅地胡说。",
+     note:"平均 2 bit/参数已越过实用底线；除非只是验证「能不能跑」，否则别交付它。"}
+  ];
+  let cur=0;
+  function render(){
+    const L=LV[cur];
+    document.getElementById("b2Vram").textContent=G.fmtGB(L.w);
+    document.getElementById("b2Bytes").textContent=`${L.name} · ${L.name==="Q2"?"0.25":G.bytesPerParam(cur===0?"bf16":cur===1?"fp8":"int4")} B/参数`;
+    document.getElementById("b2Speed").textContent="≈"+Math.round(G.decodeTps(CARD.bwGBs,L.w))+" tok/s";
+    document.getElementById("b2QBar").style.width=L.q+"%";
+    document.getElementById("b2QBar").style.background=`linear-gradient(90deg,${L.qc},${L.qc})`;
+    document.getElementById("b2QualityTxt").textContent=`示意完整度 ≈${L.q}%（非精确基准）`;
+    document.getElementById("b2Advice").textContent=L.adv;
+    document.getElementById("b2Note").textContent=L.note;
+    document.getElementById("b2Warn").classList.toggle("show",cur===3);
+    box.querySelectorAll(".pill").forEach((b,i)=>b.classList.toggle("active",i===cur));
+  }
+  box.querySelectorAll(".pill").forEach((b,i)=>b.onclick=()=>{cur=i;render()});
+  ["b2w32","b2w16","b2w8","b2w4"].forEach((id,i)=>{
+    document.getElementById(id).textContent=G.fmtGB(G.weightGB(MODEL.paramsB,["fp32","bf16","fp8","int4"][i]))});
+  render();
+})();
+
+/* ============ B3 部署工具决策树 ============ */
+(function(){
+  const TASKS=[
+    {id:"chat",name:"个人陪聊/问答"},{id:"code",name:"本地代码助手"},
+    {id:"team",name:"给小团队开 API"},{id:"prod",name:"高并发线上服务"},{id:"squeeze",name:"极致压榨性能"}];
+  const HWS=[
+    {id:"mac",name:"Mac（统一内存）"},{id:"consumer",name:"NVIDIA 消费卡"},
+    {id:"dc",name:"数据中心卡"},{id:"cloud",name:"云 GPU / 不想买卡"}];
+  const CMD={
+    ollama14:"ollama run qwen2.5:14b",
+    ollamaCoder:"ollama run qwen2.5-coder:14b",
+    llamaServer:"llama-server -m Qwen2.5-14B-Instruct-Q4_K_M.gguf -ngl 99 --port 8080",
+    vllmAwq:"vllm serve Qwen/Qwen2.5-14B-Instruct-AWQ --max-model-len 8192 --gpu-memory-utilization 0.9 --max-num-seqs 64",
+    vllmDc:"vllm serve Qwen/Qwen2.5-14B-Instruct --gpu-memory-utilization 0.9",
+    sglang:"python -m sglang.launch_server --model Qwen/Qwen2.5-14B-Instruct",
+    trtllm:"trtllm-serve --model Qwen/Qwen2.5-14B-Instruct   # 需先用 TensorRT-LLM 构建引擎",
+    api:"（无需命令：直接调商业 API，如 OpenAI / Anthropic / DeepSeek）",
+    gui:"LM Studio：图形界面下载 GGUF → 加载对话（无需命令行）"
+  };
+  /* 决策表：task × hw → {tool, why, cmd} */
+  const D={
+    chat:{mac:{t:"Ollama",why:"统一内存装得下 14B Q4，一条命令零配置，安静省电。",c:CMD.ollama14},
+      consumer:{t:"Ollama / LM Studio",why:"24GB 消费卡是 14B 的甜点；爱命令行用 Ollama，爱点鼠标用 LM Studio。",c:CMD.ollama14},
+      dc:{t:"Ollama（或商业 API）",why:"个人陪聊用数据中心卡是杀鸡用牛刀——不如直接调 API 省心。",c:CMD.ollama14},
+      cloud:{t:"商业 API",why:"为陪聊租云 GPU 按时烧钱不划算；低用量场景 API 几乎必赢。",c:CMD.api}},
+    code:{mac:{t:"Ollama + coder 模型",why:"统一内存吃长上下文有优势；qwen2.5-coder 特化过代码任务。",c:CMD.ollamaCoder},
+      consumer:{t:"Ollama / LM Studio",why:"14B Q4 全进显存，80~110 tok/s（查证 2026-09），打字跟得上。",c:CMD.ollamaCoder},
+      dc:{t:"llama.cpp server / Ollama",why:"单人用不需要批处理框架；引擎层直启更轻。",c:CMD.llamaServer},
+      cloud:{t:"商业 API（或云上小卡）",why:"单人代码助手不值得常驻云卡；API 更便宜且免运维。",c:CMD.api}},
+    team:{mac:{t:"云上 vLLM（Mac 不做服务）",why:"Mac 带宽低且服务生态弱；把省下的折腾钱拿去租卡。",c:CMD.vllmDc},
+      consumer:{t:"vLLM（消费卡 + 限流）",why:"小团队 QPS 低，24GB 卡跑 AWQ 量化 + 严格限流足够；章 4 的旋钮全用上。",c:CMD.vllmAwq},
+      dc:{t:"vLLM / SGLang",why:"生产服务层主力；共享 system prompt 多就优先试 SGLang 的前缀缓存。",c:CMD.vllmDc},
+      cloud:{t:"vLLM（云 GPU 按量）",why:"按量计费试错成本低，流量稳了再评估自建（D 页算账）。",c:CMD.vllmDc}},
+    prod:{mac:{t:"不推荐",why:"生产高并发不要在 Mac 上做：批处理/监控/多副本生态都在 NVIDIA 侧。",c:CMD.vllmDc},
+      consumer:{t:"vLLM + 严格限流",why:"能扛但贴着显存上限：调小 max_num_seqs、缩上下文，监控水位（章 5）。",c:CMD.vllmAwq},
+      dc:{t:"vLLM / SGLang",why:"标准答案：continuous batching + PagedAttention，多副本 + 负载路由。",c:CMD.vllmDc},
+      cloud:{t:"vLLM 多副本 + 监控",why:"弹性扩缩 + 前缀缓存 + 商业 API 兜底（架构演进见 D 页搭建器）。",c:CMD.sglang}},
+    squeeze:{mac:{t:"llama.cpp（Metal）",why:"Mac 上 llama.cpp 的 Metal 后端已是事实最优；无 TensorRT 可选。",c:CMD.llamaServer},
+      consumer:{t:"TensorRT-LLM / 精调 llama.cpp",why:"极限吞吐要上 TensorRT-LLM；消费卡收益相对小，先量化再谈优化。",c:CMD.trtllm},
+      dc:{t:"TensorRT-LLM",why:"追极限吞吐的终点站：内核融合 + FP8 + 深度编译优化，代价是构建链路重。",c:CMD.trtllm},
+      cloud:{t:"TensorRT-LLM（新卡）",why:"只有 FP8/FP4 新卡才能榨出它的全部；先确认账单扛得住。",c:CMD.trtllm}}
+  };
+  let task="code",hw="consumer",interacted=false;
+  const tBox=document.getElementById("b3Task"),hBox=document.getElementById("b3Hw");
+  function pills(box,arr,cur,onPick){
+    box.innerHTML="";arr.forEach(x=>{const b=document.createElement("button");
+      b.className="pill"+(x.id===cur?" active":"");b.textContent=x.name;
+      b.onclick=()=>{interacted=true;onPick(x.id);paint()};box.appendChild(b)})}
+  function col(el,arr,curId){
+    el.innerHTML="";arr.forEach(x=>{const d=document.createElement("div");
+      d.className="decide-cell"+(x.id===curId?" on":"");
+      d.innerHTML=x.id===curId?x.name+`<small>✔ 已选</small>`:x.name;el.appendChild(d)})}
+  function paint(){
+    pills(tBox,TASKS,task,id=>task=id);pills(hBox,HWS,hw,id=>hw=id);
+    col(document.getElementById("b3ColTask"),TASKS,task);
+    col(document.getElementById("b3ColHw"),HWS,hw);
+    const leaf=D[task][hw];
+    document.getElementById("b3ColTool").innerHTML=`<div class="decide-cell on">${leaf.t}<small>✔ 推荐</small></div>`;
+    document.getElementById("b3Why").textContent=leaf.why;
+    document.getElementById("b3Cmd").textContent=leaf.c;
+    document.getElementById("b3CmdBox").open=interacted;
+  }
+  paint();
+})();
+
+/* ============ B4 并发模拟器（离散事件核心） ============ */
+/* SIM-CORE-BEGIN（纯函数：只依赖传入的 GC 与 opts，可在 node 中独立运行自检） */
+function gdepSimCore(GC,opts){
+  var card=GC.gpuById("rtx4090"),model=GC.modelById("qwen14b");
+  var wGB=GC.weightGB(model.paramsB,"int4"),ohGB=GC.overheadGB(wGB);
+  var kvB=GC.kvBytesPerToken(model.layers,model.kvDim,2);
+  var usable=GC.usableVRAM(card.vramGB);
+  var budget=(opts.budgetGB!=null?opts.budgetGB:usable-wGB-ohGB);
+  var eff=0.65;
+  var singleTps=GC.decodeTps(card.bwGBs,wGB)*eff;
+  var flopsTok=2*model.paramsB*1e9;
+  var prefillTps=card.bf16Tflops*1e12*0.4/flopsTok;
+  var aggCap=1/(flopsTok/(card.bf16Tflops*1e12*0.4)/eff);
+  var prompt=opts.promptTokens,gen=opts.genTokens;
+  var kvFinalGB=(prompt+gen)*kvB/1e9;
+  var maxSeqsMem=Math.max(1,Math.floor(budget/kvFinalGB));
+  var strict=!!opts.strictAdmission;                 // 限流：准入上限打八折 + 排队 + 超时
+  var maxActive=strict?Math.max(1,Math.floor(maxSeqsMem*0.8)):maxSeqsMem;
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  var rng=mulberry32(opts.seed||42);
+  /* 等间隔 + 抖动到达：均值速率等于 arriveRate，且避免指数到达在 ρ→1 时的病态尖峰 */
+  var arrivals=[],guard=0;
+  var nArr=Math.max(1,Math.round(opts.arriveRate*opts.horizon));
+  var slot=opts.horizon/nArr;
+  for(var ai=0;ai<nArr;ai++){arrivals.push({id:ai,arrive:(ai+0.3+rng()*0.4)*slot})}
+  var mode=opts.mode,dt=0.02,queue=[],active=[],cur=null;
+  var done=0,dropped=0,memOOM=0,timeoutRejects=0,ttftSum=0,tokTotal=0,peakVram=0,kvUsed=0,arrivedCount=0;
+  var tokensWin=0,winT=0,recentTps=0;
+  var series=[],nextSample=0,timeout=opts.queueTimeout||20;
+  var svcSingle=prompt/prefillTps+gen/singleTps;
+  function admitReq(r,now){r.prefillLeft=prompt/prefillTps;r.made=0;r.firstTokAt=null;active.push(r)}
+  function fitsFinal(){return kvUsed+kvFinalGB<=budget+1e-9}   // budget 已扣除权重与开销，只算 KV
+  for(var now=0;now<=opts.horizon+1e-9;now+=dt){
+    while(arrivals.length&&arrivals[0].arrive<=now){
+      var r=arrivals.shift();arrivedCount++;
+      if(mode==="serial"){queue.push(r);if(queue.length>400){queue.shift();dropped++;timeoutRejects++}}
+      else if(strict){queue.push(r);if(queue.length>400){queue.shift();dropped++;timeoutRejects++}}
+      else if(active.length<maxActive&&fitsFinal())admitReq(r,now);
+      else{dropped++;memOOM++}                       // 显存墙：KV 抢不到位，直接拒
+    }
+    if(mode==="serial"){
+      if(!cur&&queue.length){cur=queue.shift();cur.made=0;cur.prefillLeft=prompt/prefillTps;cur.firstTokAt=null}
+      var isq;
+      for(isq=queue.length-1;isq>=0;isq--){if(now-queue[isq].arrive>timeout){queue.splice(isq,1);dropped++;timeoutRejects++}}
+      if(cur){
+        if(cur.prefillLeft>0){cur.prefillLeft-=dt}
+        else{
+          if(cur.firstTokAt==null){cur.firstTokAt=now;ttftSum+=now-cur.arrive}
+          var adv=Math.min(singleTps*dt,gen-cur.made);cur.made+=adv;tokTotal+=adv;tokensWin+=adv;
+          if(cur.made>=gen-1e-9){done++;cur=null}
+        }
+      }
+      kvUsed=cur?((cur.made||0)+prompt/2)*kvB/1e9:0;
+    }else{
+      if(strict){
+        while(queue.length&&active.length<maxActive&&fitsFinal())admitReq(queue.shift(),now);
+        var iq;
+        for(iq=queue.length-1;iq>=0;iq--){if(now-queue[iq].arrive>timeout){queue.splice(iq,1);dropped++;timeoutRejects++}}
+      }
+      var i2,req;
+      var decoders=0;
+      for(i2=0;i2<active.length;i2++){if(active[i2].prefillLeft>0){active[i2].prefillLeft-=dt}else decoders++}
+      if(decoders>0){
+        var per=Math.min(singleTps,aggCap/decoders)*dt;
+        for(i2=active.length-1;i2>=0;i2--){req=active[i2];if(req.prefillLeft>0)continue;
+          if(req.firstTokAt==null){req.firstTokAt=now;ttftSum+=now-req.arrive}
+          var adv2=Math.min(per,gen-req.made);req.made+=adv2;tokTotal+=adv2;tokensWin+=adv2;
+          if(req.made>=gen-1e-9){done++;active.splice(i2,1)}
+        }
+      }
+      kvUsed=0;for(i2=0;i2<active.length;i2++){kvUsed+=(prompt+(active[i2].made||0))*kvB/1e9}
+    }
+    var vramPct=(ohGB+wGB+Math.max(0,kvUsed))/usable*100;
+    if(vramPct>peakVram)peakVram=vramPct;
+    winT+=dt;
+    if(winT>=2-1e-9){recentTps=tokensWin/winT;tokensWin=0;winT=0}
+    if(now>=nextSample-1e-9){
+      series.push({t:+now.toFixed(2),tps:recentTps,ttft:done?ttftSum/done:0,vram:vramPct});
+      nextSample+=0.5;
+    }
+  }
+  var served=arrivedCount;
+  return{series:series,stats:{arrived:served,completed:done,dropped:dropped,memOOM:memOOM,
+    timeoutRejects:timeoutRejects,avgTTFT:done?ttftSum/done:0,aggTpsAvg:tokTotal/opts.horizon,
+    aggTpsPeak:aggCap,singleTps:singleTps,peakVramPct:peakVram,leftQueued:queue.length+(cur?1:0)+active.length,
+    maxSeqsMem:maxSeqsMem,svcSingle:svcSingle,kvFinalGB:kvFinalGB,prefillTps:prefillTps}};
+}
+/* SIM-CORE-END */
+
+(function(){
+  const concBox=document.getElementById("b4Conc"),fixBox=document.getElementById("b4Fix"),
+    runBtn=document.getElementById("b4Run"),oomBox=document.getElementById("b4Oom"),
+    scenario=document.getElementById("b4Scenario"),foot=document.getElementById("b4Foot");
+  let conc=32,fix="none";
+  const PROMPT=6144,GEN=512,HORIZON=90;
+  function runOnce(mode,arriveRate,over){
+    over=over||{};
+    return gdepSimCore(G,{mode:mode,arriveRate:arriveRate,promptTokens:over.prompt||PROMPT,
+      genTokens:over.gen||GEN,horizon:HORIZON,seed:42,queueTimeout:20,
+      strictAdmission:fix==="limit"&&mode==="cb",
+      budgetGB:fix==="hw"?KV_BUDGET*2:null});
+  }
+  function path(svg,pts,color,dash){
+    const NS="http://www.w3.org/2000/svg";
+    const pl=document.createElementNS(NS,"polyline");
+    pl.setAttribute("fill","none");pl.setAttribute("stroke-width","2");
+    pl.style.stroke=color;if(dash)pl.style.strokeDasharray="5 4";
+    pl.setAttribute("points",pts.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "));
+    svg.appendChild(pl);
+  }
+  function drawChart(svg,serCb,serSer,key,yMax,yFmt){
+    const NS="http://www.w3.org/2000/svg";
+    svg.innerHTML="";
+    [0.25,0.5,0.75].forEach(f=>{const l=document.createElementNS(NS,"line");
+      l.setAttribute("x1",0);l.setAttribute("x2",300);l.setAttribute("y1",120*f);l.setAttribute("y2",120*f);
+      l.setAttribute("stroke","#d8cfbd");l.setAttribute("stroke-width","1");svg.appendChild(l)});
+    const map=s=>s.map(p=>({x:p.t/HORIZON*300,y:120-Math.min(1,p[key]/yMax)*118}));
+    path(svg,map(serSer),"#a83232",true);
+    path(svg,map(serCb),"#3d7a44",false);
+    const t=document.createElementNS(NS,"text");
+    t.setAttribute("x",4);t.setAttribute("y",10);t.setAttribute("font-size","9");t.style.fill="#8a8172";
+    t.style.fontFamily="var(--mono)";t.textContent=yFmt(yMax);svg.appendChild(t);
+  }
+  function render(){
+    const over=fix==="ctx"?{prompt:PROMPT/2,gen:GEN/2}:{};
+    const pEff=over.prompt||PROMPT,gEff=over.gen||GEN;
+    const SVC_EFF=pEff/PREFILL_TPS+gEff/SINGLE_TPS;      // 处置后单请求服务时长随之变化
+    const arriveRate=conc*0.9/SVC_EFF;                    // 等效并发 ≈ conc（留 10% 余量避免临界抖动）
+    const ser=runOnce("serial",arriveRate,over),cb=runOnce("cb",arriveRate,over);
+    const maxTps=Math.max(AGG_CAP*1.1,SINGLE_TPS*1.2);
+    const maxTtft=Math.max(10,ser.stats.avgTTFT*1.3,cb.stats.avgTTFT*1.3);
+    drawChart(document.getElementById("b4ChTps"),cb.series,ser.series,"tps",maxTps,v=>Math.round(v)+" tok/s");
+    drawChart(document.getElementById("b4ChTtft"),cb.series,ser.series,"ttft",maxTtft,v=>"avg ≤"+v.toFixed(0)+" s");
+    drawChart(document.getElementById("b4ChVram"),cb.series,ser.series,"vram",100,v=>v+"%");
+    scenario.textContent=`场景：14B 4-bit @ 4090 · 请求 ${pEff.toLocaleString()} tok 入 / ${gEff} tok 出 · 显存可容纳约 ${cb.stats.maxSeqsMem} 路（KV 预算 ${(fix==="hw"?KV_BUDGET*2:KV_BUDGET).toFixed(1)} GB）`;
+    document.getElementById("b4Compare").innerHTML=
+      `<tr><td>完成 / 到达</td><td>${ser.stats.completed} / ${ser.stats.arrived}</td><td><b>${cb.stats.completed} / ${cb.stats.arrived}</b></td></tr>`+
+      `<tr><td>平均聚合吞吐</td><td>${Math.round(ser.stats.aggTpsAvg)} tok/s</td><td><b style="color:var(--ok)">${Math.round(cb.stats.aggTpsAvg)} tok/s</b>（上限 ≈${Math.round(AGG_CAP)}）</td></tr>`+
+      `<tr><td>平均 TTFT（已完成请求）</td><td style="color:var(--bad)">${ser.stats.avgTTFT.toFixed(1)} s</td><td><b>${cb.stats.avgTTFT.toFixed(1)} s</b></td></tr>`+
+      `<tr><td>显存峰值</td><td>${ser.stats.peakVramPct.toFixed(0)}%</td><td>${cb.stats.peakVramPct.toFixed(0)}%</td></tr>`+
+      `<tr><td>窗口结束仍在排队/处理</td><td style="color:var(--bad)">${ser.stats.leftQueued} 个</td><td>${cb.stats.leftQueued} 个</td></tr>`+
+      `<tr><td>被拒 / OOM</td><td>${ser.stats.timeoutRejects}（排队超时）</td><td>${cb.stats.timeoutRejects} 拒 / <b style="color:var(--bad)">${cb.stats.memOOM} OOM</b></td></tr>`;
+    const oomTotal=cb.stats.memOOM;
+    const fixLabel={limit:"限流准入",ctx:"缩上下文",hw:"加卡（48GB）"}[fix];
+    if(oomTotal>0){
+      oomBox.classList.add("show");
+      oomBox.innerHTML=`<b>OOM 事件 × ${oomTotal}</b> —— 显存打满：新请求抢不到 KV 被直接拒绝（模拟显存打满时的繁忙/报错）。聚合吞吐上限 ≈${Math.round(AGG_CAP)} tok/s 根本没摸到，先撞墙的是显存。`+
+        (fix!=="none"?`已应用「${fixLabel}」仍压不住：${conc} 路长上下文超出硬件容量——处置只是把墙推远，最终还是要靠限流兜底。`:`这就是「吞吐的墙是显存不是算力」。试试右侧处置动作。`);
+    }else if(cb.stats.timeoutRejects>0){
+      oomBox.classList.add("show");
+      oomBox.innerHTML=`<b>主动限流生效</b> —— OOM 0 次；${cb.stats.timeoutRejects} 个请求排队超过 20s 被明确拒绝。这就是章 5 说的「拒绝得漂亮」：崩变成可预期的失败。`;
+    }else{oomBox.classList.remove("show")}
+    foot.textContent="请求在 90 秒窗口内等间隔+抖动到达（均值速率 = 等效并发 × 0.9 ÷ 单请求服务时长 ≈"+SVC_EFF.toFixed(1)+"s，固定种子可复现）；简化口径见上方深挖框。";
+  }
+  concBox.querySelectorAll(".pill").forEach(b=>b.onclick=()=>{conc=+b.dataset.c;
+    concBox.querySelectorAll(".pill").forEach(x=>x.classList.toggle("active",x===b));render()});
+  fixBox.querySelectorAll(".pill").forEach(b=>b.onclick=()=>{fix=b.dataset.f;
+    fixBox.querySelectorAll(".pill").forEach(x=>x.classList.toggle("active",x===b));render()});
+  runBtn.onclick=render;
+  render();
+})();
+
+/* ============ 章6 终极测验 ============ */
+const QUESTIONS=[
+ {q:"TTFT（首 token 延迟）主要由哪个阶段决定？该阶段是什么瓶颈？",
+  o:["Prefill · 算力瓶颈（compute-bound）","Prefill · 带宽瓶颈（memory-bound）","Decode · 算力瓶颈","Decode · 带宽瓶颈"],a:0,
+  x:"Prefill 要把整个 prompt 的 token 一次性并行算完，几千个 GPU 核心都有活干，算力是稀缺品 → TTFT 由算力决定。Decode 一次只算 1 个 token，时间花在等数据，才是带宽瓶颈。"},
+ {q:"Decode 速度的粗算式是？（为什么每生成一个 token 都要读一遍全部权重）",
+  o:["tokens/s ≈ 算力 ÷ 层数；因为每层要单独加载","tokens/s ≈ 显存带宽 ÷ 权重量；因为自回归每步都依赖全部权重并回看全部 KV","tokens/s ≈ 显存容量 ÷ 上下文；因为 KV 越大越慢","tokens/s ≈ 带宽 × 批大小；批越大越快"],a:1,
+  x:"自回归生成每一步都要用全部权重做前向、注意力要回看全部历史 KV，所以每 token 都把权重从显存完整搬一遍 → 速度上限 ≈ 带宽÷权重量（实际打 5~7 折）。这也是量化能提速的原因。"},
+ {q:"同一个 14B 模型，Q4_K_M（≈9GB 文件）和 BF16（≈29.6GB 权重）在 4090 上，哪个 decode 更快？为什么？",
+  o:["BF16 快，精度高缓存友好","一样快，速度只看算力","Q4 快：每 token 读 9GB vs 29.6GB，带宽÷权重量差约 3 倍","BF16 快，量化模型要额外反量化"],a:2,
+  x:"decode 是带宽瓶颈：每 token 把权重读一遍，9GB 比 29.6GB 少读约 3 倍字节，理论速度差约 3 倍（136 vs 34 tok/s，实际打 5~7 折）。反量化的算术开销相对数据搬运可忽略。"},
+ {q:"连续批处理（continuous batching）比静态批快在哪？",
+  o:["它把权重压缩了，读得更快","迭代级调度：请求按「生成一步」为单位随时加入/退出，短请求不用陪跑最长者","它用更大的显存","它把 prompt 变短了"],a:1,
+  x:"静态批凑一批、等最慢的做完才换班，短请求早早完成后空转陪跑，批间还有空窗。Orca（OSDI'22）提出迭代级调度：每生成一步就重新组批，新请求即插、完成即走，吞吐提升数倍。"},
+ {q:"服务显存逼近打满、OOM 在即，优先动哪个（组）参数兜底？",
+  o:["temperature 和 top_p","并发上限（max_num_seqs 调小）与显存水位限制（gpu_memory_utilization），配合排队超时","把日志级别调高","换一个更大的模型"],a:1,
+  x:"OOM 的根源是 KV 随「并发×上下文」膨胀。第一动作是限流：调小 max_num_seqs（vLLM 默认 256）、卡 gpu_memory_utilization（默认 0.9）、给排队加上限与超时——让服务「拒绝得漂亮」而不是崩。采样参数与日志与此无关。"}
+];
+(function(){
+  let qi=0,qs=0,picked=-1,locked=false;
+  const qNo=document.getElementById("qNo"),qText=document.getElementById("qText"),qOpts=document.getElementById("qOpts"),
+    qExp=document.getElementById("qExp"),qSubmit=document.getElementById("qSubmit"),qNext=document.getElementById("qNext"),
+    qRestart=document.getElementById("qRestart"),qVerdict=document.getElementById("qVerdict"),
+    quizScore=document.getElementById("quizScore"),quizBest=document.getElementById("quizBest");
+  const BEST_KEY="gpu-deploy-b-quiz-best";
+  let best=0;try{best=+localStorage.getItem(BEST_KEY)||0}catch(e){}
+  function showBest(){quizBest.textContent=best?` · 最佳 ${best}/5`:""}
+  function loadQ(){
+    picked=-1;locked=false;const Q=QUESTIONS[qi];
+    qNo.textContent=`QUESTION ${qi+1} / ${QUESTIONS.length}`;
+    qText.textContent=Q.q;qOpts.innerHTML="";qExp.classList.remove("show");qVerdict.textContent="";
+    qSubmit.style.display="";qSubmit.disabled=true;qNext.style.display="none";qRestart.style.display="none";
+    Q.o.forEach((o,i)=>{const d=document.createElement("div");d.className="q-opt";
+      d.textContent=String.fromCharCode(65+i)+". "+o;
+      d.onclick=()=>{if(locked)return;picked=i;
+        [...qOpts.children].forEach((x,j)=>x.classList.toggle("picked",j===i));qSubmit.disabled=false};
+      qOpts.appendChild(d)});
+  }
+  qSubmit.onclick=()=>{
+    if(picked<0)return;locked=true;const Q=QUESTIONS[qi],ok=picked===Q.a;
+    if(ok)qs++;
+    [...qOpts.children].forEach((x,i)=>{x.classList.remove("picked");x.classList.add("locked");
+      if(i===Q.a)x.classList.add("right");else if(i===picked)x.classList.add("wrong")});
+    qExp.textContent=(ok?"✓ ":"✗ ")+Q.x;qExp.classList.add("show");
+    quizScore.textContent=`${qs} / ${QUESTIONS.length}`;
+    qVerdict.textContent=ok?"正确":"再想想";qVerdict.className="q-verdict "+(ok?"ok":"bad");
+    qSubmit.style.display="none";
+    if(qi<QUESTIONS.length-1)qNext.style.display="";
+    else{qRestart.style.display="";
+      qVerdict.textContent+=qs>=4?" · 出师！":" · 建议回看 01 / 04 章";
+      if(qs>best){best=qs;try{localStorage.setItem(BEST_KEY,String(best))}catch(e){}}
+      showBest();ckMark("b6",qs>=4);}
+  };
+  qNext.onclick=()=>{qi++;loadQ()};
+  qRestart.onclick=()=>{qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};
+  showBest();loadQ();
+})();
+</script>
+</body>
+</html>

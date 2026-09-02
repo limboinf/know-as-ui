@@ -37,6 +37,14 @@ pi-context-management/
 
 llm-prompt-caching/
 └── a.html                     # LLM 前缀缓存原理、厂商对照与成本实验室
+
+gpu-and-deployment/
+├── a.html                     # 第一页 A：GPU、显存与模型运行的底层认知（显存估算器）
+├── b.html                     # 第二页 B：推理、量化与本地/线上部署（推理时间线、并发模拟器）
+├── c.html                     # 第三页 C：微调实战（知识库 vs 微调面试题、LoRA/QLoRA、训练显存沙盘、需求分流挑战）
+├── d.html                     # 第四页 D：GPU 选型、成本与真实工程案例（部署架构搭建器）
+├── topic.css                  # 四页共享样式
+└── calc.js                    # 四页共享显存/成本公式（硬件表、KV、训练账单、$/1M）
 ```
 
 ## 新增知识点

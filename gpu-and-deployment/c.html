@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>GPU 与模型部署 · C 微调实战</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属组件样式（不动 topic.css） ===== */
+/* 章1 · 好样本 vs 坏样本对照卡 */
+.sample-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:var(--content-rail);margin:16px 0}
+.sample-card{border:1.5px solid var(--line);border-radius:9px;padding:14px 16px;background:#fffdf8}
+.sample-card.good{border-color:var(--ok)}
+.sample-card.bad{border-color:var(--bad)}
+.sample-card h4{font:700 12.5px var(--mono);letter-spacing:.08em;margin-bottom:9px}
+.sample-card.good h4{color:var(--ok)}
+.sample-card.bad h4{color:var(--bad)}
+.sample-card ul{margin:0;padding-left:17px}
+.sample-card li{font-size:13.5px;margin-bottom:5px;line-height:1.6}
+@media(max-width:700px){.sample-grid{grid-template-columns:1fr}}
+
+/* C1 · 训练显存时间线 */
+.c1-stage{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(230px,1fr);gap:18px;align-items:start}
+.c1-stack{display:flex;flex-direction:column-reverse;gap:2px;height:340px;border:1.5px solid var(--ink);border-radius:8px;background:var(--c-free);padding:8px;overflow:hidden}
+.c1-blk{border-radius:3px;display:flex;align-items:center;justify-content:center;font:700 10px var(--mono);color:#fff;opacity:0;transform:translateY(-12px);transition:.45s;height:0;min-height:0;overflow:hidden;white-space:nowrap;flex-shrink:0}
+.c1-blk.show{opacity:1;transform:none}
+.c1-blk.w{background:var(--c-weight)}
+.c1-blk.a{background:var(--c-act)}
+.c1-blk.g{background:var(--c-kv)}
+.c1-blk.o{background:#4a6d8c}
+.c1-banner{display:none;margin-top:12px;padding:10px 14px;border:1.5px solid var(--bad);border-radius:8px;background:#f6dede;font:700 13px var(--mono);color:var(--bad)}
+.c1-banner.show{display:block}
+.c1-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.c1-status{font:12px var(--mono);color:var(--ink-soft);margin-top:8px;min-height:2.6em}
+@media(max-width:760px){.c1-stage{grid-template-columns:1fr}}
+
+/* C2/C4 · 堆叠条第四种颜色：优化器状态（钢蓝，页面级扩展） */
+.vram-seg.opt{background:#4a6d8c}
+.vram-legend .opt{background:#4a6d8c}
+.seg-name{padding:0 6px}
+
+/* C2 · 速度刻度 */
+.speed-track{height:16px;border:1.5px solid var(--ink);border-radius:99px;background:var(--c-free);overflow:hidden;margin:6px 0 4px}
+.speed-fill{height:100%;background:var(--gpu);transition:width .35s}
+
+/* C4 · 需求分流挑战（知识库 vs 微调） */
+.sel-card{border:1.5px solid var(--ink);border-radius:9px;background:#fffdf8;padding:16px 18px;margin:12px 0}
+.sel-no{font:700 11px var(--mono);letter-spacing:.12em;color:var(--ink-soft);margin-bottom:8px}
+.sel-text{font-size:15.5px;line-height:1.65;min-height:3.2em;margin-bottom:14px}
+.sel-btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sel-btns .sim-btn.right{border-color:var(--ok);background:#e2ecdd}
+.sel-btns .sim-btn.wrong{border-color:var(--bad);background:#f6dede;opacity:.85}
+.sel-btns .sim-btn:disabled{cursor:default}
+.sel-fb{margin-top:12px;border-left:3px solid var(--line);background:var(--paper-deep);padding:10px 14px;font-size:13.5px;line-height:1.65}
+.sel-fb.ok{border-left-color:var(--ok)}
+.sel-fb.bad{border-left-color:var(--bad)}
+
+/* 章9 · 上一页/下一页 */
+.pager{display:flex;justify-content:space-between;gap:12px;max-width:var(--content-rail);margin:26px 0 8px;flex-wrap:wrap}
+.pager a{flex:1;min-width:220px;text-decoration:none;border:1.5px solid var(--ink);border-radius:9px;padding:12px 16px;background:#fffdf8;color:var(--ink)}
+.pager a:hover{border-color:var(--accent);color:var(--accent)}
+.pager a span{display:block;font:10.5px var(--mono);letter-spacing:.12em;color:var(--ink-faint);text-transform:uppercase}
+.pager a b{font-size:15px}
+.pager a.next{text-align:right}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">GPU <em>与模型部署</em> · C 微调实战</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="四页导航">
+  <span class="sn-label">GPU 与模型部署 · 四部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>底层认知</a>
+  <a class="sn-item" href="b.html"><b>B</b>推理与部署</a>
+  <a class="sn-item is-current" href="c.html"><b>C</b>微调实战</a>
+  <a class="sn-item" href="d.html"><b>D</b>选型与运维</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一个 14B 模型的一生</span>
+  <span class="cs-act done">序幕 · 在个人电脑跑起来</span>
+  <span class="cs-act done">第二幕 · 变成代码助手</span>
+  <span class="cs-act current">第三幕 · 微调成知识助手</span>
+  <span class="cs-act">第四幕 · 上线 50 人服务</span>
+</div>
+
+<aside class="page-intro">
+  <div class="pi-block prev"><span class="pi-tag">前情 · A / B 页</span>
+    <p>你会算<strong>推理</strong>的账了：权重 + KV + 开销装不装得下，服务端怎么靠批处理和限流稳住并发——但这一切的前提，是「模型保持出厂的样子」。</p>
+  </div>
+  <div class="pi-arrow">→</div>
+  <div class="pi-block this"><span class="pi-tag">本页 · C 微调实战</span>
+    <p>开始<strong>改变模型本身</strong>——用程序员的方式：先过一道 Agent 面试高频题（知识用知识库 RAG，还是微调？），再看全量训练为什么轮不到你（16 字节/参数的账单）、LoRA / QLoRA 怎么把 237GB 的活干成 10.6GB，最后是「一张 4090 过夜」的完整微调姿势。</p>
+  </div>
+</aside>
+
+<!-- ================= 01 ================= -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">「微调」到底在调什么 —— 不是灌知识，是调行为</h2></div>
+  <p class="lede">想把 14B 变成「懂我们公司业务的助手」，第一反应往往是：把公司文档全喂给它训练一遍？<strong>这个直觉大概率是错的，而且错得很贵。</strong></p>
+
+  <div class="note danger"><b>先纠正最大的误区</b>训练 ≠ 灌知识。模型里的知识几乎全部来自<strong>预训练</strong>（读全网文本读出来的）；微调（SFT）调整的是<strong>行为与格式</strong>——「它已经会，只是要教会它按你的方式回答」。一句话：微调让它「会考」，不是让它「变聪明」。想让模型记住公司产品的参数细节，更好的工具是 RAG（检索增强）或把文档写进 system prompt，而不是微调。</div>
+
+  <h3>训练的两大阶段：预训练 → 后训练</h3>
+  <p>顶层分层就两段：<strong>预训练</strong>（pre-training）从零读全网，产出只会「续写」的底座模型（base）；<strong>后训练</strong>（post-training）是底座之后一切「行为塑造」的统称——SFT、偏好对齐都归它。<strong>继续预训练（CPT）不是并列的第三种</strong>，它是预训练的延长线：拿现成底座、继续用「读书」的方式（下一词预测 + 无标注纯文本）喂领域语料，长的是<strong>知识</strong>，不是行为。<span class="badge info">查证 2026-09</span></p>
+  <table>
+    <thead><tr><th>阶段</th><th>在做什么</th><th>后厨比喻</th><th>典型规模</th><th>你要付的代价</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="2"><strong>预训练</strong><br><small>厂商的事</small></td><td>从零读全网文本，学语言与世界知识 → 产出底座模型（base，只会续写不会对话）</td><td>培养一名厨师，从切菜学到满汉全席</td><td>万亿级 token、数千卡、数月（绝大部分算力花在这）</td><td>千万~亿美元级，别碰</td></tr>
+      <tr><td>└ <strong>继续预训练</strong>（CPT）：拿现成底座继续「读书」，喂领域语料（代码 / 医疗 / 法律）——学的还是知识，不是行为</td><td>送资深厨师去进修一个新菜系</td><td>十亿~千亿 token</td><td>贵，且容易把通用能力「练偏」（要掺通用数据防遗忘）；通常是厂商 / 平台做</td></tr>
+      <tr><td rowspan="2"><strong>后训练</strong><br><small>你的入口</small></td><td><strong>SFT 指令微调</strong>（本页主角）：用「指令—回答」对，教「怎么回答」</td><td>给菜谱加一页「本店摆盘规范」</td><td>几百~几万条指令对</td><td>一张消费级卡就可能搞定</td></tr>
+      <tr><td>└ <strong>偏好对齐</strong>（RLHF / DPO）：在多个回答里教它「哪个更好」</td><td>试菜后打分，调整咸淡</td><td>千~万对偏好数据</td><td>流程复杂，通常 SFT 不够再做</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>这张表从上往下，就是从「厂商」走到「你」</b>上半张（预训练和它的延长线 CPT）是模型厂商和基础平台团队的战场——万亿 token、千卡集群、数月周期，做 AI 应用的程序员碰不到，也不用碰；下半张的后训练（SFT、偏好对齐）才是应用工程师做得起、见效快的入口。<strong>本页主角就是 SFT。</strong></div>
+
+  <h3>数据 &gt; 算法：1000 条精样本的传说</h3>
+  <p>2023 年 Meta 的 LIMA 论文做了个著名实验：<strong>只用 1000 条精心挑选/编写的「指令—回答」对</strong>，对 LLaMA 65B 做普通 SFT（无 RLHF），效果能对齐到接近 ChatGPT 的水平（人类评估中 43% 的情况不输 GPT-4）。论文把这叫「表面对齐假说」：能力和知识是预训练给的，对齐只是教会它「该用哪副面孔」。<span class="badge info">查证 2026-09：arXiv:2305.11206</span></p>
+  <div class="note warn"><b>别把传说当定律</b>2024 年起有多篇后续研究（如 arXiv:2410.03717）反驳「仅仅是表面」的说法——对复杂推理任务，数据的<strong>量和质量</strong>仍然实打实地重要。LIMA 教会我们的是优先级：<strong>先把几百条高质量数据做扎实，再谈扩量、换算法、加卡。</strong></div>
+
+  <h3>好样本 vs 坏样本：一张对照卡</h3>
+  <p>你 500 条数据的质量，决定这次微调是「资产」还是「废卡一下午」。动手前拿这张卡过一遍：</p>
+  <div class="sample-grid">
+    <div class="sample-card good">
+      <h4>✓ 好样本</h4>
+      <ul>
+        <li><strong>来自真实场景</strong>：用户真的会这么问（最好从日志里捞）</li>
+        <li><strong>输入输出成对</strong>：回答就是你希望模型学会的样子，直接可用</li>
+        <li><strong>格式统一</strong>：全部过一遍 chat template，别混三种语气</li>
+        <li><strong>覆盖任务分布</strong>：高频问题多、长尾问题也有，难度有梯度</li>
+        <li><strong>已去重、已脱敏</strong>：重复样本放大偏心，敏感信息会背进权重</li>
+      </ul>
+    </div>
+    <div class="sample-card bad">
+      <h4>✗ 坏样本</h4>
+      <ul>
+        <li><strong>拿文档直接切块</strong>：那是 RAG 的料，微调它学不会「回答」</li>
+        <li><strong>回答互相矛盾</strong>：同一问题两个口径，模型学会摇摆</li>
+        <li><strong>全是同一种问法</strong>：过拟合到句式，换个说法就露馅</li>
+        <li><strong>LLM 批量生成不审</strong>：错误会以讹传讹，模型学得比你想象的快</li>
+        <li><strong>灌知识型长文</strong>：指望 SFT 记住参数表——记不牢还挤占行为学习</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note ok"><b>第三幕开演</b>贯穿案例进行到一半：我们的 14B 模型已经在个人电脑跑起来（a 页），也当上了代码助手（b 页）。现在的任务——把它微调成「按公司知识库的回答规范做事」的知识助手。手里素材：客服日志里挑出的 <strong>400 条真实问答</strong>。硬件预算：一张 RTX 4090。它够吗？先把 02 章的面试题过掉——分清这次微调要解决「知道什么」还是「怎么做」——再去 03 章算训练的账。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck1"><div class="ckpt-box">✓</div><div class="ckpt-text">能向同事解释「微调是调行为不是灌知识」，并说出什么时候该用 RAG 而不是微调</div></div>
+    <div class="ckpt-item" data-key="ck1b"><div class="ckpt-box">✓</div><div class="ckpt-text">知道 LIMA「1000 条精样本」结论和它的适用边界</div></div>
+  </div>
+</section>
+
+<!-- ================= 02 ================= -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">知识库（RAG）还是微调小模型 —— Agent 岗的高频面试题</h2></div>
+  <p class="lede">「公司文档每周都在变，为什么要用知识库，而不是把这些知识微调进小模型？」——Agent / AI 应用岗面试的高频题。它考的不是背概念，是你能不能为一条真实需求选对工具。</p>
+
+  <div class="note ok"><b>一句话判准（先背这句）</b>知识库（RAG）解决「模型需要<strong>知道什么</strong>」，微调小模型解决「模型需要<strong>稳定地怎么做</strong>」。<strong>知道什么</strong> = 会变的事实，放外部资料里随查随新；<strong>怎么做</strong> = 不变的动作，练进参数里又快又稳。</div>
+
+  <h3>大白话：活页菜谱 vs 肌肉记忆</h3>
+  <p>延续厨房比喻。知识库像后厨挂一本<strong>活页菜谱</strong>：客人问「这道菜怎么做」，翻到那页照着答，还能补一句「菜谱第 12 页」——<strong>有出处</strong>；菜单明天要改，撕掉旧页换新页立刻生效，不用重新培训厨师。微调像把<strong>摆盘规范练成肌肉记忆</strong>：不用翻书，手起刀落又快又稳，高频出菜不掉链子；但规范一改就得重新培训（重新训练），而且厨师说不出「这个动作是哪次培训学的」——<strong>没有出处</strong>。</p>
+
+  <h3>应用场景：谁该干什么</h3>
+  <p><strong>知识库（RAG）</strong>承载<strong>会更新、需要追溯来源</strong>的业务事实：产品文档、企业制度、价格库存、客户资料、项目知识、最新政策。优势是知识更新快——文档变了、更新索引即可，不需要重新训练模型；回答可以带出处、做权限控制，出了错也容易定位（改的是文档，不是模型）。</p>
+  <p><strong>微调小模型</strong>适合<strong>高频、稳定、输入输出边界明确</strong>的任务：</p>
+  <ul class="plain">
+    <li>客服意图分类与工单路由</li>
+    <li>从合同、发票、病历中抽取固定字段</li>
+    <li>商品属性标准化、内容审核、风险识别</li>
+    <li>把自然语言稳定转换为固定 JSON 或工具调用</li>
+    <li>对检索结果做重排，或把用户问题改写成更适合检索的查询</li>
+  </ul>
+  <div class="note"><b>共同点</b>这些任务<strong>不是缺少知识，而是希望模型长期、稳定、低成本地执行一个「业务动作」</strong>——动作不常变、输入输出有边界、效果可验证，正好是微调的舒适区。</div>
+
+  <h3>一张对比表：七个维度</h3>
+  <table>
+    <thead><tr><th>维度</th><th>知识库 / RAG</th><th>微调小模型</th></tr></thead>
+    <tbody>
+      <tr><td><strong>知识更新</strong></td><td>快：更新文档和索引即可</td><td>慢：要重新准备数据、训练、评测</td></tr>
+      <tr><td><strong>首次投入</strong></td><td>较低：能快速上线验证</td><td>较高：数据、训练、评测体系都要建</td></tr>
+      <tr><td><strong>高频调用成本</strong></td><td>检索、上下文和模型调用持续产生费用</td><td>模型足够小时，边际成本通常更低</td></tr>
+      <tr><td><strong>延迟</strong></td><td>要检索、拼上下文、再生成</td><td>直接推理，适合实时高并发</td></tr>
+      <tr><td><strong>可追溯性</strong></td><td>强：回答可附引用来源</td><td>弱：知识压进参数，难解释出处</td></tr>
+      <tr><td><strong>数据安全</strong></td><td>私有知识库可做权限隔离</td><td>可私有部署，但训练数据治理要求更高</td></tr>
+      <tr><td><strong>适合的任务</strong></td><td>会更新、要出处的知识问答</td><td>高频固定动作：分类、抽取、格式化、路由</td></tr>
+    </tbody>
+  </table>
+
+  <h3>微调小模型的四个前提</h3>
+  <ul class="plain">
+    <li><strong>① 任务足够窄且稳定</strong>：业务目标和输出格式经常变，微调很快过期；像「把商品标题归到指定类目」这样稳定的任务才适合训。</li>
+    <li><strong>② 调用量足够高</strong>：低频任务直接用通用模型或 RAG 更灵活；高频任务才摊得平数据准备、训练、部署和持续评测的成本。</li>
+    <li><strong>③ 有高质量、可验证的样本闭环</strong>：人工纠错、审批结论、用户是否采纳、是否退款、是否转人工——「输入—正确输出—结果验证」缺一不可。</li>
+    <li><strong>④ 效果可以被明确评测</strong>：训练前先定义业务指标——字段抽取准确率、分类 F1、转人工率、审核漏判率、单次处理成本。否则只是在自己的题库上看起来很强。</li>
+  </ul>
+  <div class="note warn"><b>没有闭环就别训</b>条件③最容易被忽略：不是有一堆历史文本就能训。没有「输入—正确输出—结果验证」的闭环，微调本质上是在<strong>把噪声固化进模型</strong>。</div>
+  <p>所以：RAG 通常是业务知识接入的<strong>第一选择</strong>；小模型微调是业务规模化之后，为高频固定动作做<strong>降本增效</strong>的手段。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 C4 · 需求分流挑战（面试模拟）</b><span class="lab-note">8 条真实需求 · 选 知识库 RAG / 微调小模型 / 通用大模型</span></div>
+    <div class="lab-body">
+      <div class="sel-card">
+        <div class="sel-no" id="selNo">需求 1 / 8</div>
+        <div class="sel-text" id="selText"></div>
+        <div class="sel-btns">
+          <button class="sim-btn ghost" data-k="rag">📚 知识库 RAG</button>
+          <button class="sim-btn ghost" data-k="ft">🎓 微调小模型</button>
+          <button class="sim-btn ghost" data-k="llm">🧠 通用大模型</button>
+          <button class="sim-btn" id="selNext" style="display:none">下一题 →</button>
+        </div>
+        <div class="sel-fb" id="selFb">判断依据只有一条：这个需求在解决「知道什么」（会变的事实、要出处），还是「怎么做」（稳定的动作）？拿不准就自问：它需要出处吗？它天天变吗？</div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><span>进度</span><b id="selProg">0 / 8</b></div>
+        <div class="kpi gpu"><span>答对</span><b id="selScore">0</b></div>
+      </div>
+    </div>
+    <div class="lab-foot">判准：知识库 = 会变的事实（要出处）· 微调 = 高频稳定动作（要闭环）· 通用大模型 = 复杂推理与长尾兜底。答对 6 / 8 以上，这道面试题你稳了。</div>
+  </div>
+
+  <h3>合理的架构：三层分工</h3>
+  <div class="diagram">
+    <svg viewBox="0 0 660 240" role="img" aria-label="RAG、微调小模型、通用大模型的三层分工架构">
+      <rect class="dg-box" x="20" y="86" width="160" height="68" rx="6"></rect>
+      <text class="dg-sub" x="100" y="112" text-anchor="middle">业务请求进来</text>
+      <text class="dg-tiny" x="100" y="132" text-anchor="middle">编排层先判断要什么</text>
+      <path class="dg-line dg-dash" d="M180,104 L240,44"></path>
+      <path class="dg-line dg-dash" d="M180,120 L240,120"></path>
+      <path class="dg-line dg-dash" d="M180,136 L240,196"></path>
+      <rect class="dg-green" x="240" y="16" width="400" height="56" rx="6"></rect>
+      <text class="dg-lbl-ink" x="256" y="38">知识层 · 知识库 / RAG</text>
+      <text class="dg-tiny" x="256" y="56">最新、可引用、受权限控制的业务事实：文档 / 制度 / 价格库存 / 政策</text>
+      <rect class="dg-accent" x="240" y="92" width="400" height="56" rx="6"></rect>
+      <text class="dg-lbl-ink" x="256" y="114">动作层 · 微调小模型</text>
+      <text class="dg-tiny" x="256" y="132">高频标准动作：分类 / 抽取 / 路由 / 查询改写 / 重排 —— 快、稳、便宜</text>
+      <rect class="dg-box" x="240" y="168" width="400" height="56" rx="6"></rect>
+      <text class="dg-lbl-ink" x="256" y="190">兜底层 · 通用大模型</text>
+      <text class="dg-tiny" x="256" y="208">复杂推理、长尾问题、拿不准的都丢给它</text>
+    </svg>
+    <figcaption>三层不是三选一，是一条流水线：要「事实」查知识层，要「标准动作」交给微调小模型，剩下的难题给通用大模型兜底。</figcaption>
+  </div>
+  <div class="note ok"><b>一句话总结（面试可以就答这句）</b>RAG 让 Agent 知道最新事实，微调小模型让 Agent 把高频业务动作做得<strong>又快又稳</strong>。回到贯穿案例：把 14B 微调成「按公司规范回答」的知识助手，练的正是「怎么做」（回答规范）；它引用的公司知识本身放知识库——「知道什么」不用训。<strong>下一章开始算这笔训练的账。</strong></div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck2"><div class="ckpt-box">✓</div><div class="ckpt-text">能用一句话说清知识库与微调的分工——「知道什么」vs「稳定地怎么做」，并各举两个适配任务</div></div>
+    <div class="ckpt-item" data-key="ck2b"><div class="ckpt-box">✓</div><div class="ckpt-text">能报出微调的四个前提：任务窄而稳、调用量高、有样本闭环、效果可评测</div></div>
+  </div>
+</section>
+
+<!-- ================= 03 ================= -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">全量训练为什么轮不到你 —— 16 字节/参数的账单</h2></div>
+  <p class="lede">上一章定了方向：微调教的是「怎么做」。动手之前先算一笔账，看清为什么「全量训练」是数据中心的事、不是程序员桌上的事：同一张 24GB 的 4090，跑量化后的 14B 推理绰绰有余（a/b 页已经验证），可一敲下全量训练的命令，几步之内 OOM。<strong>显存去哪了？</strong></p>
+
+  <p>答案在 a 页埋过伏笔：推理只往前算，训练要<strong>反推梯度</strong>。为了能反推，三样东西必须全程住在显存里——这正是「改菜谱」和「照菜谱做菜」的区别：照着做，菜谱摊开一页就够；要改写整本书，你得把每一页的改动记录、修订理由、修订历史全部摊在台面上。</p>
+
+  <h3>每个参数的 16 字节账单</h3>
+  <p>混合精度（BF16 计算）+ AdamW 优化器是当下训练的默认组合，它的显存口径来自 ZeRO 论文（Rajbhandari et al., 2020，<span class="badge info">查证 2026-09：arXiv:1910.02054</span>）——<strong>每个参数约 16 字节，不含激活</strong>：</p>
+  <table>
+    <thead><tr><th>成分</th><th>精度</th><th>字节/参数</th><th>为什么必须在</th></tr></thead>
+    <tbody>
+      <tr><td>权重（工作副本）</td><td>BF16</td><td>2</td><td>前向计算用它</td></tr>
+      <tr><td>梯度</td><td>BF16</td><td>2</td><td>反向逐层回填，「往哪边改」</td></tr>
+      <tr><td>主权重（master copy）</td><td>FP32</td><td>4</td><td>BF16 尾数太短，小更新会被舍入吞掉；真正的参数原文</td></tr>
+      <tr><td>Adam 一阶矩 m</td><td>FP32</td><td>4</td><td>梯度的「动量」（近期平均方向）</td></tr>
+      <tr><td>Adam 二阶矩 v</td><td>FP32</td><td>4</td><td>梯度的「方差」（自适应步长）</td></tr>
+      <tr><td><strong>合计</strong></td><td></td><td><strong>16</strong></td><td>权重2 + 梯度2 + 主权重4 + m4 + v4</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>对着算一遍 14B</b>Qwen2.5-14B 实际 14.8B 参数：<strong><span id="nFull14">237 GB</span></strong>（= 14.8 × 16，不含激活）。其中权重 <span id="nW14">29.6 GB</span>、梯度 29.6 GB、优化器状态（主权重+m+v）<span id="nOpt14">178 GB</span>。对比一下：H100 80GB 只够零头。<strong>这就是「必须多卡或者换方法」的数学根源，不是工程不够努力。</strong></div>
+
+  <h3>激活：第二个大头</h3>
+  <p>还不止 16 字节。前向的中间结果（激活值）必须留着给反向用——它随 <strong>batch × 上下文 × 层数</strong> 线性上涨，长上下文时能追平权重本身。按 Megatron 口径（34 × hidden × 层数 × 每 token 字节，量级估算），14B 在 4×1024 tokens 的批次下激活约 <strong><span id="nAct14">34 GB</span></strong>，峰值合计 ≈ <strong><span id="nPeak14">64 GB</span></strong>——一张 80GB H100 单卡连一步都迈不出去。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 C1 · 训练显存时间线</b><span class="lab-note">Qwen2.5-14B · batch 4×1024 tokens · 不开 checkpointing · 数字现场调用 calc.js</span></div>
+    <div class="lab-body">
+      <div class="c1-stage">
+        <div>
+          <div class="c1-stack" id="c1Stack"></div>
+          <div class="c1-controls">
+            <button class="sim-btn ghost" id="c1Prev" disabled>◀ 上一步</button>
+            <button class="sim-btn" id="c1Next">下一步 →</button>
+            <button class="sim-btn ghost" id="c1Play">▶ 自动播放</button>
+            <button class="sim-btn ghost" id="c1Reset">↺ 重播</button>
+          </div>
+          <div class="c1-status" id="c1Status">点击「下一步」，看一个训练步里显存怎么被吃掉。</div>
+          <div class="c1-banner" id="c1Banner">237 GB 需求 vs 80 GB H100 —— 全量训练 14B，单卡死刑。出路在 04（LoRA）/ 05（QLoRA）：换方法，而不是加卡。</div>
+        </div>
+        <div>
+          <div class="kpi-grid">
+            <div class="kpi"><span>BF16 权重</span><b id="c1W">0 GB</b></div>
+            <div class="kpi"><span>激活（峰值中）</span><b id="c1A">0 GB</b></div>
+            <div class="kpi"><span>梯度</span><b id="c1G">0 GB</b></div>
+            <div class="kpi"><span>优化器状态</span><b id="c1O">0 GB</b></div>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi gpu"><span>显存合计</span><b id="c1T">0 GB</b></div>
+            <div class="kpi"><span>参照 · H100</span><b>80 GB</b></div>
+          </div>
+          <div class="note" style="margin-bottom:0"><b>读图</b>色块高度 ∝ 显存：铁锈=权重，灰褐=激活，琥珀=梯度，钢蓝=优化器状态。条形按 236.8 GB 等比缩放，所以优化器一落位就撑爆画面。</div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">账单公式：GPU_CALC.trainBreakdownGB('full')，激活 = activationGB(5120, 48, 4096, false)。量级估算，数据截至 2026-09。</div>
+  </div>
+
+  <p>顺带预告：如果开启 <strong>gradient checkpointing</strong>（微调的标准姿势里默认开），激活从每 token 34 字节降到 2 字节（4×1024 tokens 时 <span id="nAct14Ck">2 GB</span>），代价是慢 20~30%——一笔几乎总是划算的「时间换显存」。</p>
+
+  <details class="quiz"><summary>小自测：为什么「显存够装权重」不代表「能训练」？</summary>
+    <div class="ans">训练 = 权重(2B) + 梯度(2B) + FP32主权重(4B) + Adam m(4B) + v(4B) = <strong>8 倍于 BF16 推理的权重开销</strong>，再叠加随 batch×上下文增长的激活。24GB 装 14B 的 BF16 权重（29.6GB）尚且不够，训练更无从谈起。</div>
+  </details>
+
+  <details class="quiz"><summary>延伸视野 · 真要做全量训练：多卡的四种切法（了解即可）</summary>
+    <div class="ans">
+      <p style="margin:0 0 8px">预训练和大规模全量训练属于「训练基础设施工程」——平台团队和模型厂商的日常，应用工程师几乎不会亲手做。面试聊到时，一句话分清它们各自切的是什么：</p>
+      <table>
+        <thead><tr><th>切法</th><th>切的是什么</th><th>一句话特征</th></tr></thead>
+        <tbody>
+          <tr><td><strong>DP 数据并行</strong></td><td>切数据：每卡一整份模型</td><td>最省心，前提是单卡装得下</td></tr>
+          <tr><td><strong>TP 张量并行</strong></td><td>切层内矩阵</td><td>每层都通信，要 NVLink，一般 ≤8 卡同机</td></tr>
+          <tr><td><strong>PP 流水线并行</strong></td><td>切层，分段接力</td><td>通信最少，有流水线气泡</td></tr>
+          <tr><td><strong>ZeRO / FSDP</strong></td><td>切状态：每卡只存 1/N</td><td>训练侧万金油，对互联最宽容</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:8px 0 0">应用工程师的口诀只有一句：<strong>装不下，先换方法（LoRA / QLoRA），而不是加卡。</strong>本页主线到此转向——不再追求装下全量训练，而是绕开它。</p>
+    </div>
+  </details>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck3"><div class="ckpt-box">✓</div><div class="ckpt-text">能脱口说出 16 字节账单的五项成分，并解释为什么 14B 全量训练约 237GB</div></div>
+    <div class="ckpt-item" data-key="ck3b"><div class="ckpt-box">✓</div><div class="ckpt-text">知道激活是第二个大头，随 batch × 上下文 × 层数涨</div></div>
+  </div>
+</section>
+
+<!-- ================= 04 ================= -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">LoRA —— 不重写菜谱，页边贴便利贴</h2></div>
+  <p class="lede">237GB 的账单劝退了单卡全量。但你只是想教它「用我们的格式和口吻回答」——<strong>真的需要改全部 148 亿个参数吗？</strong></p>
+
+  <h3>LoRA 是个什么概念</h3>
+  <p>先用大白话说清楚：<strong>LoRA 不是一种模型，是一种「不动原模型」的微调方法。</strong>全量微调要把整个模型重训一遍（14B 就是 148 亿个参数全部更新）；LoRA 反着来——把原模型<strong>整个冻住</strong>，只在旁边新挂一小块可训练的参数，训练时只更新这一小块。训完的产物不是完整模型，而是一个几十到几百 MB 的「补丁文件」，社区叫它 <strong>LoRA adapter</strong>（模型站上供人下载的各种 LoRA 就是它）。对应本章标题的比喻：全量微调是重写整本菜谱，LoRA 是菜谱一页不改、在页边贴便利贴——原书永久保留，便利贴随时可撕可换。</p>
+  <ul class="plain">
+    <li><strong>名字拆解</strong>：LoRA = <strong>Lo</strong>w-<strong>Ra</strong>nk <strong>A</strong>daptation，低秩适配。Adaptation（适配）= 让模型适应你的任务；Low-Rank（低秩）= 改动量用「两个瘦矩阵的乘积」来表达——凭什么敢这么省，下一节讲。</li>
+    <li><strong>底座与补丁的关系</strong>：底座（base）不变，补丁（adapter）即插即拔。推理时可以把补丁<strong>合并</strong>进权重（部署时和普通模型没区别），也可以保持底座不动、按请求挂不同任务的补丁——一个底座服务多个场景。</li>
+    <li><strong>程序员为什么爱它</strong>：显存账单断崖式下降（14B 从 237GB 掉到本章后面的 33GB），48GB 卡舒适；分享和回滚只需拷补丁文件，不用动 29.6GB 的底座。下一章 QLoRA 再把它压进 24GB 卡。</li>
+  </ul>
+
+  <h3>低秩假设：改动其实很小</h3>
+  <p>LoRA（Hu et al., 2021，<span class="badge info">查证 2026-09：arXiv:2106.09685</span>）的出发点是一个实验发现：<strong>微调时权重的「改变量」是低秩的</strong>——看起来要动整个矩阵，实际改动集中在一个低维子空间里（相关结论可追溯至 Aghajanyan et al., 2020 的本征维度研究）。既然如此，别动原矩阵 W，只在旁边挂一对瘦矩阵 A、B（秩 r 很小，如 8~32），用它们的乘积 BA 当「改动量」：</p>
+  <div class="diagram">
+    <svg viewBox="0 0 660 170" role="img" aria-label="LoRA 结构示意：冻结的 W 旁挂低秩 A、B">
+      <rect class="dg-box" x="30" y="30" width="200" height="110" rx="6"></rect>
+      <text class="dg-title" x="130" y="80" text-anchor="middle">W 冻结主干</text>
+      <text class="dg-sub" x="130" y="102" text-anchor="middle">只读 · 2 字节/参数</text>
+      <text class="dg-tiny" x="130" y="122" text-anchor="middle">不进优化器，不存梯度</text>
+      <rect class="dg-accent" x="330" y="86" width="60" height="26" rx="4"></rect>
+      <text class="dg-sub" x="360" y="103" text-anchor="middle">A (d×r)</text>
+      <rect class="dg-accent" x="404" y="56" width="60" height="26" rx="4"></rect>
+      <text class="dg-sub" x="434" y="73" text-anchor="middle">B (r×d)</text>
+      <text class="dg-lbl" x="397" y="42" text-anchor="middle">秩 r = 8~32，很瘦</text>
+      <text class="dg-lbl-ink" x="397" y="136" text-anchor="middle">只有这一对矩阵进优化器（吃 16 字节账单）</text>
+      <path class="dg-line dg-dash" d="M230,85 L330,99"></path>
+      <path class="dg-line dg-dash" d="M464,69 L560,85"></path>
+      <rect class="dg-box" x="560" y="52" width="80" height="66" rx="6" style="stroke-dasharray:4 3"></rect>
+      <text class="dg-sub" x="600" y="80" text-anchor="middle">W + BA</text>
+      <text class="dg-tiny" x="600" y="100" text-anchor="middle">推理时合并</text>
+      <text class="dg-lbl" x="345" y="160">× α/r 缩放后加回主干</text>
+    </svg>
+    <figcaption>LoRA：全量是重写整本菜谱，LoRA 是在页边贴便利贴 —— 书还是那本书</figcaption>
+  </div>
+
+  <h3>显存账立刻变了</h3>
+  <p>关键在于<strong>优化器状态只跟着「可训练参数」走</strong>。冻结主干按推理精度（BF16，2 字节/参数）放着只读；可训练的 LoRA 增量通常只占参数量的 0.1%~1%（本手册按挂满线性层、r≈16 的 0.5% 口径算）。14B 的账变成：</p>
+  <table>
+    <thead><tr><th>成分</th><th>全量 SFT</th><th>LoRA</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>冻结主干</td><td>—（全在训）</td><td id="c3Tfrozen">29.6 GB</td><td>BF16 只读，2 字节/参数</td></tr>
+      <tr><td>可训练参数</td><td>14.8B</td><td id="c3Ttrainable">0.074B（0.5%）</td><td>LoRA 的 A、B 矩阵</td></tr>
+      <tr><td>增量梯度+优化器</td><td>207 GB</td><td id="c3Topt">1.2 GB</td><td>只随 0.074B 参数走（2+4+4+4 字节）</td></tr>
+      <tr><td>激活（4×1024 tok，ckpt 开）</td><td>2 GB</td><td id="c3Tact">2 GB</td><td>反向照算，激活省不了太多</td></tr>
+      <tr><td><strong>合计</strong></td><td><strong>237 GB</strong></td><td><strong id="c3Ttotal">33 GB</strong></td><td>调 trainBreakdownGB('lora') 现场算</td></tr>
+    </tbody>
+  </table>
+  <div class="note ok"><b>判定</b>33 GB → <strong>48GB 卡舒适</strong>（占用约七成）；<strong>24GB 卡装不下</strong>——光 BF16 主干就要 29.6GB，已超 24GB 的可用上限。所以「24GB 跑 14B LoRA」的教程，要么实际开的是 8-bit 主干，要么就是 QLoRA（下一章）。</div>
+
+  <h3>rank 与 alpha 的直觉</h3>
+  <ul class="plain">
+    <li><strong>rank r</strong>：便利贴的「信息容量」。任务越接近模型已会的东西，r 越小越够用——论文里 r=4 起步就常常够；社区常用 <strong>8~32</strong>，r 拉大不会明显变聪明，只会让可训练参数和过拟合风险变大。<span class="badge info">查证 2026-09：LoRA 论文 + Unsloth 指南</span></li>
+    <li><strong>alpha</strong>：便利贴字迹的「浓淡」。增量乘 α/r 后加回主干；实践里常取 <strong>α = r 或 2r</strong>，先固定 α=r、只调 r 是省心开局。</li>
+    <li><strong>target_modules</strong>：便利贴贴在哪几页。只挂注意力层最省；挂上 MLP 线性层效果常更好、可训练参数也更多（本手册 0.5% 口径即「挂满线性层」）。</li>
+  </ul>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck4"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释「为什么 LoRA 的优化器状态可以忽略」——因为只随 0.1%~1% 的可训练参数走</div></div>
+    <div class="ckpt-item" data-key="ck4b"><div class="ckpt-box">✓</div><div class="ckpt-text">知道 14B LoRA ≈ 33GB：48GB 舒适、24GB 装不下 BF16 主干</div></div>
+  </div>
+</section>
+
+<!-- ================= 05 ================= -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">QLoRA —— NF4 存放，BF16 计算，24GB 卡的主战场</h2></div>
+  <p class="lede">LoRA 把 237GB 砍到 33GB，但主干那 29.6GB 还是超了 24GB 卡的门槛。最后一刀砍向主干：<strong>存的时候压缩，算的时候还原。</strong></p>
+
+  <h3>三招</h3>
+  <ul class="plain">
+    <li><strong>① NF4 存主干</strong>：4-bit NormalFloat，专为「权重服从正态分布」设计的信息论最优 4-bit 类型——每参数 <strong>0.5 字节</strong>，14B 主干从 29.6GB 压到 <strong>7.4GB</strong>（b 页的「口袋本菜谱」思路，只是这次是给训练用的）。</li>
+    <li><strong>② 反量化计算</strong>：反向穿过冻结层时，把 NF4 权重<strong>临时反量化成 BF16</strong> 再参与矩阵乘——保证数值上是 16-bit 精度的训练。论文结论：质量不掉档。</li>
+    <li><strong>③ Paged Optimizers</strong>：优化器状态显存吃紧时，借 NVIDIA 统一内存把状态页临时挪到 CPU 内存，避免梯度尖峰时刻 OOM 崩溃。</li>
+  </ul>
+  <div class="note"><b>论文原话级主张</b><span class="badge info">查证 2026-09：arXiv:2305.14314</span>QLoRA 让 <strong>65B 模型在单张 48GB 卡上完成微调</strong>，质量追平 16-bit 全量微调；配套的 Double Quantization 把量化常数本身再量化，65B 上再省约 3GB（每参数约 0.4 bit）。Guanaco 模型即由单卡 24 小时 QLoRA 训出。</div>
+
+  <h3>14B 的账：10~14GB 区间</h3>
+  <p>QLoRA 口径重算（batch 4×1024、checkpointing 开）：主干 NF4 <strong>7.4GB</strong> + LoRA 增量与优化器 <strong>≈1.2GB</strong> + 激活 <strong>≈2GB</strong> = 合计 <strong><span id="nQlora14">10.6 GB</span></strong>。上下文或 batch 加大时向 14GB 靠——所以经验区间是 <strong>10~14GB</strong>：<strong>16GB 卡能跑，24GB 卡舒适</strong>。</p>
+  <table>
+    <thead><tr><th>方法</th><th>主干</th><th>14B 合计（4×1024，ckpt）</th><th>16GB 卡</th><th>24GB 卡</th><th>48GB 卡</th></tr></thead>
+    <tbody>
+      <tr><td>全量 SFT</td><td>BF16 在训</td><td>237 GB</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td>LoRA</td><td>BF16 冻结</td><td>33 GB</td><td>❌</td><td>❌</td><td>✓ 舒适</td></tr>
+      <tr><td><strong>QLoRA</strong></td><td><strong>NF4 冻结</strong></td><td><strong>10.6 GB</strong></td><td>✓ 能跑</td><td>✓ 舒适</td><td>✓ 富余</td></tr>
+    </tbody>
+  </table>
+  <div class="note warn"><b>代价是什么</b>速度。每次穿过冻结层都要反量化，QLoRA 的有效吞吐通常只有 LoRA 的五到六成（量级，工具实现差异大）。省下的钱是显存，付出的是墙钟时间——这正是「一张 4090 过夜」而不是「一下午」的原因。</div>
+
+  <h3>第三幕落地：4090 上的过夜计划</h3>
+  <ul class="plain">
+    <li><strong>数据</strong>：客服日志精选 400 条（c1 的对照卡已过检），8:2 切出 80 条做验证集。</li>
+    <li><strong>配置</strong>：QLoRA（NF4 主干）+ r=16、α=16、lr 2e-4、3 epoch、batch 有效 16（小 batch × gradient accumulation）。<span class="badge info">查证 2026-09：Unsloth 推荐 LoRA/QLoRA 起步 lr=2e-4、1~3 epoch</span></li>
+    <li><strong>时间量级</strong>：4090 上每个 epoch 约 0.5~1 小时（量级粗估，取决于上下文长度与工具），3 epoch 两三小时收工——「过夜」是留给人肉检查数据的富余。</li>
+    <li><strong>checkpoint 挑选规则</strong>：每个 epoch 存一档，<strong>按验证集 loss 挑，不是拿最后一个</strong>；留 2~3 个低 loss 候选，人工各抽 20 题盲评再定稿。</li>
+    <li><strong>交付</strong>：选定 adapter 后两种走法——合并回主干出完整模型，或保留 4-bit 主干 + LoRA 运行（省显存，交给 b 页的部署章）。</li>
+  </ul>
+
+  <details class="quiz"><summary>小自测：QLoRA 里哪些部分是 4-bit，哪些是 16-bit？</summary>
+    <div class="ans"><strong>存的</strong>是 4-bit：冻结主干用 NF4（0.5 字节/参数）。<strong>算的</strong>是 16-bit：前向/反向时反量化成 BF16 参与计算，LoRA 增量与优化器状态也照旧走 16-bit 口径。「4-bit 存放、16-bit 计算」八个字就是 QLoRA。</div>
+  </details>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck5"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出 QLoRA 三招：NF4 存、反量化 BF16 算、paged optimizer</div></div>
+    <div class="ckpt-item" data-key="ck5b"><div class="ckpt-box">✓</div><div class="ckpt-text">能给 14B 定方案：24GB 卡 = QLoRA + 几百条样本 + 1~3 epoch，按验证 loss 挑 checkpoint</div></div>
+  </div>
+</section>
+
+<!-- ================= 06 ================= -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">训练显存沙盘 —— 同一个模型的三种命运</h2></div>
+  <p class="lede">原理讲完，把它装进一台「沙盘」：<strong>选模型 × 选方法 × 拨开关</strong>，看显存账单、卡判定和训练时长怎么联动。重点体验切方法的那一下——全量 ❌ → LoRA ⚠️ → QLoRA ✅。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 C2 · 训练显存沙盘</b><span class="lab-note">全部账单调用 calc.js · 数据截至 2026-09</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>模型</label>
+          <div class="pills" id="c2Models">
+            <button class="pill" data-m="qwen7b">Qwen2.5-7B</button>
+            <button class="pill active" data-m="qwen14b">Qwen2.5-14B</button>
+            <button class="pill" data-m="qwen32b">Qwen2.5-32B</button>
+            <button class="pill" data-m="llama70b">Llama-3.3-70B</button>
+          </div>
+        </div>
+        <div class="ctrl"><label>训练方法</label>
+          <div class="pills" id="c2Methods">
+            <button class="pill" data-meth="full">全量 SFT</button>
+            <button class="pill" data-meth="lora">LoRA</button>
+            <button class="pill active" data-meth="qlora">QLoRA</button>
+          </div>
+        </div>
+        <div class="ctrl"><label>判定用卡（显存阈值）</label>
+          <div class="pills" id="c2Cards">
+            <button class="pill" data-card="8">8GB</button>
+            <button class="pill" data-card="16">16GB</button>
+            <button class="pill active" data-card="24">24GB</button>
+            <button class="pill" data-card="48">48GB</button>
+            <button class="pill" data-card="80">80GB</button>
+          </div>
+        </div>
+        <div class="ctrl"><label>gradient checkpointing</label>
+          <div class="pills" id="c2Ck">
+            <button class="pill active" data-v="1">开（激活 2 B/token）</button>
+            <button class="pill" data-v="0">关（34 B/token）</button>
+          </div>
+        </div>
+      </div>
+      <div class="ctrl-grid">
+        <div class="ctrl"><label><span>batch 大小</span><b id="c2BatchV">4</b></label><input type="range" id="c2Batch" min="1" max="16" step="1" value="4"></div>
+        <div class="ctrl"><label><span>单条上下文（tokens）</span><b id="c2CtxV">1024</b></label><input type="range" id="c2Ctx" min="512" max="8192" step="256" value="1024"></div>
+        <div class="ctrl"><label><span>数据集条数（估时长用）</span><b id="c2SamplesV">400</b></label><input type="range" id="c2Samples" min="100" max="5000" step="100" value="400"></div>
+      </div>
+
+      <div class="vram-legend"><span><i class="weight"></i>主干（LoRA/QLoRA 冻结存放）</span><span><i class="kv"></i>权重+梯度（全量时全部在此格）</span><span><i class="opt"></i>优化器状态</span><span><i class="act"></i>激活</span><span><i class="free"></i>剩余（相对所选卡）</span></div>
+      <div class="vram-stack" id="c2Stack">
+        <div class="vram-seg weight" id="c2sFrozen"></div>
+        <div class="vram-seg kv" id="c2sWg"></div>
+        <div class="vram-seg opt" id="c2sOpt"></div>
+        <div class="vram-seg act" id="c2sAct"></div>
+        <div class="vram-seg free" id="c2sFree"></div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi gpu"><span>显存需求合计</span><b id="c2Total">—</b></div>
+        <div class="kpi" id="c2VerdictKpi"><span>判定（可用含 5% 系统余量）</span><b id="c2Verdict">—</b></div>
+        <div class="kpi"><span>可训练参数占比</span><b id="c2Trainable">—</b></div>
+        <div class="kpi"><span>相对训练速度</span><b id="c2Speed">—</b></div>
+        <div class="kpi"><span>≈ 每 epoch（4090 口径）</span><b id="c2Epoch">—</b></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="font:11px var(--mono);color:var(--ink-faint)">剧情预设 →</span>
+        <button class="pill" id="c2pFull">14B 全量 · 三种命运之一</button>
+        <button class="pill" id="c2pLora">14B LoRA</button>
+        <button class="pill" id="c2pQlora">14B QLoRA</button>
+      </div>
+      <p id="c2Info" style="max-width:none;font-size:13.5px;color:var(--ink-soft);margin-top:12px"></p>
+    </div>
+    <div class="lab-foot">trainBreakdownGB + activationGB + verdict 现场计算；速度/时长为量级粗估（全量=1.0、LoRA≈0.9、QLoRA≈0.5；ckpt 再 ×0.75；MFU 0.35 的 4090 参照），非精确基准。</div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck6"><div class="ckpt-box">✓</div><div class="ckpt-text">亲手把 14B 从全量切到 QLoRA，说清 237GB → 10.6GB 里每一项怎么变小的</div></div>
+    <div class="ckpt-item" data-key="ck6b"><div class="ckpt-box">✓</div><div class="ckpt-text">知道 70B 即使 QLoRA 也要 ~46GB：48GB 勉强、80GB 舒适</div></div>
+  </div>
+</section>
+
+<!-- ================= 07 ================= -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">终极测验 —— 五题出师</h2></div>
+  <p class="lede">5 题验收。答对 4 题，你就有底气在评审会上对「上四张 A100 全量微调」的方案说不，也对「把公司文档全喂给模型微调」的需求说不。</p>
+  <div class="quizbox"><div class="quiz-head"><span>FINAL EXAM · FINE-TUNING</span><strong id="quizScore">0 / 5</strong></div><div class="quiz-body"><div class="q-no" id="qNo"></div><div class="q-text" id="qText"></div><div id="qOpts"></div><div class="q-exp" id="qExp"></div></div><div class="quiz-foot"><button class="sim-btn" id="qSubmit" disabled>确认答案</button><button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button><button class="sim-btn ghost" id="qRestart" style="display:none">↺ 重新考</button><span class="q-verdict" id="qVerdict"></span></div></div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div>
+    <div class="ckpt-item" data-key="ck7"><div class="ckpt-box">✓</div><div class="ckpt-text">测验拿到 4 / 5 以上</div></div>
+  </div>
+</section>
+
+<!-- ================= 08 ================= -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">本页所有账单由目录下 <code>calc.js</code> 统一计算（四页共享，避免 a/c/d 数字打架）。以下论文与文档为口径出处，链接核对于 2026-09。</p>
+
+  <h3>论文</h3>
+  <ul class="plain source-list">
+    <li>LoRA: Low-Rank Adaptation of Large Language Models — Hu et al., 2021 · 低秩假设、r/α 口径 · <a href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener">arXiv:2106.09685</a> <span class="badge info">查证 2026-09</span></li>
+    <li>QLoRA: Efficient Finetuning of Quantized LLMs — Dettmers et al., 2023 · 65B 单卡 48GB、NF4、Double Quantization（约省 0.4 bit/参数）、Paged Optimizers · <a href="https://arxiv.org/abs/2305.14314" target="_blank" rel="noopener">arXiv:2305.14314</a> <span class="badge info">查证 2026-09</span></li>
+    <li>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models — Rajbhandari et al., 2020 · 混合精度 + Adam 每参数 16 字节的出处（2+2+4+4+4）· <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">arXiv:1910.02054</a> <span class="badge info">查证 2026-09</span></li>
+    <li>FSDP / PyTorch ZeRO 系列 — Zhao et al., 2023 · <a href="https://arxiv.org/abs/2304.11277" target="_blank" rel="noopener">arXiv:2304.11277</a> <span class="badge info">查证 2026-09</span></li>
+    <li>LIMA: Less Is More for Alignment — Zhou et al., 2023 · 1000 条精样本 + 表面对齐假说 · <a href="https://arxiv.org/abs/2305.11206" target="_blank" rel="noopener">arXiv:2305.11206</a> <span class="badge info">查证 2026-09</span></li>
+    <li>Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning — Aghajanyan et al., 2020 · 低秩假设的前身 · <a href="https://arxiv.org/abs/2012.13255" target="_blank" rel="noopener">arXiv:2012.13255</a> <span class="badge info">查证 2026-09</span></li>
+    <li>（反方观点）Revisiting the Superficial Alignment Hypothesis — 2024 · 对齐不止是学格式 · <a href="https://arxiv.org/abs/2410.03717" target="_blank" rel="noopener">arXiv:2410.03717</a> <span class="badge info">查证 2026-09</span></li>
+    <li>RAG: Retrieval-Augmented Generation — Lewis et al., 2020 · 「知识放外部检索、不进参数」路线的出处（02 章选型框架的原型）· <a href="https://arxiv.org/abs/2005.11401" target="_blank" rel="noopener">arXiv:2005.11401</a> <span class="badge info">查证 2026-09</span></li>
+  </ul>
+
+  <h3>文档与工具（2026 年微调三件套的一句话定位）</h3>
+  <ul class="plain source-list">
+    <li>Unsloth — 重写内核，单卡速度与显存效率首选；其<a href="https://unsloth.ai/docs/get-started/fine-tuning-llms-guide/lora-hyperparameters-guide" target="_blank" rel="noopener">LoRA 超参指南</a>是 lr 2e-4 / 1~3 epoch 建议的出处 <span class="badge info">查证 2026-09</span></li>
+    <li>LLaMA-Factory — WebUI 工作流友好，适合不写代码的微调（内部可挂 Unsloth 后端）· <a href="https://github.com/hiyouga/LLaMA-Factory" target="_blank" rel="noopener">GitHub</a> <span class="badge info">查证 2026-09</span></li>
+    <li>Axolotl — YAML 驱动、多卡/分布式配置可复现性强 · <a href="https://github.com/axolotl-ai-cloud/axolotl" target="_blank" rel="noopener">GitHub</a> <span class="badge info">查证 2026-09</span></li>
+    <li>Hugging Face PEFT（LoRA/QLoRA 官方实现）· <a href="https://huggingface.co/docs/peft" target="_blank" rel="noopener">huggingface.co/docs/peft</a>；TRL（SFT/DPO Trainer）· <a href="https://huggingface.co/docs/trl" target="_blank" rel="noopener">huggingface.co/docs/trl</a> <span class="badge info">查证 2026-09</span></li>
+    <li>bitsandbytes（NF4 / 8-bit optimizer 的实现库）· <a href="https://huggingface.co/docs/bitsandbytes" target="_blank" rel="noopener">huggingface.co/docs/bitsandbytes</a> <span class="badge info">查证 2026-09</span></li>
+  </ul>
+
+  <nav class="pager">
+    <a href="b.html"><span>← 上一页</span><b>B · 推理、量化与本地/线上部署</b></a>
+    <a class="next" href="d.html"><span>下一页 →</span><b>D · 选型、成本与真实工程案例</b></a>
+  </nav>
+  <footer class="colophon">资料核对日期：2026-09-02 · 显存账单由 calc.js 现场计算，量级估算，请以论文与官方文档为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="calc.js"></script>
+<script>
+/* ===== TOC + scrollspy + 进度条 ===== */
+const chapters=[...document.querySelectorAll("section.chapter")],toc=document.getElementById("toc");
+const names=["微调到底调什么","知识库还是微调","全量训练的账单","LoRA 便利贴","QLoRA 四比特","训练显存沙盘","终极测验","参考资料"];
+chapters.forEach((sec,i)=>{const a=document.createElement("a");a.href="#"+sec.id;a.innerHTML='<span class="no">'+String(i+1).padStart(2,"0")+'</span>'+names[i];toc.appendChild(a)});
+const links=[...toc.querySelectorAll("a")],progFill=document.getElementById("progFill"),progLabel=document.getElementById("progLabel");
+function updateSpy(){const y=scrollY+140;let cur=0;chapters.forEach((s,i)=>{if(s.offsetTop<=y)cur=i});links.forEach((a,i)=>a.classList.toggle("active",i===cur));progFill.style.width=((cur+1)/chapters.length*100)+"%";progLabel.textContent=(cur+1)+" / "+chapters.length+" 章"}
+addEventListener("scroll",updateSpy,{passive:true});addEventListener("resize",updateSpy);updateSpy();
+
+/* ===== 通关打卡（localStorage 前缀 gpu-deploy-c-） ===== */
+const CK="gpu-deploy-c-checkpoints";let ck={};try{ck=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){}
+document.querySelectorAll(".ckpt-item").forEach(el=>{if(ck[el.dataset.key])el.classList.add("done");el.onclick=()=>{el.classList.toggle("done");ck[el.dataset.key]=el.classList.contains("done");try{localStorage.setItem(CK,JSON.stringify(ck))}catch(e){}}});
+
+/* ===== 公共句柄 ===== */
+const G=window.GPU_CALC;
+function fmt(x){return G?G.fmtGB(x):(Math.round(x*10)/10+" GB")}
+function setTxt(id,v){const el=document.getElementById(id);if(el)el.textContent=v}
+
+/* ===== 正文关键数字：现场调用 calc.js 填充（14B 口径） ===== */
+(function(){
+  if(!G)return;
+  const M=G.MODELS.qwen14b,P=M.paramsB;
+  const act=G.activationGB(M.hidden,M.layers,4096,false),actCk=G.activationGB(M.hidden,M.layers,4096,true);
+  setTxt("nFull14",fmt(G.trainBreakdownGB(P,"full",{activationGB:0}).total));
+  setTxt("nW14",fmt(G.weightGB(P,"bf16")));
+  setTxt("nOpt14",fmt(G.trainBreakdownGB(P,"full",{activationGB:0}).optimizer));
+  setTxt("nAct14",fmt(act));
+  setTxt("nPeak14",fmt(G.weightGB(P,"bf16")+act));
+  setTxt("nAct14Ck",fmt(actCk));
+  setTxt("nQlora14",fmt(G.trainBreakdownGB(P,"qlora",{activationGB:actCk}).total));
+  /* 章3 LoRA 对照表 */
+  const b=G.trainBreakdownGB(P,"lora",{activationGB:actCk});
+  setTxt("c3Tfrozen",fmt(b.frozen));
+  setTxt("c3Ttrainable",b.trainableParamsB.toFixed(3)+"B（0.5%）");
+  setTxt("c3Topt",fmt(b.gradients+b.optimizer));
+  setTxt("c3Tact",fmt(b.activations));
+  setTxt("c3Ttotal",fmt(b.total));
+})();
+
+/* ===== C1 · 训练显存时间线 ===== */
+(function(){
+  if(!G)return;
+  const M=G.MODELS.qwen14b,P=M.paramsB;
+  const bill=G.trainBreakdownGB(P,"full",{activationGB:0});   /* 16 字节账单唯一出处 */
+  const wGB=bill.weights, gradEach=bill.gradients/8, optEach=bill.optimizer/3;
+  const actEach=G.activationGB(M.hidden,M.layers,4096,false)/8;
+  const stack=document.getElementById("c1Stack"),status=document.getElementById("c1Status"),banner=document.getElementById("c1Banner");
+  const btnPrev=document.getElementById("c1Prev"),btnNext=document.getElementById("c1Next"),btnPlay=document.getElementById("c1Play"),btnReset=document.getElementById("c1Reset");
+  function mk(cls,label,gb,hidden){const d=document.createElement("div");d.className="c1-blk "+cls;d.style.height=Math.max(4,Math.round(gb*1.05))+"px";d.textContent=label;if(hidden)d.title=label;return d}
+  const wEl=mk("w","BF16 权重 "+fmt(wGB),wGB);
+  stack.appendChild(wEl);
+  const actEls=[];for(let i=0;i<8;i++){actEls.push(mk("a","",actEach,"L"+(48-i*6-5)+"-"+(48-i*6)))}
+  const gradEls=[];for(let i=0;i<8;i++){gradEls.push(mk("g","",gradEach,"梯度切片"))}
+  gradEls.forEach(e=>{e.textContent=""});
+  const optEls=[mk("o","FP32 主权重 "+fmt(optEach),optEach),mk("o","Adam m "+fmt(optEach),optEach),mk("o","Adam v "+fmt(optEach),optEach)];
+  optEls.forEach(e=>stack.appendChild(e));
+  gradEls.forEach(e=>stack.appendChild(e));
+  actEls.forEach(e=>stack.appendChild(e));
+  /* 列优先反转显示：stack 是 column-reverse，后 append 的排底部；层级顺序 权重(顶)→激活→梯度→优化器(底) */
+  const STEPS=[
+    {a:0,g:0,o:0,t:"第 0 步 · 一张空卡。CUDA 上下文约 0.5~1GB，此处忽略。"},
+    {a:0,g:0,o:0,t:"第 1 步 · 权重进场：BF16 权重 "+fmt(wGB)+" 常驻显存（14.8B × 2 字节），到训练结束都不会离开。"},
+    {a:4,g:0,o:0,t:"前向·上半场：逐层计算，激活（中间结果）开始堆高——它们必须留着，等反向来回溯梯度。"},
+    {a:8,g:0,o:0,t:"前向·下半场：48 层全部算完，激活堆到峰值 "+fmt(G.activationGB(M.hidden,M.layers,4096,false))+"，合计 ≈ "+fmt(P*2+G.activationGB(M.hidden,M.layers,4096,false))+"。还没更新一个参数呢。"},
+    {a:4,g:4,o:0,t:"反向·上半场：从顶层往回算梯度，激活用完一层释放一层（此消彼长，峰值已过）。"},
+    {a:0,g:8,o:0,t:"反向·下半场：梯度回填完毕 "+fmt(bill.gradients)+"，激活清零。当前合计 ≈ "+fmt(bill.weights+bill.gradients)+"。"},
+    {a:0,g:8,o:3,t:"优化器步：Adam 一阶矩 m、二阶矩 v 和 FP32 主权重同时落位，一举 +"+fmt(P*12)+"！这就是 16 字节账单里最重的 12 字节。"},
+    {a:0,g:8,o:3,t:"终局：合计 "+fmt(G.trainBreakdownGB(P,"full",{activationGB:0}).total)+"（不含激活波动）。对照右侧 80GB 的 H100——全量训练 14B，单卡没有生路。"}
+  ];
+  let si=0,timer=null;
+  const kpiW=document.getElementById("c1W"),kpiA=document.getElementById("c1A"),kpiG=document.getElementById("c1G"),kpiO=document.getElementById("c1O"),kpiT=document.getElementById("c1T");
+  function render(){
+    const s=STEPS[si];
+    wEl.classList.toggle("show",si>=1);
+    actEls.forEach((e,i)=>e.classList.toggle("show",i<s.a));
+    gradEls.forEach((e,i)=>e.classList.toggle("show",i<s.g));
+    optEls.forEach((e,i)=>e.classList.toggle("show",i<s.o));
+    const a=actEach*s.a,g=gradEach*s.g,o=optEach*s.o,w=si>=1?wGB:0;
+    kpiW.textContent=fmt(w);kpiA.textContent=fmt(a);kpiG.textContent=fmt(g);kpiO.textContent=fmt(o);kpiT.textContent=fmt(w+a+g+o);
+    status.textContent=s.t;
+    banner.classList.toggle("show",si>=7);
+    btnPrev.disabled=si===0;
+    btnNext.textContent=si>=STEPS.length-1?"从头再看 ↺":"下一步 →";
+  }
+  function stop(){if(timer){clearInterval(timer);timer=null}btnPlay.textContent="▶ 自动播放"}
+  btnPrev.onclick=()=>{si=Math.max(0,si-1);stop();render()};
+  btnNext.onclick=()=>{si=si>=STEPS.length-1?0:si+1;stop();render()};
+  btnReset.onclick=()=>{si=0;stop();render()};
+  btnPlay.onclick=()=>{if(timer){stop();return}si=0;render();btnPlay.textContent="⏸ 暂停";timer=setInterval(()=>{if(si>=STEPS.length-1){stop();return}si++;render()},1700)};
+  render();
+})();
+
+/* ===== C2 · 训练显存沙盘 ===== */
+(function(){
+  if(!G)return;
+  const st={model:"qwen14b",method:"qlora",card:24,ckpt:true,batch:4,ctx:1024,samples:400};
+  const MF={full:1,lora:0.9,qlora:0.5};       /* 方法相对速度（量级） */
+  const MFU=0.35, REF_TFLOPS=165;             /* 4090 口径粗估 */
+  function wire(groupId,attr,key,cast){document.querySelectorAll("#"+groupId+" .pill").forEach(p=>p.onclick=()=>{document.querySelectorAll("#"+groupId+" .pill").forEach(x=>x.classList.remove("active"));p.classList.add("active");st[key]=cast?cast(p.dataset[attr]):p.dataset[attr];render()})}
+  wire("c2Models","m","model");
+  wire("c2Methods","meth","method");
+  wire("c2Cards","card","card",Number);
+  document.querySelectorAll("#c2Ck .pill").forEach(p=>p.onclick=()=>{document.querySelectorAll("#c2Ck .pill").forEach(x=>x.classList.remove("active"));p.classList.add("active");st.ckpt=p.dataset.v==="1";render()});
+  const rB=document.getElementById("c2Batch"),rC=document.getElementById("c2Ctx"),rS=document.getElementById("c2Samples");
+  rB.oninput=()=>{st.batch=+rB.value;setTxt("c2BatchV",rB.value);render()};
+  rC.oninput=()=>{st.ctx=+rC.value;setTxt("c2CtxV",rC.value);render()};
+  rS.oninput=()=>{st.samples=+rS.value;setTxt("c2SamplesV",rS.value);render()};
+  document.getElementById("c2pFull").onclick=()=>apply("full");
+  document.getElementById("c2pLora").onclick=()=>apply("lora");
+  document.getElementById("c2pQlora").onclick=()=>apply("qlora");
+  function apply(method){st.model="qwen14b";st.method=method;st.card=24;st.ckpt=true;st.batch=4;st.ctx=1024;
+    [["c2Models","m",st.model],["c2Methods","meth",method],["c2Cards","card","24"]].forEach(([id,attr,val])=>{document.querySelectorAll("#"+id+" .pill").forEach(p=>p.classList.toggle("active",p.dataset[attr]===val))});
+    document.querySelectorAll("#c2Ck .pill").forEach(p=>p.classList.toggle("active",p.dataset.v==="1"));
+    rB.value=4;setTxt("c2BatchV","4");rC.value=1024;setTxt("c2CtxV","1024");
+    render();}
+  function render(){
+    const M=G.modelById(st.model),P=M.paramsB;
+    const seq=st.batch*st.ctx;
+    const act=G.activationGB(M.hidden,M.layers,seq,st.ckpt);
+    const b=G.trainBreakdownGB(P,st.method,{activationGB:act});
+    const usable=G.usableVRAM(st.card);
+    const v=G.verdict(b.total,usable);
+    const segs=[[document.getElementById("c2sFrozen"),b.frozen],[document.getElementById("c2sWg"),b.weights+b.gradients],[document.getElementById("c2sOpt"),b.optimizer],[document.getElementById("c2sAct"),b.activations]];
+    const names=["主干","权重+梯度","优化器","激活"];
+    segs.forEach(([el,val],i)=>{const pct=Math.min(100,val/usable*100);el.style.width=pct+"%";el.textContent=(pct>14?names[i]+" "+fmt(val):"")});
+    const rest=Math.max(0,usable-b.total);
+    const fEl=document.getElementById("c2sFree");fEl.style.width=Math.max(0,100-Math.min(100,b.total/usable*100))+"%";fEl.textContent=rest>0&&rest/usable>0.14?"剩余 "+fmt(rest):"";
+    setTxt("c2Total",fmt(b.total));
+    const vk=document.getElementById("c2Verdict");vk.textContent=v.level==="ok"?"✓ 装下":(v.level==="tight"?"⚠ 紧张":"✗ 爆：OOM");
+    vk.parentElement.className="kpi "+(v.level==="ok"?"ok":(v.level==="tight"?"warn":"bad"));
+    setTxt("c2Trainable",st.method==="full"?"100%（全量）":(b.trainableParamsB.toFixed(3)+"B（"+(b.trainableParamsB/P*100).toFixed(1)+"%）"));
+    const ckF=st.ckpt?0.75:1, sp=MF[st.method]*ckF;
+    setTxt("c2Speed",Math.round(sp*100)+"%");
+    const flops=6*P*1e9*st.samples*st.ctx;
+    const hours=flops/(REF_TFLOPS*1e12*MFU*sp)/3600;
+    setTxt("c2Epoch",hours>=100?"99+ 小时":(hours>=10?Math.round(hours)+" 小时":(hours>=1?hours.toFixed(1)+" 小时":Math.max(1,Math.round(hours*60))+" 分钟")));
+    const totalStr=fmt(G.trainBreakdownGB(P,"full",{activationGB:0}).total);
+    const info=st.method==="full"
+      ?M.name+" 全量 SFT：状态 "+totalStr+"（16 字节/参数）+ 激活。单卡无解——先换方法（LoRA/QLoRA），真要全量才轮到多卡集群（03 章「延伸视野」）。"
+      :(st.method==="lora"
+        ?M.name+" LoRA：主干 BF16 冻结 "+fmt(b.frozen)+"，只有 "+(b.trainableParamsB/P*100).toFixed(1)+"% 参数吃 16 字节账单。主干本身就可能超 24GB——放不下就转 QLoRA。"
+        :M.name+" QLoRA：主干 NF4 "+fmt(b.frozen)+"（0.5 字节/参数），计算时反量化回 BF16。速度约为 LoRA 的一半，换来 24GB 卡的自由。");
+    setTxt("c2Info",info+" 上下文 "+st.ctx+" × batch "+st.batch+" 的激活 "+fmt(act)+"（checkpointing "+(st.ckpt?"开":"关")+"）。");
+  }
+  render();
+})();
+
+/* ===== 章7 · 终极测验 ===== */
+const QUESTIONS=[
+ {q:"混合精度（BF16 计算）+ AdamW 的全量训练，每个参数约吃多少字节显存（不含激活）？五项成分是？",o:["8 字节：权重2+梯度2+m2+v2","16 字节：权重2+梯度2+FP32主权重4+m4+v4","6 字节：BF16 权重2+梯度2+FP32 主权重2","24 字节：权重、梯度、优化器各 8"],a:1,x:"ZeRO 论文口径：2+2+4+4+4=16。优化器三兄弟（主权重、m、v）占 12 字节，比权重本身还多——这就是「训练显存 ≈ 推理的 8 倍起步」的根源。"},
+ {q:"LoRA 和全量微调的本质差别是什么？",o:["LoRA 学习率更小所以更稳","LoRA 冻结主干只训低秩增量，优化器状态只随可训练参数走","LoRA 把模型量化到 4-bit 再训练","LoRA 不需要反向传播"],a:1,x:"冻结主干（按推理精度只读存放），只训一对瘦矩阵 BA；16 字节账单只作用于 0.1%~1% 的可训练参数，优化器状态从上百 GB 缩到 GB 级。反向传播照样要穿过整个网络。"},
+ {q:"QLoRA 里，主干用什么精度存放、用什么精度参与计算？",o:["INT4 存、INT4 算","NF4 存、反量化成 BF16 算","BF16 存、INT4 算","FP8 存、FP8 算"],a:1,x:"「4-bit 存放、16-bit 计算」：NF4 只省存放（0.5 字节/参数），每次前向/反向穿过冻结层时反量化回 BF16，保证训练数值是 16-bit 精度——这是它质量不掉档的关键。"},
+ {q:"Gradient checkpointing 拿什么换了什么？",o:["拿精度换速度：损失变大但更快","拿显存换时间：存激活更少但更快","拿时间换显存：激活从 34 B/token 降到 2 B/token，速度慢 20~30%","纯赚：又省显存又快"],a:2,x:"不存中间激活、反向时重算——激活存放省约九成（34→2 B/token），代价是重算的 20~30% 时间。微调的标准姿势里它默认开着。"},
+ {q:"智能客服上线：促销政策每周都在变、回答要给政策文件出处；同时进线要自动分类到 12 个部门（日均 5 万单）。技术方案怎么分？",o:["政策和分类一起微调进一个 14B 模型","政策问答走 RAG（更新快、可引用），工单分类用微调的小模型","全部走 RAG，分类也靠检索相似工单","全部交给通用大模型 API，不做区分"],"a":1,x:"判准：知识库解决「知道什么」（会变、要出处），微调解决「稳定怎么做」（高频、边界明确）。分类靠检索相似工单既慢又不稳；政策微调进参数必然过期；全部丢给通用大模型则高频动作的成本和延迟都吃亏。复杂长尾才轮到通用大模型兜底。"}
+];
+let qi=0,qs=0,picked=-1,locked=false;
+const qNo=document.getElementById("qNo"),qText=document.getElementById("qText"),qOpts=document.getElementById("qOpts"),qExp=document.getElementById("qExp"),qSubmit=document.getElementById("qSubmit"),qNext=document.getElementById("qNext"),qRestart=document.getElementById("qRestart"),qVerdict=document.getElementById("qVerdict"),quizScore=document.getElementById("quizScore");
+try{const best=localStorage.getItem("gpu-deploy-c-quizbest");if(best)quizScore.textContent="最佳 "+best+" / 5"}catch(e){}
+function loadQ(){picked=-1;locked=false;const Q=QUESTIONS[qi];qNo.textContent="QUESTION "+(qi+1)+" / "+QUESTIONS.length;qText.textContent=Q.q;qOpts.innerHTML="";Q.o.forEach((o,i)=>{const d=document.createElement("div");d.className="q-opt";d.textContent=String.fromCharCode(65+i)+". "+o;d.onclick=()=>{if(locked)return;picked=i;[...qOpts.children].forEach((x,j)=>x.classList.toggle("picked",j===i));qSubmit.disabled=false};qOpts.appendChild(d)});qExp.classList.remove("show");qVerdict.textContent="";qSubmit.style.display="";qSubmit.disabled=true;qNext.style.display="none";qRestart.style.display="none"}
+qSubmit.onclick=()=>{if(picked<0||locked)return;locked=true;const Q=QUESTIONS[qi],ok=picked===Q.a;if(ok)qs++;[...qOpts.children].forEach((x,i)=>{x.classList.remove("picked");x.classList.add("locked");if(i===Q.a)x.classList.add("right");else if(i===picked)x.classList.add("wrong")});qExp.textContent=(ok?"✓ ":"✗ ")+Q.x;qExp.classList.add("show");quizScore.textContent=qs+" / "+QUESTIONS.length;qVerdict.textContent=ok?"正确":"再想想";qVerdict.className="q-verdict "+(ok?"ok":"bad");qSubmit.style.display="none";if(qi<QUESTIONS.length-1)qNext.style.display="";else{qRestart.style.display="";qVerdict.textContent+=qs>=4?" · 出师！可以去 d 页算钱了":" · 建议复习 02 / 03 章";try{const best=+localStorage.getItem("gpu-deploy-c-quizbest")||0;if(qs>best)localStorage.setItem("gpu-deploy-c-quizbest",String(qs))}catch(e){}}};
+qNext.onclick=()=>{qi++;loadQ()};
+qRestart.onclick=()=>{qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};
+loadQ();
+</script>
+</body>
+</html>
