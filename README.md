@@ -45,6 +45,11 @@ gpu-and-deployment/
 ├── d.html                     # 第四页 D：GPU 选型、成本与真实工程案例（部署架构搭建器）
 ├── topic.css                  # 四页共享样式
 └── calc.js                    # 四页共享显存/成本公式（硬件表、KV、训练账单、$/1M）
+
+dsh-cordis/
+├── a.html                     # dsh Cordis 与插件开发交互手册（插件树装卸模拟、fiber 动画、waterfall 决策链、patch 叠层、工具/钩子插件实战）
+├── topic.css                  # 系列共享样式
+└── assets/                    # 配图（出自腾讯技术工程原文）
 ```
 
 ## 新增知识点

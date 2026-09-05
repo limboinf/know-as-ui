@@ -1,0 +1,107 @@
+/* dsh Cordis 与插件开发 · 单页共享样式
+   页面专属的组件样式写在 a.html 的 <style> 块里，不要改这个文件。 */
+:root{
+  --dsh:#4a5df9;          /* 系列主题色：DeepSeek 蓝 */
+  --dsh-soft:#e8ebfd;
+  --dsh-deep:#2c3bb8;
+  --dsh-ink:#232a52;      /* 深蓝墨色（深色面板底） */
+  --stack-hi:#e8b04a;     /* effect 栈高亮琥珀 */
+}
+
+/* ===== 通用交互面板壳 ===== */
+.lab{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:18px 0;overflow:hidden}
+.lab-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;background:var(--dsh-soft);border-bottom:1.5px solid var(--ink);flex-wrap:wrap}
+.lab-head b{font:700 12px var(--mono);letter-spacing:.08em}
+.lab-body{padding:18px}
+.lab-foot{padding:12px 16px;border-top:1px solid var(--line);background:var(--paper-deep);font:12px var(--mono);color:var(--ink-soft)}
+
+.ctrl{margin-bottom:16px}
+.ctrl > label{display:flex;justify-content:space-between;align-items:baseline;font:11px var(--mono);color:var(--ink-soft);margin-bottom:6px}
+.ctrl > label b{font:800 14px var(--mono);color:var(--ink)}
+.ctrl > label b em{font-style:normal;color:var(--dsh)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{border:1px solid var(--line);background:#fffdf8;border-radius:99px;padding:5px 11px;font:600 11px var(--mono);cursor:pointer;color:var(--ink-soft);transition:.15s}
+.pill:hover{border-color:var(--dsh);color:var(--dsh)}
+.pill.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pill.active b{color:var(--stack-hi)}
+
+.sim-btn{font:600 12px var(--mono);cursor:pointer;background:var(--ink);color:var(--paper);border:1px solid var(--ink);border-radius:6px;padding:8px 15px;transition:.15s}
+.sim-btn:hover{background:var(--dsh-deep)}
+.sim-btn.ghost{background:transparent;color:var(--ink)}
+.sim-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ===== KPI 读数 ===== */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+.kpi{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:10px 12px}
+.kpi span{display:block;font:10px var(--mono);letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase}
+.kpi b{display:block;font:800 21px/1.3 var(--mono);color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.kpi.dsh b{color:var(--dsh)}
+.kpi.ok b{color:var(--ok)}
+.kpi.warn b{color:var(--warn)}
+.kpi.bad b{color:var(--bad)}
+
+/* ===== 状态灯（fiber / 依赖联动通用） ===== */
+.state-dot{display:inline-block;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink-soft);background:var(--paper);vertical-align:-1px;transition:.2s}
+.state-dot.pending{background:#f3e9d5;border-color:var(--warn)}
+.state-dot.loading{background:var(--stack-hi);border-color:var(--warn)}
+.state-dot.active{background:#9fd0a4;border-color:var(--ok)}
+.state-dot.failed{background:#e79b9b;border-color:var(--bad)}
+.state-dot.disposed{background:#d8d2c4;border-color:var(--ink-faint)}
+
+/* ===== 通关条件 · 可展开参考答案 ===== */
+details.ckpt-ans{
+  width:100%;max-width:var(--content-rail);
+  margin:-6px 0 24px 12px;
+  border:1px dashed var(--line);border-left:3px solid var(--dsh);
+  border-radius:8px;background:#fffdf8;
+  overflow:hidden;
+}
+details.ckpt-ans summary{
+  cursor:pointer;list-style:none;user-select:none;
+  display:flex;align-items:center;gap:9px;
+  padding:9px 14px;
+  font:600 12.5px var(--mono);color:var(--dsh-deep);
+}
+details.ckpt-ans summary::-webkit-details-marker{display:none}
+details.ckpt-ans summary::before{content:"▸";color:var(--dsh);transition:transform .2s}
+details.ckpt-ans[open] summary::before{transform:rotate(90deg)}
+details.ckpt-ans summary:hover{background:var(--dsh-soft)}
+.ans-body{padding:2px 16px 14px;display:grid;gap:10px}
+.ans-block{border-radius:8px;padding:11px 14px;font-size:14px;line-height:1.85}
+.ans-block.plain{background:var(--dsh-soft);border:1px solid #c9d1f5}
+.ans-block.pro{background:var(--paper-deep);border:1px solid var(--line)}
+.ans-tag{display:inline-block;font:700 10px var(--mono);letter-spacing:.12em;padding:2px 9px;border-radius:99px;margin-bottom:7px}
+.ans-block.plain .ans-tag{background:var(--dsh);color:#fff}
+.ans-block.pro .ans-tag{background:var(--ink);color:var(--stack-hi)}
+.ans-block p{max-width:none;margin:0 0 8px}
+.ans-block p:last-child{margin:0}
+
+/* ===== 终极测验 ===== */
+.quizbox{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:20px 0;overflow:hidden}
+.quiz-head{display:flex;justify-content:space-between;padding:14px 20px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep);font:11px var(--mono)}
+.quiz-body{padding:20px 24px}
+.q-no{font:11px var(--mono);color:var(--ink-faint);margin-bottom:6px}
+.q-text{font-size:17px;font-weight:650;margin-bottom:16px}
+.q-opt{border:1.5px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:14px}
+.q-opt:hover{background:var(--paper-deep)}
+.q-opt.picked{border-color:var(--dsh);background:var(--dsh-soft)}
+.q-opt.right{border-color:var(--ok);background:#e2ecdd}
+.q-opt.wrong{border-color:var(--bad);background:#f6dede}
+.q-opt.locked{pointer-events:none}
+.q-exp{display:none;border-top:1px dashed var(--line);padding-top:12px;margin-top:12px;color:var(--ink-soft);font-size:14px}
+.q-exp.show{display:block}
+.quiz-foot{display:flex;gap:9px;align-items:center;padding:13px 20px;border-top:1.5px solid var(--ink);background:var(--paper-deep)}
+.q-verdict{font-size:13px;font-weight:700}
+.q-verdict.ok{color:var(--ok)}
+.q-verdict.bad{color:var(--bad)}
+
+/* ===== 参考资料与其他 ===== */
+.source-list{max-width:var(--content-rail);font-size:13px}
+.source-list a{color:var(--accent-deep);overflow-wrap:anywhere}
+.chapter > table{display:block;max-width:100%;overflow-x:auto}
+
+@media(max-width:860px){
+  .ctrl-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

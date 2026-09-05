@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>dsh Cordis 与插件开发 · 交互手册</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属组件样式（不改 topic.css） ===== */
+
+/* ---- 封面 hero ---- */
+.hero{max-width:var(--content-rail);margin:0 0 34px}
+.hero-kicker{font:700 11px var(--mono);letter-spacing:.16em;color:var(--dsh);text-transform:uppercase;margin-bottom:10px}
+.hero h1{font:800 clamp(30px,4.6vw,46px)/1.2 var(--serif);letter-spacing:-.01em;margin:0 0 14px}
+.hero h1 em{font-style:normal;color:var(--dsh)}
+.hero p{font-size:16.5px;color:var(--ink-soft);max-width:820px}
+.hero .hero-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.hero-cover{width:100%;max-width:var(--content-rail);aspect-ratio:2.35/1;object-fit:cover;border:1.5px solid var(--ink);border-radius:12px;display:block;margin:0 0 18px;box-shadow:0 14px 30px -18px rgba(35,42,82,.45)}
+
+/* ---- A1 四问翻卡 ---- */
+.fourq{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin:16px 0 6px;max-width:var(--content-rail)}
+.fq{perspective:1000px;height:196px;cursor:pointer}
+.fq-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .45s}
+.fq.flipped .fq-inner{transform:rotateY(180deg)}
+.fq-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:1.5px solid var(--ink);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column}
+.fq-face.front{background:#fffdf8;justify-content:space-between}
+.fq-face.back{transform:rotateY(180deg);background:var(--dsh-soft)}
+.fq-no{font:800 11px var(--mono);color:var(--dsh)}
+.fq-q{font:750 16px var(--serif);line-height:1.5}
+.fq-hint{font:600 10px var(--mono);color:var(--ink-faint)}
+.fq-t{font:800 13px var(--mono);color:var(--dsh-deep);margin-bottom:7px}
+.fq-a{font-size:13.5px;line-height:1.7;color:var(--ink-soft)}
+.fq-a strong{color:var(--ink)}
+
+/* ---- B1 启动流程步进器 ---- */
+.flowline{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:6px 0 14px}
+.flow-node{flex:1 1 0;min-width:96px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);padding:9px 8px;text-align:center;position:relative;transition:.2s}
+.flow-node b{display:block;font:750 12px var(--mono);color:var(--ink-soft)}
+.flow-node small{display:block;font:10px var(--mono);color:var(--ink-faint);margin-top:3px;line-height:1.4}
+.flow-node:not(:first-child){margin-left:26px}
+.flow-node:not(:first-child)::before{content:"→";position:absolute;left:-21px;top:50%;transform:translateY(-50%);font:700 14px var(--mono);color:var(--ink-faint)}
+.flow-node.lit{border-color:var(--dsh);background:var(--dsh-soft);box-shadow:0 3px 10px -5px rgba(74,93,249,.5)}
+.flow-node.lit b{color:var(--dsh-deep)}
+.flow-node.done{border-color:#b9c8f2}
+.flow-narr{border-left:3px solid var(--dsh);background:var(--paper-deep);padding:11px 14px;font-size:13.5px;line-height:1.7;min-height:52px;margin-top:12px}
+.flow-narr b{color:var(--dsh-deep)}
+
+/* ---- B2 插件树模拟器 ---- */
+.tree-svg{width:100%;height:auto;display:block}
+.tnode{cursor:pointer}
+.tnode rect{fill:#fffdf8;stroke:#26221b;stroke-width:1.5;transition:.25s}
+.tnode text{pointer-events:none}
+.tnode .t-name{font:750 12.5px "SF Mono",Menlo,monospace;fill:#26221b}
+.tnode .t-sub{font:10px "SF Mono",Menlo,monospace;fill:#8a8172}
+.tnode:hover rect{stroke:var(--dsh);stroke-width:2}
+.tnode.dead rect{fill:#eee9dd;stroke:#b3ab99;stroke-dasharray:5 4}
+.tnode.dead .t-name{fill:#b3ab99;text-decoration:line-through}
+.tnode.dead .t-sub{fill:#c8c1b0}
+.tedge{stroke:#26221b;stroke-width:1.5;fill:none;transition:.25s}
+.tedge.dead{stroke:#b3ab99;stroke-dasharray:5 4}
+.tree-narr{border-left:3px solid var(--dsh);background:var(--paper-deep);padding:11px 14px;font-size:13.5px;line-height:1.7;min-height:50px;margin-top:12px}
+.tree-legend{display:flex;gap:16px;flex-wrap:wrap;font:11px var(--mono);color:var(--ink-soft);margin-bottom:8px}
+.tree-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* ---- B3 fiber 状态机 ---- */
+.fsm-row{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:8px 0 4px}
+.fsm-state{border:1.5px solid var(--line);border-radius:9px;background:var(--paper);padding:10px 12px;text-align:center;min-width:98px;transition:.22s;position:relative}
+.fsm-state b{display:block;font:800 13px var(--mono)}
+.fsm-state small{display:block;font:10px var(--mono);color:var(--ink-faint);margin-top:3px}
+.fsm-state:not(:first-child){margin-left:30px}
+.fsm-state:not(:first-child)::before{content:"→";position:absolute;left:-24px;top:50%;transform:translateY(-50%);font:700 15px var(--mono);color:var(--ink-faint)}
+.fsm-state.s-pending b{color:var(--warn)}
+.fsm-state.s-active b{color:var(--ok)}
+.fsm-state.s-failed b{color:var(--bad)}
+.fsm-state.lit{border-color:var(--dsh);background:var(--dsh-soft);transform:translateY(-2px);box-shadow:0 4px 12px -6px rgba(74,93,249,.55)}
+.fsm-state.lit-gone{border-color:var(--bad);background:#f6dede}
+.fsm-failwrap{display:flex;justify-content:center;margin-top:18px}
+.fsm-narr{border-left:3px solid var(--dsh);background:var(--paper-deep);padding:11px 14px;font-size:13.5px;line-height:1.7;min-height:52px;margin-top:14px}
+
+/* ---- B4 effect 栈动画 ---- */
+.eff-wrap{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.eff-actions{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.eff-stackzone{border:1.5px dashed var(--line);border-radius:10px;background:var(--paper);min-height:218px;padding:12px;display:flex;flex-direction:column-reverse;gap:8px}
+.eff-card{border:1.5px solid var(--ink);border-radius:8px;background:#fffdf8;padding:8px 12px;font:600 12px var(--mono);animation:effIn .3s ease-out}
+.eff-card small{display:block;font-weight:400;color:var(--ink-faint);margin-top:2px}
+.eff-card.popping{border-color:var(--dsh);background:var(--dsh-soft);text-decoration:line-through;color:var(--dsh-deep)}
+@keyframes effIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.eff-log{font:11.5px/1.9 var(--mono);color:var(--ink-soft);background:var(--code-bg);color:var(--code-ink);border-radius:8px;padding:12px 14px;min-height:218px;overflow:auto}
+.eff-log .ok{color:#b5c98a}
+.eff-log .hl{color:#e0915a}
+@media(max-width:760px){.eff-wrap{grid-template-columns:1fr}}
+
+/* ---- B5 依赖联动模拟器 ---- */
+.dep-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dep-col h4{margin:0 0 9px;font:750 11.5px var(--mono);letter-spacing:.08em;color:var(--ink-soft)}
+.dep-row{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:8px;background:#fffdf8;padding:9px 12px;margin-bottom:7px;font-size:13px;transition:.2s}
+.dep-row b{font:750 12px var(--mono)}
+.dep-row .dep-miss{margin-left:auto;font:600 10.5px var(--mono);color:var(--bad)}
+.dep-row.is-active{border-color:var(--ok)}
+.dep-row.is-pending{border-color:var(--warn);background:#fbf6ea}
+.dep-provider{cursor:pointer;user-select:none}
+.dep-provider .sw{width:34px;height:19px;border-radius:99px;background:#d8d2c4;border:1.5px solid var(--ink-soft);position:relative;flex:none;transition:.2s}
+.dep-provider .sw::after{content:"";position:absolute;top:1.5px;left:2px;width:12px;height:12px;border-radius:50%;background:#fffdf8;transition:.2s}
+.dep-provider.on .sw{background:var(--dsh);border-color:var(--dsh-deep)}
+.dep-provider.on .sw::after{left:16px}
+@media(max-width:700px){.dep-grid{grid-template-columns:1fr}}
+
+/* ---- B6 waterfall 模拟器 ---- */
+.wf-line{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:6px 0 4px}
+.wf-node{flex:1 1 0;min-width:88px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);padding:9px 8px;text-align:center;position:relative;transition:.22s}
+.wf-node b{display:block;font:750 12px var(--mono);color:var(--ink-soft)}
+.wf-node small{display:block;font:10px var(--mono);color:var(--ink-faint);margin-top:3px;line-height:1.45}
+.wf-node:not(:first-child){margin-left:26px}
+.wf-node:not(:first-child)::before{content:"next()";position:absolute;left:-27px;top:50%;transform:translateY(-50%);font:600 8.5px var(--mono);color:var(--ink-faint);background:var(--paper);padding:1px 2px}
+.wf-node.lit{border-color:var(--dsh);background:var(--dsh-soft)}
+.wf-node.lit b{color:var(--dsh-deep)}
+.wf-node.veto{border-color:var(--bad);background:#f6dede}
+.wf-node.veto b{color:var(--bad)}
+.wf-node.exec{border-color:var(--ok);background:#e2ecdd}
+.wf-node.skipped{opacity:.45}
+.wf-res{display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.wf-verdict{font:800 13px var(--mono);padding:6px 14px;border-radius:8px;border:1.5px solid}
+.wf-verdict.ok{color:var(--ok);border-color:var(--ok);background:#e2ecdd}
+.wf-verdict.bad{color:var(--bad);border-color:var(--bad);background:#f6dede}
+.wf-narr{border-left:3px solid var(--dsh);background:var(--paper-deep);padding:11px 14px;font-size:13.5px;line-height:1.7;min-height:50px;flex:1;min-width:220px}
+
+/* ---- B7 patch 叠层演示 ---- */
+.patch-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:start}
+.patch-layer{border:1.5px solid var(--line);border-radius:9px;background:#fffdf8;padding:11px 14px;margin-bottom:8px;cursor:pointer;transition:.18s}
+.patch-layer:hover{border-color:var(--dsh)}
+.patch-layer.applied{border-color:var(--dsh);background:var(--dsh-soft);box-shadow:0 3px 10px -6px rgba(74,93,249,.5)}
+.patch-layer b{font:750 12.5px var(--mono)}
+.patch-layer small{display:block;font:11.5px var(--mono);color:var(--ink-soft);margin-top:3px;line-height:1.55}
+.patch-layer .pl-tag{float:right;font:700 9.5px var(--mono);color:var(--ink-faint);letter-spacing:.08em}
+.patch-eff{border:1.5px solid var(--ink);border-radius:9px;background:var(--code-bg);padding:13px 15px;font:12px/2 var(--mono);color:var(--code-ink);min-height:240px}
+.patch-eff .row{display:flex;gap:8px;align-items:baseline;white-space:nowrap}
+.patch-eff .pid{color:#e0915a;min-width:86px}
+.patch-eff .pname{color:#b5c98a}
+.patch-eff .ptag{font-size:10px;color:#8a8065}
+.patch-eff .ptag.mod{color:#e8b04a}
+.patch-eff .ptag.new{color:#8fb8d8}
+@media(max-width:760px){.patch-grid{grid-template-columns:1fr}}
+
+/* ---- B8 槽位探索器 ---- */
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;margin-bottom:12px}
+.slot-chip{border:1.5px solid var(--line);border-radius:8px;background:#fffdf8;padding:9px 10px;cursor:pointer;transition:.15s;text-align:center}
+.slot-chip b{display:block;font:750 12.5px var(--mono);color:var(--ink-soft)}
+.slot-chip small{font:10px var(--mono);color:var(--ink-faint)}
+.slot-chip:hover{border-color:var(--dsh)}
+.slot-chip.active{border-color:var(--dsh);background:var(--dsh-soft)}
+.slot-chip.active b{color:var(--dsh-deep)}
+.slot-detail{border-left:3px solid var(--dsh);background:var(--paper-deep);padding:12px 15px;font-size:13.5px;line-height:1.75;min-height:76px}
+.slot-detail b{color:var(--dsh-deep)}
+
+/* ---- 配图 ---- */
+.figure-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:var(--content-rail);margin:16px 0}
+.figure-grid img{width:auto;max-width:100%;max-height:300px;height:auto;border:1.5px solid var(--ink);border-radius:10px;display:block;margin:0 auto;background:#fff}
+.fig-single{max-width:var(--content-rail);margin:16px 0}
+.fig-single img{width:auto;max-width:100%;max-height:430px;height:auto;border:1.5px solid var(--ink);border-radius:10px;display:block;margin:0 auto;background:#fff}
+figcaption{font:11px var(--mono);color:var(--ink-faint);letter-spacing:.06em;margin-top:8px}
+@media(max-width:700px){.figure-grid{grid-template-columns:1fr}}
+
+/* ---- 下一站引导 ---- */
+.next-card{display:flex;justify-content:space-between;align-items:center;gap:14px;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:var(--dsh-soft);padding:16px 20px;margin:18px 0 8px;text-decoration:none;color:var(--ink);transition:.15s}
+.next-card:hover{transform:translateY(-2px);box-shadow:3px 3px 0 var(--dsh)}
+.next-card b{font:800 15px var(--mono)}
+.next-card .nc-sub{font-size:13px;color:var(--ink-soft);margin-top:4px}
+.next-card .nc-arrow{font:800 22px var(--mono);color:var(--dsh)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">dsh Cordis <em>与插件开发</em> · 交互手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 11 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<div class="hero">
+  <div class="hero-kicker">DeepSeek Harness · 一切皆插件</div>
+  <img class="hero-cover" src="assets/cover.jpg" alt="封面：Cordis 之心与插件树插画">
+  <h1>Cordis：dsh 的<em>心脏</em>，与你的第一个插件</h1>
+  <p>DeepSeek Harness（命令行里叫 <code>dsh</code>）是 DeepSeek 开源的 agent 框架，它的口号是「一切皆插件」——工具、模型、会话、沙箱、界面，全部是插件。而管理这成百上千个插件装、卸、互相协作的底座，叫 <strong>Cordis</strong>。这本手册讲清楚两件事：Cordis 到底是什么，以及怎么亲手写一个 dsh 插件。</p>
+  <div class="hero-tags">
+    <span class="badge ui">8 个交互组件 · 全部可点击</span>
+    <span class="badge info">代码示例取自 dsh 官方教程 · 可直接运行</span>
+  </div>
+</div>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">Cordis 是什么 —— 一块带总闸的智能插线板</h2></div>
+  <p class="lede">先把术语说清楚，再打比方：Cordis 是一个<strong>插件框架</strong>。它自己不实现任何业务功能，只回答三件事——插件怎么装进来、插件怎么干净地卸出去、插件之间怎么找到对方。名字来自拉丁语 cor（心）的所有格，意思是「心脏」：它是 Koishi 的心脏，如今也是 dsh 的心脏。</p>
+
+  <p>打个比方（比喻跟在定义后面）：Cordis 像一块<strong>带总闸的智能插线板</strong>。每个插件 = 一个电器：插上就通电（加载）；拔掉时总闸保证不留「暗电流」——定时器、监听器、连接全部自动回收；电器之间互不认识，全都只从插线板取电（服务）。dsh 的每一个工具、模型适配器、UI 面板，都是插在这块板上的电器。</p>
+
+  <h3>为什么插件系统需要一个框架</h3>
+  <p>假设你写了一个聊天机器人，功能变多后开始拆模块。但「模块化」只解决代码怎么组织，解决不了另外四件事——点击下面的卡片，看 Cordis 分别怎么回答：</p>
+
+  <div class="fourq" id="fourq">
+    <div class="fq"><div class="fq-inner">
+      <div class="fq-face front"><span class="fq-no">问题 1</span><span class="fq-q">安装：新功能怎么被「接」进系统？</span><span class="fq-hint">点击翻面</span></div>
+      <div class="fq-face back"><span class="fq-t">Cordis 的回答</span><span class="fq-a">一个文件、一个 <strong>apply 函数</strong>，在配置里登记一行。不需要改框架源码，不需要写启动代码——框架来调你，而不是你调框架。</span></div>
+    </div></div>
+    <div class="fq"><div class="fq-inner">
+      <div class="fq-face front"><span class="fq-no">问题 2</span><span class="fq-q">配置：同一功能在不同环境用不同配置，写在哪里？</span><span class="fq-hint">点击翻面</span></div>
+      <div class="fq-face back"><span class="fq-t">Cordis 的回答</span><span class="fq-a">写在 <strong>cordis.yml</strong> 的条目里。插件用 Schema 声明配置结构，框架在加载前校验——配置非法就拒绝启动，绝不「半启动」。</span></div>
+    </div></div>
+    <div class="fq"><div class="fq-inner">
+      <div class="fq-face front"><span class="fq-no">问题 3</span><span class="fq-q">卸载：功能下线时，定时器、监听器、连接由谁清理？</span><span class="fq-hint">点击翻面</span></div>
+      <div class="fq-face back"><span class="fq-t">Cordis 的回答</span><span class="fq-a"><strong>框架清理，不用你记得。</strong>注册时留下「怎么撤销」的说明书（disposer），无论什么原因卸载，Cordis 都替你回滚。这是框架级保证，不是自觉。（第 5 章）</span></div>
+    </div></div>
+    <div class="fq"><div class="fq-inner">
+      <div class="fq-face front"><span class="fq-no">问题 4</span><span class="fq-q">协作：功能 A 依赖功能 B，但 B 可能还没启动、之后还可能被替换？</span><span class="fq-hint">点击翻面</span></div>
+      <div class="fq-face back"><span class="fq-t">Cordis 的回答</span><span class="fq-a">A 只声明「我需要名为 B 的服务」，然后<strong>等着</strong>；B 就绪 A 自动启动，B 消失 A 自动卸载，B 恢复 A 自动重载。A 不 import B 的代码。（第 6 章）</span></div>
+    </div></div>
+  </div>
+
+  <p>这四个问题里，「卸载」和「协作」最难——它们决定了插件能不能<strong>安全地动态装卸</strong>。Cordis 的特别之处：把这两件事从「插件作者的自觉」上升为「框架级保证」。</p>
+
+  <div class="note">
+    <b>它不是什么：不是传统 DI 容器</b>
+    传统依赖注入（Spring 那类）回答「谁创建谁」，隐含假设是「一旦绑定，服务就一直在」。Cordis 回答一个更难的问题：<strong>「谁在什么时候活着」</strong>——服务可以随时出现、随时消失、被替换，依赖它的一切自动跟着调整。论文给它的定位是 meta-framework（元框架）：规定副作用如何组合、依赖如何解析，但不预设任何业务领域。QQ 机器人能用，Agent 运行时也能用。
+  </div>
+
+  <h3>出身：从 QQ 机器人到 DeepSeek 的地基</h3>
+  <table>
+    <thead><tr><th>时间</th><th>事件</th></tr></thead>
+    <tbody>
+      <tr><td><b>2020.01</b></td><td>Shigma 发布跨平台聊天机器人框架 <b>Koishi</b>，Cordis 是它抽出来的插件内核</td></tr>
+      <tr><td><b>2022.04</b></td><td><code>cordis</code> 包独立登上 npm，成为通用插件框架</td></tr>
+      <tr><td><b>2024.11</b></td><td>Cordis 4 开始预发布：彻底重构，引入基于 <b>fiber</b> 的生命周期体系（第 4 章）</td></tr>
+      <tr><td><b>2026</b></td><td>DeepSeek Harness 以 Cordis 为地基发布（vendor 进仓库）；北大 &amp; DeepSeek-AI 发 88 页论文把它形式化</td></tr>
+    </tbody>
+  </table>
+
+  <div class="figure-grid">
+    <figure>
+      <img src="assets/cordis-heart.jpg" alt="Cordis 像一块带总闸的智能插线板" loading="lazy">
+      <figcaption>本页比喻的具象化：插件 = 电器，Cordis = 带总闸的插线板——插上就通电，拔掉无残留，取电全走同一个板</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/ecosystem.jpg" alt="插件生态市集插画" loading="lazy">
+      <figcaption>生态规模一瞥：Koishi 插件市场长期保有 4100+ 插件，上千位互不相识的作者靠同一套框架协作（2026-08 数据）</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">第一个插件：一个文件 + 一行配置</h2></div>
+  <p class="lede">写 Cordis 插件最爽的一点：<strong>完全没有框架启动代码</strong>。一个导出 apply 函数的文件，加一行配置，就能跑。</p>
+
+  <div class="codewrap"><span class="filetab">hello.ts</span><button class="copybtn">复制</button>
+<pre><span class="cm">// 一个最小的 Cordis / dsh 插件</span>
+<span class="kw">import</span> type { Context } <span class="kw">from</span> <span class="st">'@deepseek-ai/cordis'</span>
+
+<span class="kw">export const</span> name = <span class="st">'hello'</span>   <span class="cm">// 可选：诊断信息里的显示名</span>
+
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {
+  console.<span class="fn">log</span>(<span class="st">'hello from my first plugin'</span>)
+}</pre></div>
+
+  <div class="codewrap"><span class="filetab">cordis.yml —— 应用本身就是一个配置文件</span><button class="copybtn">复制</button>
+<pre><span class="kw">- name:</span> <span class="st">'./hello.ts'</span></pre></div>
+
+  <p>跑起来（dsh 自带的小启动器：创建根 Context → 挂载 Loader 插件 → 读取 cordis.yml），输出 <code>hello from my first plugin</code>。注意分工：<strong>插件只描述贡献，应用长什么样由配置决定</strong>——这叫「配置即组合」。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 插件是怎么被启动的</b><span class="pill active"><b>6</b> 步流程</span></div>
+    <div class="lab-body">
+      <div class="flowline" id="b1Flow">
+        <div class="flow-node" data-i="0"><b>cordis.yml</b><small>声明要挂载的条目</small></div>
+        <div class="flow-node" data-i="1"><b>Loader 插件</b><small>读取并解析配置</small></div>
+        <div class="flow-node" data-i="2"><b>解析模块</b><small>找到 ./hello.ts</small></div>
+        <div class="flow-node" data-i="3"><b>ctx.plugin()</b><small>挂为子插件，建 fiber</small></div>
+        <div class="flow-node" data-i="4"><b>apply(ctx)</b><small>框架调用你的函数</small></div>
+        <div class="flow-node" data-i="5"><b>贡献生效</b><small>hello from my first plugin</small></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="sim-btn" id="b1Prev">← 上一步</button>
+        <button class="sim-btn" id="b1Next">下一步 →</button>
+        <button class="sim-btn ghost" id="b1Reset">重播</button>
+      </div>
+      <div class="flow-narr" id="b1Narr"></div>
+    </div>
+    <div class="lab-foot">点击「下一步」逐步走一遍。任何配置项列表里的条目都是并发启动的：谁先跑由依赖关系（inject）决定，与书写顺序无关。</div>
+  </div>
+
+  <h3>插件的三种形态</h3>
+  <div class="codewrap"><span class="filetab">shapes.ts</span><button class="copybtn">复制</button>
+<pre><span class="kw">import</span> { Service, type <span class="ty">Context</span> } <span class="kw">from</span> <span class="st">'@deepseek-ai/cordis'</span>
+
+<span class="cm">// 1. 函数形态（最常用，没有对外服务时一直用它）</span>
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {}
+
+<span class="cm">// 2. 对象形态：带名字的对象 + apply 方法</span>
+<span class="kw">export const</span> objectPlugin = {
+  name: <span class="st">'object-plugin'</span>,
+  <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {},
+}
+
+<span class="cm">// 3. 类形态：要对外提供服务时用（第 6 章）</span>
+<span class="kw">export class</span> <span class="ty">MyService</span> <span class="kw">extends</span> <span class="ty">Service</span> {
+  <span class="fn">constructor</span>(ctx: <span class="ty">Context</span>) {
+    <span class="kw">super</span>(ctx, <span class="st">'myService'</span>)
+  }
+}</pre></div>
+
+  <table>
+    <thead><tr><th>形态</th><th>什么时候用</th><th>dsh 里的例子</th></tr></thead>
+    <tbody>
+      <tr><td><b>函数</b></td><td>只做贡献（注册工具 / 监听事件），不对外暴露能力</td><td>绝大多数 dsh-tool-*</td></tr>
+      <tr><td><b>对象</b></td><td>同函数，但想要一个显式名字</td><td>小型内部插件</td></tr>
+      <tr><td><b>类（Service）</b></td><td>要把一项能力挂到 <code>ctx.&lt;key&gt;</code> 上供别人取用</td><td>ctx.tools、ctx.llm 的提供方</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <b>新手第一坑：加了插件没反应，先查拼写</b>
+    如果配置里的路径或包名拼错了（模块<strong>解析</strong>失败），Cordis 只会通过 logger 服务报一条错误，进程不会崩——启动早期这条消息甚至可能还没接到控制台就丢了。而如果 apply 抛异常，进程会<strong>明确报错退出</strong>。「解析不到」静默、「执行出错」炸裂，两种行为要分清。
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">ctx 与插件树：一切操作的入口</h2></div>
+  <p class="lede">在 Cordis 里你几乎只跟一个东西打交道：<code>ctx</code>。大白话讲，ctx 是插件进厂时领到的<strong>工作台</strong>——上面有事件插孔、副作用登记处、子插件挂钩。插件能做的一切，都是往这张工作台上操作。</p>
+
+  <div class="codewrap"><span class="filetab">ctx 上最常用的五个操作</span><button class="copybtn">复制</button>
+<pre><span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {
+  ctx.<span class="fn">on</span>(<span class="st">'some/event'</span>, (payload) =&gt; {})  <span class="cm">// 监听事件（卸载时自动移除）</span>
+  ctx.<span class="fn">effect</span>(() =&gt; { ... })              <span class="cm">// 登记副作用（卸载时自动回滚，第 5 章）</span>
+  ctx.<span class="fn">plugin</span>(SomePlugin)                 <span class="cm">// 挂载子插件（随父插件卸载）</span>
+  ctx.<span class="fn">get</span>(<span class="st">'someService'</span>)                <span class="cm">// 读服务：没有则 undefined（可选依赖探测）</span>
+  ctx.<span class="fn">provide</span>(<span class="st">'someValue'</span>, <span class="st">42</span>)          <span class="cm">// 提供服务</span>
+}</pre></div>
+
+  <p>关键在 <code>ctx.plugin(child)</code>：它不是简单的「注册」，而是<strong>派生出一个子上下文</strong>。于是插件不是平铺的列表，而是<strong>一棵树</strong>——子上下文能看到父上下文的一切（继承），但卸载是按层级的：父插件卸载，所有子插件<strong>递归</strong>卸载；子插件卸载，不影响兄弟和父级。这棵树是 Cordis 一切生命周期语义的骨架。</p>
+
+  <div class="fig-single">
+    <img src="assets/plugin-tree.jpg" alt="dsh 的插件树：根 Context 派生子上下文" loading="lazy">
+    <figcaption>插件树意象：父节点被拔下，整个子分支熄灭，兄弟分支毫发无损——上面第 3 章的模拟器用的正是这棵树</figcaption>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 插件树装卸模拟器</b><span>点击任意节点 = 卸载 / 重装它</span></div>
+    <div class="lab-body">
+      <div class="tree-legend">
+        <span><i style="background:#fffdf8;border:1.5px solid #26221b"></i>运行中</span>
+        <span><i style="background:#eee9dd;border:1.5px dashed #b3ab99"></i>已卸载（含整个子树）</span>
+        <span style="color:var(--ink-faint)">子上下文继承父级可见性；卸载按层级递归</span>
+      </div>
+      <svg class="tree-svg" id="b2Svg" viewBox="0 0 760 330" aria-label="插件树"></svg>
+      <div class="tree-narr" id="b2Narr">点击 dsh-agent 试试：它的子插件 dsh-jobs 会被递归卸载，而兄弟节点 dsh-llm、my-tool 完全不受影响。</div>
+    </div>
+    <div class="lab-foot">再点一次已卸载的节点 = 重新挂载。真实的 dsh 进程里有 160+ 个这样的节点，语义完全相同。</div>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">fiber：插件的一生</h2></div>
+  <p class="lede">先大白话定义：<strong>fiber（纤维）是框架给每个已挂载插件实例开的「档案卡 + 生命体征监护仪」</strong>。你声明了插件、它加载到哪一步、为什么没动静、卸载到什么程度——全记录在 fiber 上。Cordis 4 为每个插件实例维护一个 fiber，状态机如下：</p>
+
+  <table>
+    <thead><tr><th>状态</th><th>大白话</th><th>技术含义</th></tr></thead>
+    <tbody>
+      <tr><td><b>PENDING</b></td><td>菜没上齐，干等</td><td>已声明，但 inject 的服务尚未就绪（第 6 章）</td></tr>
+      <tr><td><b>LOADING</b></td><td>正在开工</td><td>apply 正在执行</td></tr>
+      <tr><td><b>ACTIVE</b></td><td>正常营业</td><td>apply 完成，贡献已生效</td></tr>
+      <tr><td><b>FAILED</b></td><td>当场翻车</td><td>apply 抛异常，或配置校验失败</td></tr>
+      <tr><td><b>UNLOADING → DISPOSED</b></td><td>退租中 → 已退干净</td><td>disposer 执行中 → 一切已拆除</td></tr>
+    </tbody>
+  </table>
+
+  <div class="fig-single">
+    <img src="assets/fiber-lifecycle.jpg" alt="fiber 生命周期循环插画" loading="lazy">
+    <figcaption>插件的一生：等待 → 装配 → 运行 → 拆解回收，旁路通向翻车现场。无论因何种原因卸载（改配置 / 热重载 / 显式 dispose / 依赖服务消失），清理都是自动的</figcaption>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · fiber 状态机动画</b><span>选一个剧本，点播放</span></div>
+    <div class="lab-body">
+      <div class="pills" id="b3Scen" style="margin-bottom:14px">
+        <button class="pill active" data-s="ok"><b>剧本 A</b> 正常启动</button>
+        <button class="pill" data-s="stuck"><b>剧本 B</b> 依赖缺失，卡在 PENDING</button>
+        <button class="pill" data-s="boom"><b>剧本 C</b> apply 抛异常</button>
+        <button class="pill" data-s="hmr"><b>剧本 D</b> 热重载</button>
+      </div>
+      <div class="fsm-row" id="b3Row">
+        <div class="fsm-state s-pending" data-st="PENDING"><b>PENDING</b><small>等依赖就绪</small></div>
+        <div class="fsm-state" data-st="LOADING"><b>LOADING</b><small>apply 执行中</small></div>
+        <div class="fsm-state s-active" data-st="ACTIVE"><b>ACTIVE</b><small>运行中</small></div>
+        <div class="fsm-state" data-st="UNLOADING"><b>UNLOADING</b><small>清理中</small></div>
+        <div class="fsm-state" data-st="DISPOSED"><b>DISPOSED</b><small>已拆除</small></div>
+      </div>
+      <div class="fsm-failwrap"><div class="fsm-state s-failed" data-st="FAILED"><b>FAILED</b><small>报错，不静默跳过</small></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="sim-btn" id="b3Play">▶ 播放</button>
+        <button class="sim-btn ghost" id="b3Reset">复位</button>
+      </div>
+      <div class="fsm-narr" id="b3Narr">一个插件「加载了却没反应」，多半就是蹲在 PENDING——dsh 的 cordis_inspect 工具巡检的就是每个 fiber 的状态。</div>
+    </div>
+    <div class="lab-foot">剧本 B 是排障最高频场景：inject 指定的服务无人提供 → 永远 PENDING、不报错、不崩溃（PENDING 的 fiber 不会让进程保持存活）。</div>
+  </div>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">effect：可逆副作用 ——「改配置不用重启」的秘密</h2></div>
+  <p class="lede">先大白话定义：<strong>effect = 注册时同时交一张「撤销说明书」</strong>。effect 的主体在插件加载时执行；它返回的那个函数（叫 disposer，清理函数）在插件卸载时由框架自动执行。你永远不需要自己调用清理函数——不管插件因为什么原因被卸载。</p>
+
+  <p>比喻：像酒店入住时前台就登记好「退房清单」——不管你什么时候走、为什么走（退房、续住换房、被消防疏散），清单上的事项都会被照单执行。</p>
+
+  <div class="codewrap"><span class="filetab">effect-demo.ts</span><button class="copybtn">复制</button>
+<pre>ctx.<span class="fn">effect</span>(() =&gt; {
+  <span class="kw">const</span> conn = <span class="fn">createConnection</span>()   <span class="cm">// 加载时：建立连接</span>
+  <span class="kw">return</span> () =&gt; conn.<span class="fn">close</span>()          <span class="cm">// disposer：卸载时如何撤销</span>
+})</pre></div>
+
+  <p>更关键的事实：Cordis 的内置 API <strong>本身就是 effect</strong>——<code>ctx.on()</code> 注册的监听器随插件卸载、<code>ctx.plugin()</code> 的子插件递归卸载、服务注册随提供方消失。论文的实现章节有一个结论：<strong>Cordis 中所有对上下文的变更，最终都归结为 ctx.effect 这一个原语</strong>；提供服务、挂载插件、注册监听器，全是它的特例。所以「任何通过上下文进行的操作都自动可追踪、可恢复」不是口号，是结构事实。</p>
+
+  <div class="note danger">
+    <b>插件作者的唯一铁律</b>
+    凡是自己创建、Cordis 不管的资源（setInterval、WebSocket、文件 watcher……），都包进 <code>ctx.effect()</code> 并返回 disposer。做不到的代价就是泄漏：插件卸了，定时器还在跑。
+  </div>
+
+  <p>撤销说明按<strong>逆序</strong>执行（先注册的后撤销，天然 LIFO——后进先出，像摞盘子：最后摞上的最先拿走）。多个 effect 各自独立时，可以只撤掉其中一个而不惊动别人——这就是「单个插件可热卸载，邻居不受影响」的底层依据。</p>
+
+  <div class="fig-single">
+    <img src="assets/effect-undo.jpg" alt="effect 累加器与 LIFO 撤销" loading="lazy">
+    <figcaption>可逆副作用意象：加载时逐块放上玻璃砖、每块都记下自己的撤法；卸载时逆序取走，桌面精确回到原样</figcaption>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · effect 回滚动画</b><span>注册三个资源，再卸载插件看逆序回滚</span></div>
+    <div class="lab-body">
+      <div class="eff-wrap">
+        <div>
+          <div class="eff-actions">
+            <button class="sim-btn" id="b4Timer" disabled-push>注册定时器</button>
+            <button class="sim-btn" id="b4Conn">打开连接</button>
+            <button class="sim-btn" id="b4Listen">挂事件监听</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="sim-btn" id="b4Dispose" style="background:var(--bad);border-color:var(--bad)">⏏ 卸载插件</button>
+            <button class="sim-btn ghost" id="b4Reset">复位</button>
+          </div>
+          <div class="kpi-grid" style="margin-top:14px">
+            <div class="kpi dsh"><span>栈内 effect</span><b id="b4Count">0</b></div>
+            <div class="kpi ok"><span>已回滚</span><b id="b4Rolled">0</b></div>
+          </div>
+        </div>
+        <div>
+          <div class="eff-stackzone" id="b4Stack"></div>
+          <div class="eff-log" id="b4Log" style="margin-top:10px"><span class="hl">[log]</span> 插件 ACTIVE，等待注册 effect…</div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">注意回滚顺序：注册顺序 定时器→连接→监听，回滚一定是 监听→连接→定时器（LIFO）。</div>
+  </div>
+
+  <div class="note ok">
+    <b>所以「改配置不用重启」是理所当然的</b>
+    改配置 → 旧插件卸载（所有 effect 自动回滚）→ 新插件加载。进程从头到尾不重启。因为副作用可逆，插件可以被安全地卸了再装——热重载（HMR）、故障自动恢复、测试隔离，全部建立在这一行原语上。
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">服务与 inject：会自动重连的依赖</h2></div>
+  <p class="lede">先大白话定义：<strong>Service（服务）就是把一项能力挂到 ctx 的某个名字上</strong>（比如 <code>ctx.tools</code>、<code>ctx.llm</code>），别的插件按名字取用，而不是 import 它的代码。<strong>inject 就是声明「我需要哪几个名字」</strong>——声明之后，插件会一直保持 PENDING，直到所列服务全部就绪才启动。</p>
+
+  <div class="codewrap"><span class="filetab">greeter.ts —— 提供服务</span><button class="copybtn">复制</button>
+<pre><span class="kw">import</span> { Service, type <span class="ty">Context</span> } <span class="kw">from</span> <span class="st">'@deepseek-ai/cordis'</span>
+
+<span class="cm">// 编译时：声明合并，让 ctx.greeter 在各处都有类型</span>
+<span class="kw">declare module</span> <span class="st">'@deepseek-ai/cordis'</span> {
+  <span class="kw">interface</span> <span class="ty">Context</span> { greeter: <span class="ty">GreeterService</span> }
+}
+
+<span class="kw">export class</span> <span class="ty">GreeterService</span> <span class="kw">extends</span> <span class="ty">Service</span> {
+  <span class="fn">constructor</span>(ctx: <span class="ty">Context</span>) {
+    <span class="kw">super</span>(ctx, <span class="st">'greeter'</span>)   <span class="cm">// 运行时：以 'greeter' 注册，谁都能 ctx.greeter 拿到</span>
+  }
+  <span class="fn">greet</span>(who: <span class="ty">string</span>) { <span class="kw">return</span> <span class="st">`Hello, ${who}!`</span> }
+}
+
+<span class="kw">export const</span> name = <span class="st">'greeter'</span>
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) { ctx.<span class="fn">plugin</span>(GreeterService) }</pre></div>
+
+  <div class="codewrap"><span class="filetab">consumer.ts —— 只声明名字，不 import 实现</span><button class="copybtn">复制</button>
+<pre><span class="kw">export const</span> name = <span class="st">'consumer'</span>
+<span class="kw">export const</span> inject = [<span class="st">'greeter'</span>]      <span class="cm">// 声明依赖</span>
+
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {
+  console.<span class="fn">log</span>(ctx.greeter.<span class="fn">greet</span>(<span class="st">'world'</span>))   <span class="cm">// 此时 greeter 必定就绪</span>
+}</pre></div>
+
+  <p>cordis.yml 里两行的书写顺序<strong>无关紧要</strong>：决定插件何时启动的是依赖关系，不是文件顺序。把 greeter 整个删掉？consumer 保持 PENDING，不输出、不崩溃、也不「只运行一半」。</p>
+
+  <h3>与传统 DI 的本质区别：服务会消失是常态</h3>
+  <p>传统 DI 假设「一旦绑定，服务就一直在」；Cordis 的假设是「<strong>服务可以随时出现，也可以随时消失</strong>」。这在 Agent 场景里是日常：LLM 提供方被限流、MCP 服务器崩溃导致工具被注销、文件 watcher 被系统杀死。Cordis 的处理：<strong>提供方卸载 → 所有依赖它的插件自动卸载（effect 回滚）；提供方恢复 → 自动重载</strong>。依赖方一行重连代码都不用写。</p>
+
+  <div class="fig-single">
+    <img src="assets/service-wiring.jpg" alt="服务提供方与依赖方的电缆联动" loading="lazy">
+    <figcaption>响应式依赖意象：左边是提供方电站，右边是消费方电器——一座电站拉闸，它的电器自动休眠；电站恢复，电器自动亮起，全程无人接线</figcaption>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 依赖联动模拟器</b><span>拨动提供方开关，看下游插件状态联动</span></div>
+    <div class="lab-body">
+      <div class="dep-grid">
+        <div class="dep-col">
+          <h4>服务提供方（点击开关）</h4>
+          <div class="dep-row dep-provider on" data-p="llm"><span class="sw"></span><div><b>dsh-llm</b><br><small style="color:var(--ink-faint)">提供 llm 服务</small></div></div>
+          <div class="dep-row dep-provider on" data-p="tools"><span class="sw"></span><div><b>dsh-tools</b><br><small style="color:var(--ink-faint)">提供 tools 注册表</small></div></div>
+          <div class="dep-row dep-provider on" data-p="shell"><span class="sw"></span><div><b>dsh-bash-local</b><br><small style="color:var(--ink-faint)">提供 shell 服务</small></div></div>
+        </div>
+        <div class="dep-col">
+          <h4>消费方（inject 决定状态）</h4>
+          <div class="dep-row" data-c="llm,tools"><b>dsh-agent</b><small style="color:var(--ink-faint)">inject: [llm, tools]</small><span class="dep-miss"></span></div>
+          <div class="dep-row" data-c="tools,shell"><b>dsh-tool-bash</b><small style="color:var(--ink-faint)">inject: [tools, shell]</small><span class="dep-miss"></span></div>
+          <div class="dep-row" data-c="tools"><b>my-greet-tool</b><small style="color:var(--ink-faint)">inject: [tools]</small><span class="dep-miss"></span></div>
+          <div class="dep-row" data-c=""><b>my-observer</b><small style="color:var(--ink-faint)">无 inject，只监听事件</small><span class="dep-miss"></span></div>
+        </div>
+      </div>
+      <div class="tree-narr" id="b5Narr" style="margin-top:14px">关掉 dsh-tools：所有 inject 里带 tools 的插件立刻转入 PENDING；重新打开，它们自动恢复 ACTIVE——不需要任何重连代码。</div>
+    </div>
+    <div class="lab-foot">这也是「换提供方不改消费方」的原理：卸载 dsh-bash-local、挂载一个沙箱 shell 提供方，所有 inject 'shell' 的插件自动重启并使用新实现。</div>
+  </div>
+
+  <p>还有两个配套机制，知道名字即可：<code>ctx.isolate(key, realm)</code> 隔离——让某作用域内一项服务解析到独立实例（每个会话各自的模型 / 沙箱，互不干扰）；<code>ctx.intercept(key, meta)</code> 拦截——外层上下文给依赖访问附加元数据（沙箱策略插件约束所有用 shell 的人），都不用改组件本身。</p>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">事件与 waterfall：喊一嗓子，与一条决策链</h2></div>
+  <p class="lede">服务适合「直接打电话」（我知道找谁），但很多时候插件只想<strong>喊一嗓子</strong>或者<strong>拦一下</strong>，不关心谁在听——这就是事件。Cordis 的事件是类型化的：事件名和监听器签名靠 TypeScript 声明合并获得全链路类型安全。</p>
+
+  <div class="codewrap"><span class="filetab">声明 / 发出 / 监听</span><button class="copybtn">复制</button>
+<pre><span class="kw">declare module</span> <span class="st">'@deepseek-ai/cordis'</span> {
+  <span class="kw">interface</span> <span class="ty">Events</span> {
+    <span class="st">'stats/report'</span>(name: <span class="ty">string</span>, count: <span class="ty">number</span>): <span class="ty">void</span>
+  }
+}
+
+ctx.<span class="fn">emit</span>(<span class="st">'stats/report'</span>, <span class="st">'tool_call'</span>, <span class="st">42</span>)    <span class="cm">// 发出</span>
+ctx.<span class="fn">on</span>(<span class="st">'stats/report'</span>, (name, count) =&gt; {}) <span class="cm">// 监听（卸载时自动移除）</span></pre></div>
+
+  <h3>五种分发模式：事件的「公开契约」</h3>
+  <table>
+    <thead><tr><th>模式</th><th>是否 await</th><th>语义</th></tr></thead>
+    <tbody>
+      <tr><td><code>emit</code></td><td>否</td><td>同步广播；不等待、不收集返回值</td></tr>
+      <tr><td><code>parallel</code></td><td>是</td><td>所有监听器并发执行并一起等待</td></tr>
+      <tr><td><code>serial</code></td><td>是</td><td>按序执行；第一个非空返回值胜出并停止后续</td></tr>
+      <tr><td><code>bail</code></td><td>否</td><td>serial 的同步版本</td></tr>
+      <tr><td><code>waterfall</code></td><td>否</td><td><b>环绕中间件</b>：每个监听器拿到参数和 next()，可包装、可短路</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>waterfall 是 dsh 用得最多的模式</strong>，本质是把 Koa / Express 的中间件搬进事件系统：每个监听器收到参数和一个 <code>next()</code>。调用 <code>next()</code> = 放行给下游；不调 next() 直接返回 = <strong>否决，整条链短路</strong>。多个互不相识的插件，就这样组成一条决策链。</p>
+
+  <div class="codewrap"><span class="filetab">waterfall 监听器的两种姿势</span><button class="copybtn">复制</button>
+<pre>ctx.<span class="fn">on</span>(<span class="st">'some/decision'</span>, <span class="kw">async</span> (input, next) =&gt; {
+  <span class="kw">if</span> (!<span class="fn">hasPermission</span>(input)) <span class="kw">return</span> { denied: <span class="st">true</span> }  <span class="cm">// 不调 next()：否决，短路</span>
+  <span class="kw">return</span> <span class="fn">next</span>()                                       <span class="cm">// 调 next()：放行</span>
+})</pre></div>
+
+  <div class="fig-single">
+    <img src="assets/waterfall-gate.jpg" alt="waterfall 决策链闸门" loading="lazy">
+    <figcaption>waterfall 决策链意象：一颗请求弹珠过闸，每道闸门可以放行（调 next()）也可以拦下（否决短路）；中间某道闸落下，下游闸门连同执行炉全部沉睡</figcaption>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · waterfall 决策链模拟器</b><span>一次 bash 工具调用的过闸之旅</span></div>
+    <div class="lab-body">
+      <div class="pills" id="b6Scen" style="margin-bottom:14px">
+        <button class="pill active" data-s="pass"><b>场景 1</b> 全部放行</button>
+        <button class="pill" data-s="veto"><b>场景 2</b> 权限否决</button>
+        <button class="pill" data-s="bug"><b>场景 3</b> 审计忘了调 next()</button>
+      </div>
+      <div class="wf-line" id="b6Line">
+        <div class="wf-node" data-i="0"><b>请求</b><small>一次 bash 工具调用</small></div>
+        <div class="wf-node" data-i="1"><b>监听器 1</b><small>权限检查</small></div>
+        <div class="wf-node" data-i="2"><b>监听器 2</b><small>审批</small></div>
+        <div class="wf-node" data-i="3"><b>监听器 3</b><small>审计 / 日志</small></div>
+        <div class="wf-node" data-i="4"><b>默认行为</b><small>最内层：真正执行</small></div>
+      </div>
+      <div class="wf-res">
+        <span class="wf-verdict ok" id="b6Verdict" style="display:none"></span>
+        <div class="wf-narr" id="b6Narr">选一个场景点播放。注意「next()」标签：它是链上每一跳的接力棒。</div>
+      </div>
+    </div>
+    <div class="lab-foot">dsh 里的真实 waterfall 链：tools/pre-execute → tools/execute → tools/post-execute，以及 approval/request、agent/request。</div>
+  </div>
+
+  <div class="note warn">
+    <b>dsh 明文纪律：只负责观察 / 记录的 waterfall 监听器，必须调用 next()</b>
+    不调 next() 直接返回代表「有意否决」。如果一个日志监听器忘了调 next()，它会<strong>无声地吞掉下游所有默认行为</strong>——工具莫名其妙不执行了，还没有任何报错。场景 3 演示的就是这个坑。
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">配置即程序：cordis.yml、patch 层与 HMR</h2></div>
+  <p class="lede">第 2 章说过「应用长什么样由配置决定」。这一章把这句话推到底：<strong>cordis.yml 里的每个条目（entry）不只承载「挂哪个插件」，还承载它的配置、开关和身份</strong>——修改配置就是修改应用，而且是热修改。</p>
+
+  <div class="codewrap"><span class="filetab">cordis.yml —— 条目的完整形态</span><button class="copybtn">复制</button>
+<pre><span class="kw">- id:</span> greeter          <span class="cm"># 稳定身份：loader 靠它区分「修改」与「删了重加」</span>
+  <span class="kw">name:</span> <span class="st">'./greeter.ts'</span>
+<span class="kw">- id:</span> consumer
+  <span class="kw">name:</span> <span class="st">'./consumer.ts'</span>
+  <span class="kw">disabled:</span> <span class="st">true</span>       <span class="cm"># 保留条目但不挂载；改回后自动加载</span>
+  <span class="kw">config:</span>              <span class="cm"># 传给 apply 的第二个参数</span>
+    <span class="kw">greeting:</span> <span class="st">你好</span></pre></div>
+
+  <p>三个要点：<strong>① id 是增量更新的前提</strong>——不带 id 的条目每次读取都会获得新 id，于是任何编辑都会被当成「先删后加」整体重挂；带 id 才能精准到「只改这一个」。<strong>② Schema 校验</strong>——插件导出 Config schema（用的正是 Shigma 写的 schemastery），框架在调 apply 前校验，配置非法则加载失败并给出精确到字段的错误，插件绝不会半启动。<strong>③ HMR</strong>——挂上 cordis-plugin-hmr 后保存文件即触发热重载，而且不需要像 Webpack / Vite 那样手工标注 accept 边界：fiber 本身就界定了组件全部效果的边界，替换一个组件 = 一次 fiber 操作（dispose 旧实例 → effect 全回滚 → 挂载新实例），失败还会整体回退，绝不半重载。</p>
+
+  <h3>dsh 的做法：应用 = 一层层叠加上去的 patch</h3>
+  <p>dsh 把「配置即程序」工程化成了 <strong>Profile + Bundle + patch 覆盖层</strong>：一个 Bundle 就是一个 npm 包，其 package.json 声明一份 patch（一组 insert）；核心组合包 <code>@deepseek-ai/dsh-base</code> 的 patch 一次性 insert 几十个核心插件（真实文件约 500 行）；部署方想改默认行为，不用碰任何源码——在自己的 patch 层按 <strong>id</strong> 覆盖一行即可（后写覆盖先写）。</p>
+
+  <div class="fig-single">
+    <img src="assets/patch-layers.jpg" alt="配置树按顺序叠加各层 patch" loading="lazy">
+    <figcaption>patch 叠层意象：每层透明胶片带几颗芯片，盖下去时同位芯片覆盖下层——改应用 = 叠一层 patch，不 fork、不改包、不重启</figcaption>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · patch 叠层演示</b><span>按顺序点击各层，看生效配置树实时变化</span></div>
+    <div class="lab-body">
+      <div class="patch-grid">
+        <div>
+          <div class="patch-layer" data-l="0"><span class="pl-tag">第 0 层</span><b>空根</b><small>cordis.yml = []，什么都没有，等着被叠</small></div>
+          <div class="patch-layer" data-l="1"><span class="pl-tag">第 1 层 · bundle</span><b>@deepseek-ai/dsh-base</b><small>一次 insert 五个核心插件：timer / hmr(disabled) / llm / session / agent</small></div>
+          <div class="patch-layer" data-l="2"><span class="pl-tag">第 2 层 · 用户</span><b>cordis.patch.yml</b><small>按 id 覆盖：把 hmr 的 disabled 改回 false；新增 my-tool</small></div>
+          <div class="patch-layer" data-l="3"><span class="pl-tag">第 3 层 · 临时</span><b>--patch ./dev.yml</b><small>命令行临时层：再插入 greet-tool</small></div>
+          <button class="sim-btn ghost" id="b7Reset" style="margin-top:4px">复位</button>
+        </div>
+        <div class="patch-eff" id="b7Eff"><span style="color:#8a8065">// 生效配置树（点击左侧层来叠加）</span></div>
+      </div>
+    </div>
+    <div class="lab-foot">要点：按 id 寻址、后写覆盖先写。第 2 层只改了 hmr 一行，timer/llm/session/agent 原样保留——这就是「改应用 = 叠一层 patch」。</div>
+  </div>
+
+  <div class="figure-grid">
+    <figure>
+      <img src="assets/plugin-panel.jpg" alt="dsh 插件清单控制墙插画" loading="lazy">
+      <figcaption>真实 dsh 进程的设置页共有 160 个插件，每个都能单独启停——全拜这套配置树所赐</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/three-roles.jpg" alt="Service Definition / Provider / Consumer 三种角色" loading="lazy">
+      <figcaption>槽位背后的固定模式：中央插座 = Definition 契约，左边电站 = 可替换 Provider，右边电器 = 只认契约的 Consumer（详见第 9 章）</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="chapter" id="c9">
+  <div class="chapter-head"><span class="chapter-no">09</span><h2 class="ch">动手写一个 dsh 插件：三条路线与两个实战</h2></div>
+  <p class="lede">前面的机制全部服务于这一章的实操。先回答「怎么装进去」——三种入口，从最快到最正式：</p>
+
+  <table>
+    <thead><tr><th>入口</th><th>怎么用</th><th>适合</th></tr></thead>
+    <tbody>
+      <tr><td><b>① --patch 覆盖层</b></td><td>写个 YAML，<code>dsh web --patch ./my-plugins.yml</code> 启动时插入</td><td>本地开发，最快见效</td></tr>
+      <tr><td><b>② profile 常驻层</b></td><td>把条目写进 <code>$DSH_HOME/profiles/&lt;名字&gt;/cordis.patch.yml</code></td><td>日常自用，常驻生效</td></tr>
+      <tr><td><b>③ bundle 包</b></td><td>打包成 npm 包，package.json 声明 <code>dsh.bundle.patch</code></td><td>发布给别人 <code>dsh plugin add</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="codewrap"><span class="filetab">my-plugins.yml —— 第 ① 种入口</span><button class="copybtn">复制</button>
+<pre><span class="kw">- insert:</span>
+    <span class="kw">- id:</span> my-greet-tool
+      <span class="kw">name:</span> <span class="st">'/abs/path/to/greet-tool.ts'</span></pre></div>
+
+  <h3>实战一：给 Agent 注册一个工具</h3>
+  <p>Agent 的能力边界是 <code>ctx.tools</code> 服务。注册一个工具 = inject 等注册表就绪 + <code>ctx.tools.register()</code>。注册本身是 effect，插件卸载时工具自动注销。</p>
+
+  <div class="codewrap"><span class="filetab">greet-tool.ts —— 完整可运行</span><button class="copybtn">复制</button>
+<pre><span class="kw">import</span> type { <span class="ty">Context</span> } <span class="kw">from</span> <span class="st">'@deepseek-ai/cordis'</span>
+<span class="kw">import</span> { <span class="fn">defineTool</span> } <span class="kw">from</span> <span class="st">'@deepseek-ai/dsh-tools'</span>
+
+<span class="kw">export const</span> name = <span class="st">'greet-tool'</span>
+<span class="kw">export const</span> inject = [<span class="st">'tools'</span>]          <span class="cm">// 等工具注册表就绪（第 6 章）</span>
+
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {
+  ctx.tools.<span class="fn">register</span>(<span class="fn">defineTool</span>({
+    name: <span class="st">'greet'</span>,
+    description: <span class="st">'Greet the named person.'</span>,
+    parameters: {
+      name: { type: <span class="st">'string'</span>, required: <span class="st">true</span>, description: <span class="st">'Who to greet'</span> },
+    },
+    <span class="kw">async</span> <span class="fn">execute</span>(args) {
+      <span class="kw">return</span> <span class="st">`Hello, ${args.name}!`</span>
+    },
+  }))
+}</pre></div>
+
+  <p><code>defineTool</code> 会把 parameters 规约转成给模型看的 JSON Schema，并在 execute 前校验模型给的参数。想观察每一次工具调用？再写一个<strong>互相不认识</strong>的观察插件——靠事件解耦：</p>
+
+  <div class="codewrap"><span class="filetab">tool-logger.ts —— 观察者：不认识执行者</span><button class="copybtn">复制</button>
+<pre><span class="kw">export const</span> name = <span class="st">'tool-logger'</span>
+<span class="kw">export const</span> inject = [<span class="st">'tools'</span>]
+
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {
+  ctx.<span class="fn">on</span>(<span class="st">'tools/result'</span>, (exec, result) =&gt; {
+    console.<span class="fn">log</span>(<span class="st">`[tool-logger] ${exec.name} -&gt; done`</span>)
+  })
+}</pre></div>
+
+  <h3>实战二：写一个钩子插件（权限门禁）</h3>
+  <p>挂到 <code>tools/pre-execute</code> 这条 waterfall 链上，就有权对每次工具调用说「不」——沙箱、权限、plan-mode 插件用的都是这个扩展点：</p>
+
+  <div class="codewrap"><span class="filetab">permission-gate.ts</span><button class="copybtn">复制</button>
+<pre><span class="kw">import</span> type { <span class="ty">Context</span> } <span class="kw">from</span> <span class="st">'@deepseek-ai/cordis'</span>
+<span class="kw">import type</span> { <span class="ty">PreToolDecision</span>, <span class="ty">ToolExecution</span> } <span class="kw">from</span> <span class="st">'@deepseek-ai/dsh-tools'</span>
+
+<span class="kw">export const</span> name = <span class="st">'permission-gate'</span>
+
+<span class="kw">export function</span> <span class="fn">apply</span>(ctx: <span class="ty">Context</span>) {
+  ctx.<span class="fn">on</span>(<span class="st">'tools/pre-execute'</span>, <span class="kw">async</span> (exec: <span class="ty">ToolExecution</span>, next) =&gt; {
+    <span class="kw">if</span> (!(<span class="kw">await</span> <span class="fn">isAllowed</span>(exec))) {
+      <span class="kw">return</span> { kind: <span class="st">'deny'</span>, reason: <span class="st">'Denied by policy.'</span> }  <span class="cm">// 否决：短路</span>
+    }
+    <span class="kw">return</span> <span class="fn">next</span>()                                          <span class="cm">// 放行</span>
+  })
+}</pre></div>
+
+  <h3>槽位：扩展点全部是服务</h3>
+  <p>dsh 的扩展点不是一份「API 列表」，而是<strong>一张 Cordis 服务注册表</strong>：任何插件都能注册新服务，也能替换已有服务的提供方。每个可替换能力都遵循固定模式（上图）：<strong>Definition</strong> 只声明契约几乎不变，<strong>Provider</strong> 可整只替换，<strong>Consumer</strong> 与 Provider 互不依赖。换提供方 = cordis.yml 改一行，所有依赖方自动卸载重载（第 6 章的模拟器）。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 槽位探索器</b><span>点击槽位卡片</span></div>
+    <div class="lab-body">
+      <div class="slot-grid" id="b8Grid"></div>
+      <div class="slot-detail" id="b8Detail"></div>
+    </div>
+    <div class="lab-foot">完整槽位表（执行 / 模型 / 智能 / 数据 / 环境 / 治理 / 编排 / 自指 / 前端九大类）见 harness 文档 capability-seams 与子系统页面。</div>
+  </div>
+
+  <h3>排障三连：插件「没反应」时按序检查</h3>
+  <ul class="plain">
+    <li><b>查拼写</b>——模块解析失败（路径 / 包名错）只在 logger 报一条，进程不崩（第 2 章）；</li>
+    <li><b>查 fiber 状态</b>——多半是蹲在 PENDING：inject 的服务无人提供。用 <code>ctx.registry</code> 遍历 fiber，或直接让 Agent 调 <code>cordis_inspect</code> 工具做只读巡检；</li>
+    <li><b>补提供方</b>——把缺的服务提供方加进组合，依赖它的插件会自动激活，无需重启。</li>
+  </ul>
+
+  <div class="checkpoint">
+    <div class="toc-title" style="margin-bottom:8px">通关条件 · 点亮你的进度</div>
+    <div class="ckpt-item" data-key="dsh-cordis-c1"><span class="ckpt-box">✓</span><span class="ckpt-text"><b>跑通第一个插件</b>：hello.ts + cordis.yml，看到插件自己的输出。</span></div>
+    <details class="ckpt-ans"><summary>展开看参考答案</summary><div class="ans-body">
+      <div class="ans-block plain"><span class="ans-tag">大白话版</span><p>建一个文件只写一个 apply 函数，在 cordis.yml 里写上文件路径，跑启动器。核心是体会「框架调你」：你没写任何 main 函数，是 Loader 读配置后来调用你的 apply。</p></div>
+      <div class="ans-block pro"><span class="ans-tag">专业版</span><p>导出 <code>apply(ctx: Context)</code>（函数形态），cordis.yml 条目 <code>- name: './hello.ts'</code>。启动器创建根 Context → 挂 Loader → 解析模块 → ctx.plugin() 建 fiber → apply 执行。补充：想改配置可用 config 字段 + 导出 Config schema。</p></div>
+    </div></details>
+    <div class="ckpt-item" data-key="dsh-cordis-c2"><span class="ckpt-box">✓</span><span class="ckpt-text"><b>注册一个工具</b>：greet-tool 被 Agent 真实调用。</span></div>
+    <details class="ckpt-ans"><summary>展开看参考答案</summary><div class="ans-body">
+      <div class="ans-block plain"><span class="ans-tag">大白话版</span><p>照第 9 章实战一抄 greet-tool，用 --patch 塞进 dsh，然后对 Agent 说「用 greet 打个招呼」。工具的 description 和 parameters 就是给模型看的说明书，写得越清楚模型用得越准。</p></div>
+      <div class="ans-block pro"><span class="ans-tag">专业版</span><p>inject: ['tools'] 保证注册表就绪；ctx.tools.register(defineTool({...})) 把工具挂入注册表并附着 disposer。组合里要有 dsh-tools（及它依赖的 systemPrompt 提供方），否则你的插件停在 PENDING。观察 tools/result 事件可另写 observer 插件。</p></div>
+    </div></details>
+    <div class="ckpt-item" data-key="dsh-cordis-c3"><span class="ckpt-box">✓</span><span class="ckpt-text"><b>写一个钩子</b>：在 tools/pre-execute 上拦截某次工具调用并给出理由。</span></div>
+    <details class="ckpt-ans"><summary>展开看参考答案</summary><div class="ans-body">
+      <div class="ans-block plain"><span class="ans-tag">大白话版</span><p>照实战二写 permission-gate，把 isAllowed 换成你自己的规则（比如「禁止 rm -rf」）。要点只有一个：想拦截就不调 next() 直接返回 deny；其余情况必须 return next()，否则第 7 章场景 3 的「无声吞掉」就会找上你。</p></div>
+      <div class="ans-block pro"><span class="ans-tag">专业版</span><p>监听 'tools/pre-execute' waterfall，返回类型化决策 PreToolDecision。观察型监听器必须委托 next()；策略监听器在拥有决策权时才可短路。需要单调「最终拒绝」的场合改用 ctx.tools.guard()。</p></div>
+    </div></details>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="chapter" id="c10">
+  <div class="chapter-head"><span class="chapter-no">10</span><h2 class="ch">终极测验</h2></div>
+  <p class="lede">五道题覆盖全部核心机制。答完每题立即出解析；4 题以上正确算出师。</p>
+  <div class="quizbox">
+    <div class="quiz-head"><span id="qNo">QUESTION 1 / 5</span><span id="quizScore">0 / 5</span></div>
+    <div class="quiz-body">
+      <div class="q-no" id="qNo2" style="display:none"></div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div class="q-exp" id="qExp"></div>
+    </div>
+    <div class="quiz-foot">
+      <button class="sim-btn" id="qSubmit" disabled>提交</button>
+      <button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button>
+      <button class="sim-btn ghost" id="qRestart" style="display:none">重来</button>
+      <span class="q-verdict" id="qVerdict"></span>
+    </div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="chapter" id="c11">
+  <div class="chapter-head"><span class="chapter-no">11</span><h2 class="ch">参考资料</h2></div>
+  <p class="lede">本手册整理自以下来源：微信文章正文与配图、dsh 仓库官方文档与真实源码（base bundle patch、vendor Cordis）、以及公开的插件开发教程。</p>
+  <ul class="plain source-list">
+    <li>腾讯技术工程 · <a href="https://mp.weixin.qq.com/s/3vtCkp6EbA5MhRERD6f17A" target="_blank" rel="noopener">《DeepSeek Harness 背后的"心脏"：Cordis 到底是什么》（作者 lss233，2026-09）</a>——叙事主线参考；本页配图为 AI 生成的概念插画，非原文图表</li>
+    <li>dsh 官方文档 · <a href="https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cordis-primer.zh.md" target="_blank" rel="noopener">Cordis 入门（cordis-primer）</a> 与 <a href="https://github.com/deepseek-ai/deepseek-harness/tree/main/docs/cordis-tutorial" target="_blank" rel="noopener">Cordis 教程（七章，每个例子可运行）</a>——第 2~7、9 章代码的出处</li>
+    <li>dsh 官方文档 · <a href="https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cookbook/extension-cookbook.zh.md" target="_blank" rel="noopener">扩展实操手册（extension-cookbook）</a>——钩子插件与「功能 → 机制映射」表</li>
+    <li>源码 · <code>packages/bundle/base/cordis.patch.yml</code>（真实 base bundle，约 500 行）与 <code>vendor/cordis/</code>（vendored Cordis 源码）· 仓库 <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener">deepseek-ai/deepseek-harness</a></li>
+    <li>论文 · <a href="https://arxiv.org/abs/2608.25512" target="_blank" rel="noopener">A Programming Paradigm for Spatiotemporal Composability</a>（北大 &amp; DeepSeek-AI，88 页）——effect / coeffect 的形式化</li>
+    <li>上游框架 · <a href="https://github.com/cordiverse/cordis" target="_blank" rel="noopener">cordiverse/cordis</a> · Koishi 生态 <a href="https://koishi.chat" target="_blank" rel="noopener">koishi.chat</a></li>
+    <li>社区插件 · awesome-dsh-plugin（GitHub 搜 <code>dsh-plugin</code> 话题，2026-08 收录 174 个）</li>
+  </ul>
+
+  <h3>延伸阅读 · 本站相关手册</h3>
+  <table>
+    <thead><tr><th>手册</th><th>关联点</th></tr></thead>
+    <tbody>
+      <tr><td><a href="../pi-extensions/a.html">pi 扩展开发</a></td><td>另一个 coding agent 的插件体系：pi 用 ExtensionAPI + 事件生命周期，与 Cordis 的「服务 + 可逆副作用」互为对照</td></tr>
+      <tr><td><a href="../pi-agent-loop/a.html">pi Agent Loop</a></td><td>dsh 的 agentLoop 服务干的是同一层事：循环驱动本身也是插件</td></tr>
+      <tr><td><a href="../llm-prompt-caching/a.html">LLM 前缀缓存</a></td><td>dsh 里 ctx.llm 适配器注册表背后的模型调用层</td></tr>
+    </tbody>
+  </table>
+
+  <a class="next-card" href="../index.html">
+    <div><b>回到总目录</b><div class="nc-sub">know-as-ui · 还有 7 个可交互知识点</div></div>
+    <span class="nc-arrow">↗</span>
+  </a>
+
+  <footer class="colophon">dsh-cordis · 代码与机制事实以 deepseek-harness 官方文档与源码为准 · 配图为 AI 生成概念插画（豆包 seedream），交互组件为本页自制</footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ===== TOC + scrollspy + 进度条 ===== */
+const chapters=[...document.querySelectorAll("section.chapter")],toc=document.getElementById("toc"),
+names=["Cordis 是什么","第一个插件","ctx 与插件树","fiber 生命周期","effect 可逆副作用","服务与 inject","事件与 waterfall","配置即程序","动手写插件","终极测验","参考资料"];
+chapters.forEach((sec,i)=>{const a=document.createElement("a");a.href="#"+sec.id;a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;toc.appendChild(a)});
+const links=[...toc.querySelectorAll("a")],progFill=document.getElementById("progFill"),progLabel=document.getElementById("progLabel");
+function updateSpy(){const y=scrollY+140;let cur=0;chapters.forEach((s,i)=>{if(s.offsetTop<=y)cur=i});links.forEach((a,i)=>a.classList.toggle("active",i===cur));progFill.style.width=((cur+1)/chapters.length*100)+"%";progLabel.textContent=`${cur+1} / ${chapters.length} 章`}
+addEventListener("scroll",updateSpy,{passive:true});addEventListener("resize",updateSpy);updateSpy();
+
+/* ===== checkpoints（localStorage） ===== */
+const CK="dsh-cordis-ckpt";let ck={};try{ck=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){}
+document.querySelectorAll(".ckpt-item").forEach(el=>{if(ck[el.dataset.key])el.classList.add("done");el.onclick=()=>{el.classList.toggle("done");ck[el.dataset.key]=el.classList.contains("done");try{localStorage.setItem(CK,JSON.stringify(ck))}catch(e){}}});
+
+/* ===== 复制按钮 ===== */
+document.querySelectorAll(".codewrap").forEach(w=>{
+  const btn=w.querySelector(".copybtn"),pre=w.querySelector("pre");
+  if(!btn||!pre)return;
+  btn.onclick=()=>{navigator.clipboard.writeText(pre.innerText).then(()=>{btn.textContent="已复制 ✓";btn.classList.add("done");setTimeout(()=>{btn.textContent="复制";btn.classList.remove("done")},1400)})};
+});
+
+/* ===== A1 四问翻卡 ===== */
+document.querySelectorAll("#fourq .fq").forEach(c=>c.onclick=()=>c.classList.toggle("flipped"));
+
+/* ===== B1 启动流程步进器 ===== */
+(function(){
+  const nodes=[...document.querySelectorAll("#b1Flow .flow-node")],narr=document.getElementById("b1Narr");
+  const STEPS=[
+    "<b>① cordis.yml</b>：应用长什么样，全在这个列表里。这里只有一行：挂载 ./hello.ts。",
+    "<b>② Loader 插件</b>：启动器先创建根 Context，再挂载 Loader——读配置这件事本身也是一个插件。",
+    "<b>③ 解析模块</b>：Loader 把 name './hello.ts' 解析成模块。解析失败（拼写错）只会在 logger 报一条，进程不崩。",
+    "<b>④ ctx.plugin()</b>：Loader 把它挂为根 Context 的子插件，同时创建 fiber——插件的档案卡开好了。",
+    "<b>⑤ apply(ctx)</b>：框架调用你的函数，把子上下文递进来。注意：是你不写启动代码，框架来调你。",
+    "<b>⑥ 贡献生效</b>：apply 里注册的一切（工具 / 监听器 / effect）开始工作，输出 hello from my first plugin。"
+  ];
+  let cur=-1;
+  function render(){
+    nodes.forEach((n,i)=>{n.classList.toggle("lit",i===cur);n.classList.toggle("done",i<cur)});
+    narr.innerHTML=cur<0?"点击「下一步」，从配置文件走到你的 apply 函数。":STEPS[cur];
+    document.getElementById("b1Prev").disabled=cur<0;
+    document.getElementById("b1Next").disabled=cur>=STEPS.length-1;
+  }
+  document.getElementById("b1Prev").onclick=()=>{cur=Math.max(-1,cur-1);render()};
+  document.getElementById("b1Next").onclick=()=>{cur=Math.min(STEPS.length-1,cur+1);render()};
+  document.getElementById("b1Reset").onclick=()=>{cur=-1;render()};
+  nodes.forEach((n,i)=>n.onclick=()=>{cur=i;render()});
+  render();
+})();
+
+/* ===== B2 插件树装卸模拟器 ===== */
+(function(){
+  const NS="http://www.w3.org/2000/svg",svg=document.getElementById("b2Svg"),narr=document.getElementById("b2Narr");
+  /* {id,name,sub,x,y,parent} */
+  const NODES=[
+    {id:"root", name:"根 Context", sub:"new Context()", x:380,y:42},
+    {id:"loader", name:"Loader", sub:"读取 cordis.yml", x:95, y:158},
+    {id:"llm", name:"dsh-llm", sub:"模型适配器", x:255,y:158},
+    {id:"agent", name:"dsh-agent", sub:"智能体循环", x:430,y:158},
+    {id:"tool", name:"my-tool", sub:"你的插件 (apply)", x:615,y:158,yours:true},
+    {id:"jobs", name:"dsh-jobs", sub:"后台任务", x:430,y:272},
+    {id:"ui", name:"my-ui", sub:"你的子插件", x:615,y:272},
+  ];
+  const EDGES=[["root","loader"],["root","llm"],["root","agent"],["root","tool"],["agent","jobs"],["tool","ui"]];
+  const byId={};NODES.forEach(n=>byId[n.id]=n);
+  const dead=new Set();
+  const NW=150,NH=54;
+  const edgeEls={},nodeEls={};
+  EDGES.forEach(([a,b])=>{
+    const A=byId[a],B=byId[b];
+    const p=document.createElementNS(NS,"path");
+    const mx=A.x,my=A.y+NH/2,by=B.y-NH/2;
+    p.setAttribute("d",`M ${mx} ${my} C ${mx} ${my+40}, ${B.x} ${by-40}, ${B.x} ${by}`);
+    p.setAttribute("class","tedge");svg.appendChild(p);edgeEls[b]=p;
+  });
+  NODES.forEach(n=>{
+    const g=document.createElementNS(NS,"g");
+    g.setAttribute("class","tnode"+(n.yours?" yours":""));
+    const r=document.createElementNS(NS,"rect");
+    r.setAttribute("x",n.x-NW/2);r.setAttribute("y",n.y-NH/2);r.setAttribute("width",NW);r.setAttribute("height",NH);r.setAttribute("rx",9);
+    if(n.id==="root"){r.setAttribute("fill","#e8ebfd");r.setAttribute("stroke","#4a5df9");r.setAttribute("stroke-width","2")}
+    if(n.yours){r.setAttribute("fill","#e2ecdd");r.setAttribute("stroke","#3d7a44");r.setAttribute("stroke-width","2")}
+    const t1=document.createElementNS(NS,"text");t1.setAttribute("class","t-name");t1.setAttribute("x",n.x);t1.setAttribute("y",n.y-3);t1.setAttribute("text-anchor","middle");t1.textContent=n.name;
+    const t2=document.createElementNS(NS,"text");t2.setAttribute("class","t-sub");t2.setAttribute("x",n.x);t2.setAttribute("y",n.y+15);t2.setAttribute("text-anchor","middle");t2.textContent=n.sub;
+    g.appendChild(r);g.appendChild(t1);g.appendChild(t2);
+    g.onclick=()=>toggle(n.id);
+    svg.appendChild(g);nodeEls[n.id]=g;
+  });
+  function descendants(id){const out=[];EDGES.forEach(([a,b])=>{if(a===id)out.push(b,...descendants(b))});return out}
+  function toggle(id){
+    if(id==="root")return;
+    const going=!dead.has(id);
+    const sub=[id,...descendants(id)];
+    if(going)sub.forEach(d=>dead.add(d));else sub.forEach(d=>dead.delete(d));
+    /* 存活 = 自身未被显式卸载，且祖先链上无人被卸载 */
+    function alive(x){if(x==="root")return true;const p=EDGES.find(e=>e[1]===x);return !dead.has(x)&&alive(p[0])}
+    NODES.forEach(n=>{if(n.id==="root")return;nodeEls[n.id].classList.toggle("dead",!alive(n.id))});
+    EDGES.forEach(([a,b])=>{edgeEls[b].classList.toggle("dead",!alive(b))});
+    const N=byId[id];
+    narr.innerHTML=going
+      ?`<b>卸载 ${N.name}</b>：它的整个子树（${[id,...descendants(id)].filter(x=>x!=="root").map(x=>byId[x].name).join("、")}）被递归卸载，effect 全部回滚；树上的其他分支不受任何影响。`
+      :`<b>重装 ${N.name}</b>：apply 重新执行；若其依赖服务缺失，它会先停在 PENDING 等齐再启动（第 4、6 章）。`;
+  }
+  narr.innerHTML="点击 dsh-agent 试试：它的子插件 dsh-jobs 会被递归卸载，而兄弟节点 dsh-llm、my-tool 完全不受影响。";
+})();
+
+/* ===== B3 fiber 状态机动画 ===== */
+(function(){
+  const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const states={};document.querySelectorAll("#b3Row .fsm-state, .fsm-failwrap .fsm-state").forEach(el=>states[el.dataset.st]=el);
+  const narr=document.getElementById("b3Narr"),btn=document.getElementById("b3Play");
+  const SCRIPTS={
+    ok:{pre:"剧本 A · 正常启动：最常见的一生。",steps:[
+      ["PENDING","已声明，但 inject 的服务还没就绪——先等着。"],
+      ["LOADING","依赖齐了，apply 开始执行。"],
+      ["ACTIVE","apply 完成，贡献生效。终态：营业中。"]]},
+    stuck:{pre:"剧本 B · 依赖缺失：排障最高频。",steps:[
+      ["PENDING","inject 指定的服务无人提供 → 一直等。不报错、不崩溃、不输出。"],
+      ["PENDING","还是 PENDING。补上提供方才会往下走；cordis_inspect 看到的就是它。"],
+      ["LOADING","（补上提供方后）依赖满足，开始加载。"],
+      ["ACTIVE","自动激活。你不需要重启任何东西。"]]},
+    boom:{pre:"剧本 C · apply 抛异常：报错，不静默跳过。",steps:[
+      ["PENDING","照例先等依赖。"],
+      ["LOADING","apply 执行……"],
+      ["FAILED","抛异常 / 配置校验失败 → fiber 进入 FAILED，明确报错。插件绝不会带病运行。"]]},
+    hmr:{pre:"剧本 D · 热重载：改配置不用重启的全过程。",steps:[
+      ["ACTIVE","插件正在运行。"],
+      ["UNLOADING","你保存了文件（或改了配置）→ 旧实例开始清理：所有 effect 按逆序回滚。"],
+      ["LOADING","新代码挂载，apply 重新执行。"],
+      ["ACTIVE","新版本上线。进程从头到尾没重启。"]]}
+  };
+  let scen="ok",timers=[],cur=0;
+  function clear(){timers.forEach(clearTimeout);timers=[]}
+  function reset(){clear();Object.values(states).forEach(el=>el.classList.remove("lit","lit-gone"));cur=0;narr.textContent=SCRIPTS[scen].pre}
+  function play(){
+    reset();const steps=SCRIPTS[scen].steps;const gap=RM?0:1150;
+    steps.forEach(([st,msg],i)=>{timers.push(setTimeout(()=>{
+      Object.values(states).forEach(el=>el.classList.remove("lit","lit-gone"));
+      const el=states[st];if(el)el.classList.add(scen==="boom"&&st==="FAILED"?"lit-gone":"lit");
+      narr.textContent=msg;cur=i;
+    },i*gap))});
+  }
+  document.querySelectorAll("#b3Scen .pill").forEach(p=>p.onclick=()=>{scen=p.dataset.s;document.querySelectorAll("#b3Scen .pill").forEach(x=>x.classList.toggle("active",x===p));reset()});
+  btn.onclick=play;document.getElementById("b3Reset").onclick=reset;reset();
+})();
+
+/* ===== B4 effect 栈动画 ===== */
+(function(){
+  const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const stack=document.getElementById("b4Stack"),log=document.getElementById("b4Log");
+  const count=document.getElementById("b4Count"),rolled=document.getElementById("b4Rolled");
+  const items=[];
+  const DEFS=[
+    {id:"timer", label:"setInterval 定时器", dispose:"clearInterval(t)"},
+    {id:"conn", label:"WebSocket 连接", dispose:"conn.close()"},
+    {id:"listen", label:"事件监听器", dispose:"removeListener(fn)"}
+  ];
+  const btnTimer=document.getElementById("b4Timer"),btnConn=document.getElementById("b4Conn"),
+        btnListen=document.getElementById("b4Listen"),btnDispose=document.getElementById("b4Dispose"),btnReset=document.getElementById("b4Reset");
+  function logLine(html){const d=document.createElement("div");d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight}
+  function render(){
+    stack.innerHTML="";items.forEach(it=>{const c=document.createElement("div");c.className="eff-card";c.innerHTML=`ctx.effect(<b>${it.label}</b>)<small>disposer: ${it.dispose}</small>`;stack.appendChild(c)});
+    count.textContent=items.length;
+    btnTimer.disabled=items.some(i=>i.id==="timer");btnConn.disabled=items.some(i=>i.id==="conn");btnListen.disabled=items.some(i=>i.id==="listen");
+    btnDispose.disabled=items.length===0;
+  }
+  function push(def){
+    items.push({...def});logLine(`<span class="hl">[load]</span> 注册 ${def.label} —— 同时登记 disposer：<span class="ok">${def.dispose}</span>`);render();
+  }
+  btnTimer.onclick=()=>push(DEFS[0]);btnConn.onclick=()=>push(DEFS[1]);btnListen.onclick=()=>push(DEFS[2]);
+  btnDispose.onclick=()=>{
+    btnDispose.disabled=true;const gap=RM?0:700;
+    for(let i=items.length-1,n=1;i>=0;i--,n++){
+      setTimeout(()=>{
+        const it=items[i];const cards=stack.querySelectorAll(".eff-card");const card=cards[i];
+        if(card)card.classList.add("popping");
+        logLine(`<span class="hl">[unload ${n}/3]</span> 逆序回滚：${it.dispose} <span class="ok">✓</span>`);
+        rolled.textContent=String(n);
+      },(items.length-1-i)*gap);
+    }
+    setTimeout(()=>{items.length=0;render();logLine(`<span class="ok">[done]</span> 全部 effect 已回滚，fiber → DISPOSED。全程无人手写清理调用。`)},items.length*gap+200);
+  };
+  btnReset.onclick=()=>{items.length=0;rolled.textContent="0";log.innerHTML=`<span class="hl">[log]</span> 插件 ACTIVE，等待注册 effect…`;render()};
+  render();
+})();
+
+/* ===== B5 依赖联动模拟器 ===== */
+(function(){
+  const providers={llm:true,tools:true,shell:true};
+  const provEls=[...document.querySelectorAll(".dep-provider")];
+  const consEls=[...document.querySelectorAll(".dep-row[data-c]")];
+  const narr=document.getElementById("b5Narr");
+  const NAMES={llm:"llm",tools:"tools",shell:"shell"};
+  function render(){
+    provEls.forEach(p=>p.classList.toggle("on",providers[p.dataset.p]));
+    consEls.forEach(c=>{
+      const needs=c.dataset.c?c.dataset.c.split(","):[];
+      const miss=needs.filter(k=>!providers[k]);
+      c.classList.toggle("is-active",miss.length===0);
+      c.classList.toggle("is-pending",miss.length>0);
+      let dot=c.querySelector(".state-dot");
+      if(!dot){dot=document.createElement("span");dot.className="state-dot";c.insertBefore(dot,c.firstChild)}
+      dot.className="state-dot "+(miss.length===0?"active":"pending");
+      c.querySelector(".dep-miss").textContent=miss.length?`等 ${miss.map(m=>NAMES[m]).join("、")}`:"";
+    });
+  }
+  provEls.forEach(p=>p.onclick=()=>{
+    const k=p.dataset.p;providers[k]=!providers[k];render();
+    narr.innerHTML=providers[k]
+      ?`<b>挂载 ${p.querySelector("b").textContent}</b>：依赖它的插件从 PENDING 自动恢复 ACTIVE——自动重载，零重连代码。`
+      :`<b>卸载 ${p.querySelector("b").textContent}</b>：所有 inject 里带 '${NAMES[k]}' 的插件立刻 PENDING（effect 回滚）。注意 my-observer 无 inject，不受影响——它只听事件。`;
+  });
+  render();
+})();
+
+/* ===== B6 waterfall 决策链模拟器 ===== */
+(function(){
+  const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const nodes=[...document.querySelectorAll("#b6Line .wf-node")],verdict=document.getElementById("b6Verdict"),narr=document.getElementById("b6Narr");
+  const btns=[...document.querySelectorAll("#b6Scen .pill")];
+  const S={
+    pass:{cls:"ok",v:"✓ 工具已执行",n:"请求穿过三个监听器：权限放行 next() → 审批放行 next() → 审计记完日志后也调用 next() → 最内层默认行为执行。三个插件互不相识，只靠接力棒 next() 协作。",lit:[0,1,2,3,4],veto:null},
+    veto:{cls:"bad",v:"✗ 已拒绝",n:"监听器 1（权限）发现没权限：不调 next() 直接返回 deny —— 链在这里短路，监听器 2、3 和默认行为根本没有执行。这就是「否决」：拥有决策权的监听器可以直接回答。",lit:[0,1],veto:1},
+    bug:{cls:"bad",v:"✗ 工具没有执行（且没有任何报错）",n:"审计监听器记完日志后忘了调 next()，直接 return 了 —— 对框架来说这等价于「否决」。下游默认行为被无声吞掉：日志写了，工具却没跑。只负责观察的监听器必须调用 next()。",lit:[0,1,2,3],veto:3}
+  };
+  let scen="pass",timers=[];
+  function reset(){timers.forEach(clearTimeout);timers=[];nodes.forEach(n=>n.classList.remove("lit","veto","exec","skipped"));verdict.style.display="none"}
+  function play(){
+    reset();const s=S[scen];const gap=RM?0:620;
+    s.lit.forEach((idx,i)=>{timers.push(setTimeout(()=>{
+      nodes.forEach(n=>n.classList.remove("lit"));
+      nodes[idx].classList.add("lit");
+      if(s.veto===idx){nodes[idx].classList.remove("lit");nodes[idx].classList.add("veto")}
+      if(idx===4&&!s.veto)nodes[idx].classList.add("exec");
+      if(s.veto!==null&&idx>s.veto)nodes[idx].classList.add("skipped");
+    },i*gap))});
+    timers.push(setTimeout(()=>{
+      verdict.textContent=s.v;verdict.className="wf-verdict "+s.cls;verdict.style.display="";
+      narr.textContent=s.n;
+      if(s.veto===null){nodes[4].classList.add("exec");nodes[4].classList.remove("lit")}
+      else for(let k=s.veto+1;k<nodes.length;k++)nodes[k].classList.add("skipped");
+    },s.lit.length*gap+150));
+  }
+  btns.forEach(b=>b.onclick=()=>{scen=b.dataset.s;btns.forEach(x=>x.classList.toggle("active",x===b));reset();play()});
+  reset();
+})();
+
+/* ===== B7 patch 叠层演示 ===== */
+(function(){
+  const layers=[...document.querySelectorAll(".patch-layer")],eff=document.getElementById("b7Eff");
+  /* 生效树按 id 覆盖：后写覆盖先写 */
+  const PATCHES=[
+    {"timer":{name:"cordis-plugin-timer",tag:"来自 dsh-base"}},
+    {"timer":{name:"cordis-plugin-timer",tag:"来自 dsh-base"},"hmr":{name:"cordis-plugin-hmr",tag:"dsh-base · disabled",off:true},"llm":{name:"dsh-llm",tag:"来自 dsh-base"},"session":{name:"dsh-session",tag:"来自 dsh-base"},"agent":{name:"dsh-agent",tag:"来自 dsh-base"}},
+    {"timer":{name:"cordis-plugin-timer",tag:"来自 dsh-base"},"hmr":{name:"cordis-plugin-hmr",tag:"被用户层改回 enabled","mod":true},"llm":{name:"dsh-llm",tag:"来自 dsh-base"},"session":{name:"dsh-session",tag:"来自 dsh-base"},"agent":{name:"dsh-agent",tag:"来自 dsh-base"},"my-tool":{name:"/path/to/my-tool.ts",tag:"用户层新增",nw:true}},
+    {"timer":{name:"cordis-plugin-timer",tag:"来自 dsh-base"},"hmr":{name:"cordis-plugin-hmr",tag:"被用户层改回 enabled","mod":true},"llm":{name:"dsh-llm",tag:"来自 dsh-base"},"session":{name:"dsh-session",tag:"来自 dsh-base"},"agent":{name:"dsh-agent",tag:"来自 dsh-base"},"my-tool":{name:"/path/to/my-tool.ts",tag:"用户层新增",nw:true},"greet-tool":{name:"/path/to/greet-tool.ts",tag:"--patch 临时新增",nw:true}}
+  ];
+  let applied=0;
+  function render(){
+    layers.forEach((l,i)=>l.classList.toggle("applied",i<applied));
+    if(applied===0){eff.innerHTML='<span style="color:#8a8065">// 生效配置树（点击左侧层来叠加）\n// 空根：cordis.yml = []</span>';return}
+    const p=PATCHES[applied-1];
+    let html=`<span style="color:#8a8065">// 生效配置树 · ${applied} 层 patch 叠加后</span>`;
+    for(const[id,row]of Object.entries(p)){
+      const tag=row.mod?'<span class="ptag mod">改动</span>':row.nw?'<span class="ptag new">新增</span>':"";
+      const extra=row.off?' <span class="ptag">[disabled: true]</span>':"";
+      html+=`<div class="row"><span class="pid">- id: ${id}</span><span class="pname">${row.name}</span><span class="ptag">${row.tag}</span>${extra}${tag}</div>`;
+    }
+    html+=`<div class="row" style="margin-top:8px"><span class="ptag">按 id 寻址 · 后写覆盖先写 · Loader 只对差异做增量挂载/卸载</span></div>`;
+    eff.innerHTML=html;
+  }
+  layers.forEach((l,i)=>l.onclick=()=>{applied=i+1;render()});
+  document.getElementById("b7Reset").onclick=()=>{applied=0;render()};
+  render();
+})();
+
+/* ===== B8 槽位探索器 ===== */
+(function(){
+  const SLOTS={
+    tools:{t:"工具注册表",d:"Agent 能调用的所有能力都挂在这里。<b>现有提供方</b>：dsh-tools（注册表本体）+ 所有 dsh-tool-*。<b>你可以写</b>：新工具（数据库查询、浏览器自动化、Git 操作…），或挂 tools/pre-execute 写权限钩子。"},
+    llm:{t:"LLM 适配器",d:"模型调用的注册表。<b>现有提供方</b>：llm-deepseek、llm-pi-ai（多提供方）、llm-replay。<b>你可以写</b>：接入任意模型厂商的适配器，patch 层一行切换。"},
+    shell:{t:"Bash 执行",d:"命令执行能力。<b>现有提供方</b>：bash-local、bash-sandbox、pwsh-local、E2B。<b>你可以写</b>：远程 / 容器 shell 提供方——Definition 和所有 Consumer 不用改一行。"},
+    sessions:{t:"会话与持久化",d:"会话日志与落盘。<b>现有提供方</b>：session-persistence-jsonl / -sqlite、session-query-sqlite。<b>你可以写</b>：新的存储后端、会话投影、标题生成器。"},
+    fs:{t:"文件系统",d:"文件读写的能力接缝。<b>现有提供方</b>：fs-local、fs-sandbox、fs-e2b。<b>你可以写</b>：虚拟 FS、只读镜像、云盘桥。"},
+    web:{t:"Web 访问",d:"抓取与搜索。<b>现有提供方</b>：web-fetch-http、web-search-deepseek / exa / perplexity。<b>你可以写</b>：新的搜索源、带缓存的抓取器。"},
+    approval:{t:"审批 / 权限",d:"治理接缝：approval、permissionPresets、sandboxPolicy。<b>你可以写</b>：审批策略插件（挂 waterfall 链）、token 预算控制、审计日志。"},
+    subagents:{t:"子 Agent 提供方",d:"委派能力的注册表。<b>现有提供方</b>：spawn/fork-in-process、ACP、Codex、Claude Code。<b>你可以写</b>：常驻专家 Agent 池（审查员 / 测试员），主 Agent 按需调度。"}
+  };
+  const grid=document.getElementById("b8Grid"),detail=document.getElementById("b8Detail");
+  Object.entries(SLOTS).forEach(([k,s])=>{
+    const c=document.createElement("div");c.className="slot-chip";c.innerHTML=`<b>ctx.${k}</b><small>${s.t}</small>`;
+    c.onclick=()=>{document.querySelectorAll(".slot-chip").forEach(x=>x.classList.remove("active"));c.classList.add("active");detail.innerHTML=s.d};
+    grid.appendChild(c);
+  });
+  detail.innerHTML="<b>提示：</b>dsh 的扩展点不是 API 列表，而是一张服务注册表——任何插件都能注册新服务，也能替换已有服务的提供方。点一个槽位看看里面住着谁。";
+})();
+
+/* ===== 终极测验 ===== */
+const QUESTIONS=[
+ {q:"卸载插件树上的 dsh-agent（它挂了子插件 dsh-jobs），会发生什么？",
+  o:["只有 dsh-agent 停止，dsh-jobs 继续运行","dsh-jobs 被递归卸载，兄弟节点不受影响","整棵插件树全部重启","dsh-jobs 变成 FAILED 并报错"],a:1,
+  x:"ctx.plugin(child) 派生子上下文，卸载按层级递归：父卸载 → 整个子树回滚；兄弟和父级不受影响（第 3 章模拟器）。"},
+ {q:"你加了一个插件，启动后毫无反应、也不报错。最可能的原因是？",
+  o:["Cordis 没有加载它","配置文件语法错误","它的 fiber 蹲在 PENDING：inject 的服务无人提供","Node 版本太低"],a:2,
+  x:"PENDING = 依赖没上齐，插件静默等待（不保持进程存活）。用 cordis_inspect 或 ctx.registry 查 fiber 状态；另外记得先排除路径拼写错误——解析失败也只在 logger 报一条（第 4、9 章）。"},
+ {q:"插件里要开一个 setInterval，正确的姿势是？",
+  o:["直接 setInterval，插件卸载时框架自然会清","包进 ctx.effect(() => { const t = setInterval(...); return () => clearInterval(t) })","用全局变量记住它，下次启动时清理","不清理也没关系，进程退出会回收"],a:1,
+  x:"铁律：自己创建、Cordis 不管的资源都包进 ctx.effect() 并返回 disposer。直接开定时器 = 泄漏：插件卸了它还在跑，HMR 时会越积越多（第 5 章）。"},
+ {q:"一个只负责记日志的 waterfall 监听器忘了调用 next()，后果是？",
+  o:["日志丢失","编译报错","下游默认行为被无声吞掉——比如工具不再执行，且没有任何报错","没有影响，框架会自动补调 next()"],a:2,
+  x:"waterfall 里不调 next() 直接返回 = 否决、短路。观察型监听器必须 return next()，这是 dsh 的明文纪律（第 7 章场景 3 演示过）。"},
+ {q:"想把本地 bash 换成沙箱执行，需要做什么？",
+  o:["修改 dsh 源码里所有用 shell 的地方","在 patch 层把 shell 的提供方换成沙箱实现——一行配置，依赖方自动重载","给每个工具插件加 if (sandbox) 分支","重装 dsh"],a:1,
+  x:"三种角色分工：Definition（shell 契约）和 Consumer（dsh-tool-bash 等）都不动，只换 Provider。提供方卸载 → 依赖方自动卸载；新提供方挂载 → 自动重载（第 6、9 章）。"}
+];
+let qi=0,qs=0,picked=-1,locked=false;
+const qNo=document.getElementById("qNo"),qText=document.getElementById("qText"),qOpts=document.getElementById("qOpts"),qExp=document.getElementById("qExp"),qSubmit=document.getElementById("qSubmit"),qNext=document.getElementById("qNext"),qRestart=document.getElementById("qRestart"),qVerdict=document.getElementById("qVerdict"),quizScore=document.getElementById("quizScore");
+function loadQ(){picked=-1;locked=false;const Q=QUESTIONS[qi];qNo.textContent="QUESTION "+(qi+1)+" / "+QUESTIONS.length;qText.textContent=Q.q;qOpts.innerHTML="";Q.o.forEach((o,i)=>{const d=document.createElement("div");d.className="q-opt";d.textContent=String.fromCharCode(65+i)+". "+o;d.onclick=()=>{if(locked)return;picked=i;[...qOpts.children].forEach((x,j)=>x.classList.toggle("picked",j===i));qSubmit.disabled=false};qOpts.appendChild(d)});qExp.classList.remove("show");qVerdict.textContent="";qSubmit.style.display="";qSubmit.disabled=true;qNext.style.display="none";qRestart.style.display="none"}
+qSubmit.onclick=()=>{if(picked<0)return;locked=true;const Q=QUESTIONS[qi],ok=picked===Q.a;if(ok)qs++;[...qOpts.children].forEach((x,i)=>{x.classList.remove("picked");x.classList.add("locked");if(i===Q.a)x.classList.add("right");else if(i===picked)x.classList.add("wrong")});qExp.textContent=(ok?"✓ ":"✗ ")+Q.x;qExp.classList.add("show");quizScore.textContent=qs+" / "+QUESTIONS.length;qVerdict.textContent=ok?"正确":"再想想";qVerdict.className="q-verdict "+(ok?"ok":"bad");qSubmit.style.display="none";if(qi<QUESTIONS.length-1)qNext.style.display="";else{qRestart.style.display="";qVerdict.textContent+=qs>=4?" · 出师，可以去写插件了":" · 建议复习第 3~7 章";try{localStorage.setItem("dsh-cordis-quiz-best",String(qs))}catch(e){}
+  if(qs>=4){const el=document.querySelector('.ckpt-item[data-key="dsh-cordis-c3"]');if(el&&!el.classList.contains("done")){el.classList.add("done");ck["dsh-cordis-c3"]=true;try{localStorage.setItem(CK,JSON.stringify(ck))}catch(e){}}}}};
+qNext.onclick=()=>{qi++;loadQ()};
+qRestart.onclick=()=>{qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};
+loadQ();
+</script>
+</body>
+</html>
