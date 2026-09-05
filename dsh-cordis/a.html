@@ -250,12 +250,12 @@ figcaption{font:11px var(--mono);color:var(--ink-faint);letter-spacing:.06em;mar
 
   <div class="figure-grid">
     <figure>
-      <img src="assets/cordis-heart.jpg" alt="Cordis 像一块带总闸的智能插线板" loading="lazy">
-      <figcaption>本页比喻的具象化：插件 = 电器，Cordis = 带总闸的插线板——插上就通电，拔掉无残留，取电全走同一个板</figcaption>
+      <img src="assets/cordis-heart.jpg" alt="Cordis 是什么：插件框架三件事图解" loading="lazy">
+      <figcaption>本节内容的图形化小结：Cordis 这个插件框架只管三件事——装进来、卸干净、找得到；dsh 的一切能力都是插在它上面的插件</figcaption>
     </figure>
     <figure>
-      <img src="assets/ecosystem.jpg" alt="插件生态市集插画" loading="lazy">
-      <figcaption>生态规模一瞥：Koishi 插件市场长期保有 4100+ 插件，上千位互不相识的作者靠同一套框架协作（2026-08 数据）</figcaption>
+      <img src="assets/ecosystem.jpg" alt="Cordis 生态规模数字卡片" loading="lazy">
+      <figcaption>生态规模一瞥（2026-08 实测）：Koishi 社区插件 4100+、cordis 年下载 51 万次、awesome-dsh 收录 174 个、dsh 内置 160 个</figcaption>
     </figure>
   </div>
 </section>
@@ -353,8 +353,8 @@ figcaption{font:11px var(--mono);color:var(--ink-faint);letter-spacing:.06em;mar
   <p>关键在 <code>ctx.plugin(child)</code>：它不是简单的「注册」，而是<strong>派生出一个子上下文</strong>。于是插件不是平铺的列表，而是<strong>一棵树</strong>——子上下文能看到父上下文的一切（继承），但卸载是按层级的：父插件卸载，所有子插件<strong>递归</strong>卸载；子插件卸载，不影响兄弟和父级。这棵树是 Cordis 一切生命周期语义的骨架。</p>
 
   <div class="fig-single">
-    <img src="assets/plugin-tree.jpg" alt="dsh 的插件树：根 Context 派生子上下文" loading="lazy">
-    <figcaption>插件树意象：父节点被拔下，整个子分支熄灭，兄弟分支毫发无损——上面第 3 章的模拟器用的正是这棵树</figcaption>
+      <img src="assets/plugin-tree.jpg" alt="插件树结构图解" loading="lazy">
+      <figcaption>插件树图解：灰色虚线的 dsh-jobs 表示已随父插件卸载的子树——下面这个模拟器就是这棵树的可交互版，点它</figcaption>
   </div>
 
   <div class="lab">
@@ -389,8 +389,8 @@ figcaption{font:11px var(--mono);color:var(--ink-faint);letter-spacing:.06em;mar
   </table>
 
   <div class="fig-single">
-    <img src="assets/fiber-lifecycle.jpg" alt="fiber 生命周期循环插画" loading="lazy">
-    <figcaption>插件的一生：等待 → 装配 → 运行 → 拆解回收，旁路通向翻车现场。无论因何种原因卸载（改配置 / 热重载 / 显式 dispose / 依赖服务消失），清理都是自动的</figcaption>
+      <img src="assets/fiber-lifecycle.jpg" alt="fiber 状态机图解" loading="lazy">
+      <figcaption>fiber 状态机图解：无论因何种原因卸载（改配置 / 热重载 / 显式 dispose / 依赖服务消失），清理都是自动的</figcaption>
   </div>
 
   <div class="lab">
@@ -443,8 +443,8 @@ figcaption{font:11px var(--mono);color:var(--ink-faint);letter-spacing:.06em;mar
   <p>撤销说明按<strong>逆序</strong>执行（先注册的后撤销，天然 LIFO——后进先出，像摞盘子：最后摞上的最先拿走）。多个 effect 各自独立时，可以只撤掉其中一个而不惊动别人——这就是「单个插件可热卸载，邻居不受影响」的底层依据。</p>
 
   <div class="fig-single">
-    <img src="assets/effect-undo.jpg" alt="effect 累加器与 LIFO 撤销" loading="lazy">
-    <figcaption>可逆副作用意象：加载时逐块放上玻璃砖、每块都记下自己的撤法；卸载时逆序取走，桌面精确回到原样</figcaption>
+      <img src="assets/effect-undo.jpg" alt="effect 注册与 LIFO 回滚图解" loading="lazy">
+      <figcaption>effect 图解：加载时执行主体、卸载时自动执行 disposer；多个 effect 按注册的逆序回滚（LIFO）</figcaption>
   </div>
 
   <div class="lab">
@@ -518,8 +518,8 @@ figcaption{font:11px var(--mono);color:var(--ink-faint);letter-spacing:.06em;mar
   <p>传统 DI 假设「一旦绑定，服务就一直在」；Cordis 的假设是「<strong>服务可以随时出现，也可以随时消失</strong>」。这在 Agent 场景里是日常：LLM 提供方被限流、MCP 服务器崩溃导致工具被注销、文件 watcher 被系统杀死。Cordis 的处理：<strong>提供方卸载 → 所有依赖它的插件自动卸载（effect 回滚）；提供方恢复 → 自动重载</strong>。依赖方一行重连代码都不用写。</p>
 
   <div class="fig-single">
-    <img src="assets/service-wiring.jpg" alt="服务提供方与依赖方的电缆联动" loading="lazy">
-    <figcaption>响应式依赖意象：左边是提供方电站，右边是消费方电器——一座电站拉闸，它的电器自动休眠；电站恢复，电器自动亮起，全程无人接线</figcaption>
+      <img src="assets/service-wiring.jpg" alt="服务与 inject 图解" loading="lazy">
+      <figcaption>服务与 inject 图解：消费方只声明名字、不 import 实现；提供方卸载 → 依赖方自动卸载，恢复 → 自动重载</figcaption>
   </div>
 
   <div class="lab">
@@ -584,8 +584,8 @@ ctx.<span class="fn">on</span>(<span class="st">'stats/report'</span>, (name, co
 })</pre></div>
 
   <div class="fig-single">
-    <img src="assets/waterfall-gate.jpg" alt="waterfall 决策链闸门" loading="lazy">
-    <figcaption>waterfall 决策链意象：一颗请求弹珠过闸，每道闸门可以放行（调 next()）也可以拦下（否决短路）；中间某道闸落下，下游闸门连同执行炉全部沉睡</figcaption>
+      <img src="assets/waterfall-gate.jpg" alt="waterfall 决策链图解" loading="lazy">
+      <figcaption>waterfall 决策链图解：调 next() 放行、不调 = 否决短路；只负责观察的监听器必须调用 next()</figcaption>
   </div>
 
   <div class="lab">
@@ -637,8 +637,8 @@ ctx.<span class="fn">on</span>(<span class="st">'stats/report'</span>, (name, co
   <p>dsh 把「配置即程序」工程化成了 <strong>Profile + Bundle + patch 覆盖层</strong>：一个 Bundle 就是一个 npm 包，其 package.json 声明一份 patch（一组 insert）；核心组合包 <code>@deepseek-ai/dsh-base</code> 的 patch 一次性 insert 几十个核心插件（真实文件约 500 行）；部署方想改默认行为，不用碰任何源码——在自己的 patch 层按 <strong>id</strong> 覆盖一行即可（后写覆盖先写）。</p>
 
   <div class="fig-single">
-    <img src="assets/patch-layers.jpg" alt="配置树按顺序叠加各层 patch" loading="lazy">
-    <figcaption>patch 叠层意象：每层透明胶片带几颗芯片，盖下去时同位芯片覆盖下层——改应用 = 叠一层 patch，不 fork、不改包、不重启</figcaption>
+      <img src="assets/patch-layers.jpg" alt="patch 叠层图解" loading="lazy">
+      <figcaption>patch 叠层图解：四层按顺序叠加出生效配置树——按 id 寻址、后写覆盖先写；改应用 = 叠一层 patch</figcaption>
   </div>
 
   <div class="lab">
@@ -660,12 +660,12 @@ ctx.<span class="fn">on</span>(<span class="st">'stats/report'</span>, (name, co
 
   <div class="figure-grid">
     <figure>
-      <img src="assets/plugin-panel.jpg" alt="dsh 插件清单控制墙插画" loading="lazy">
-      <figcaption>真实 dsh 进程的设置页共有 160 个插件，每个都能单独启停——全拜这套配置树所赐</figcaption>
+      <img src="assets/plugin-panel.jpg" alt="服务槽位注册表图解" loading="lazy">
+      <figcaption>dsh 的扩展点是一张服务注册表：八个常用槽位，任何插件都能注册新服务、也能替换已有提供方</figcaption>
     </figure>
     <figure>
-      <img src="assets/three-roles.jpg" alt="Service Definition / Provider / Consumer 三种角色" loading="lazy">
-      <figcaption>槽位背后的固定模式：中央插座 = Definition 契约，左边电站 = 可替换 Provider，右边电器 = 只认契约的 Consumer（详见第 9 章）</figcaption>
+      <img src="assets/three-roles.jpg" alt="Service Definition / Provider / Consumer 三种角色图解" loading="lazy">
+      <figcaption>三种角色：Definition 定契约、Provider 可替换、Consumer 只认契约——换提供方 = cordis.yml 改一行（配合第 6 章的联动模拟器）</figcaption>
     </figure>
   </div>
 </section>
@@ -807,7 +807,7 @@ ctx.<span class="fn">on</span>(<span class="st">'stats/report'</span>, (name, co
   <div class="chapter-head"><span class="chapter-no">11</span><h2 class="ch">参考资料</h2></div>
   <p class="lede">本手册整理自以下来源：微信文章正文与配图、dsh 仓库官方文档与真实源码（base bundle patch、vendor Cordis）、以及公开的插件开发教程。</p>
   <ul class="plain source-list">
-    <li>腾讯技术工程 · <a href="https://mp.weixin.qq.com/s/3vtCkp6EbA5MhRERD6f17A" target="_blank" rel="noopener">《DeepSeek Harness 背后的"心脏"：Cordis 到底是什么》（作者 lss233，2026-09）</a>——叙事主线参考；本页配图为 AI 生成的概念插画，非原文图表</li>
+    <li>腾讯技术工程 · <a href="https://mp.weixin.qq.com/s/3vtCkp6EbA5MhRERD6f17A" target="_blank" rel="noopener">《DeepSeek Harness 背后的"心脏"：Cordis 到底是什么》（作者 lss233，2026-09）</a>——叙事主线参考；本页封面与配图均为 AI 生成，非原文图表</li>
     <li>dsh 官方文档 · <a href="https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cordis-primer.zh.md" target="_blank" rel="noopener">Cordis 入门（cordis-primer）</a> 与 <a href="https://github.com/deepseek-ai/deepseek-harness/tree/main/docs/cordis-tutorial" target="_blank" rel="noopener">Cordis 教程（七章，每个例子可运行）</a>——第 2~7、9 章代码的出处</li>
     <li>dsh 官方文档 · <a href="https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cookbook/extension-cookbook.zh.md" target="_blank" rel="noopener">扩展实操手册（extension-cookbook）</a>——钩子插件与「功能 → 机制映射」表</li>
     <li>源码 · <code>packages/bundle/base/cordis.patch.yml</code>（真实 base bundle，约 500 行）与 <code>vendor/cordis/</code>（vendored Cordis 源码）· 仓库 <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener">deepseek-ai/deepseek-harness</a></li>
@@ -831,7 +831,7 @@ ctx.<span class="fn">on</span>(<span class="st">'stats/report'</span>, (name, co
     <span class="nc-arrow">↗</span>
   </a>
 
-  <footer class="colophon">dsh-cordis · 代码与机制事实以 deepseek-harness 官方文档与源码为准 · 配图为 AI 生成概念插画（豆包 seedream），交互组件为本页自制</footer>
+  <footer class="colophon">dsh-cordis · 代码与机制事实以 deepseek-harness 官方文档与源码为准 · 封面为 AI 生成插画（豆包 seedream），内容配图为 AI 生成图解（GPT-Image-2），交互组件为本页自制</footer>
 </section>
 
 </main>
