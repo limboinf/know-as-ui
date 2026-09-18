@@ -1,0 +1,108 @@
+/* Jev 深入浅出 · 单页共享样式
+   页面专属的组件样式写在 a.html 的 <style> 块里，不要改这个文件。 */
+:root{
+  --jev:#0d8f82;           /* 系列主题色：仪表青 */
+  --jev-soft:#e0f1ee;
+  --jev-deep:#0a645c;
+  --jev-ink:#123a36;       /* 深青墨色（深色面板底） */
+  --amber:#e8a23a;         /* 概率高亮琥珀 */
+}
+
+/* ===== 通用交互面板壳 ===== */
+.lab{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:18px 0;overflow:hidden}
+.lab-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;background:var(--jev-soft);border-bottom:1.5px solid var(--ink);flex-wrap:wrap}
+.lab-head b{font:700 12px var(--mono);letter-spacing:.08em}
+.lab-body{padding:18px}
+.lab-foot{padding:12px 16px;border-top:1px solid var(--line);background:var(--paper-deep);font:12px var(--mono);color:var(--ink-soft)}
+
+.ctrl{margin-bottom:16px}
+.ctrl > label{display:flex;justify-content:space-between;align-items:baseline;font:11px var(--mono);color:var(--ink-soft);margin-bottom:6px}
+.ctrl > label b{font:800 14px var(--mono);color:var(--ink)}
+.ctrl > label b em{font-style:normal;color:var(--jev)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{border:1px solid var(--line);background:#fffdf8;border-radius:99px;padding:5px 11px;font:600 11px var(--mono);cursor:pointer;color:var(--ink-soft);transition:.15s}
+.pill:hover{border-color:var(--jev);color:var(--jev)}
+.pill.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pill.active b{color:var(--amber)}
+
+.sim-btn{font:600 12px var(--mono);cursor:pointer;background:var(--ink);color:var(--paper);border:1px solid var(--ink);border-radius:6px;padding:8px 15px;transition:.15s}
+.sim-btn:hover{background:var(--jev-deep)}
+.sim-btn.ghost{background:transparent;color:var(--ink)}
+.sim-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ===== KPI 读数 ===== */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+.kpi{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:10px 12px}
+.kpi span{display:block;font:10px var(--mono);letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase}
+.kpi b{display:block;font:800 21px/1.3 var(--mono);color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.kpi.jev b{color:var(--jev)}
+.kpi.ok b{color:var(--ok)}
+.kpi.warn b{color:var(--warn)}
+.kpi.bad b{color:var(--bad)}
+
+/* ===== 概率条（Choice / Score 分布通用） ===== */
+.prob-row{display:grid;grid-template-columns:118px 1fr 52px;gap:8px;align-items:center;margin-bottom:7px}
+.prob-row .pr-name{font:650 11.5px var(--mono);color:var(--ink-soft);text-align:right;overflow-wrap:anywhere}
+.prob-row .pr-bar{height:16px;background:var(--paper-deep);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.prob-row .pr-fill{height:100%;background:#c8c1b0;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.prob-row.win .pr-fill{background:var(--jev)}
+.prob-row.win .pr-name{color:var(--jev-deep);font-weight:800}
+.prob-row .pr-val{font:700 11.5px var(--mono);color:var(--ink-soft)}
+
+/* ===== 通关条件 · 可展开参考答案 ===== */
+details.ckpt-ans{
+  width:100%;max-width:var(--content-rail);
+  margin:-6px 0 24px 12px;
+  border:1px dashed var(--line);border-left:3px solid var(--jev);
+  border-radius:8px;background:#fffdf8;
+  overflow:hidden;
+}
+details.ckpt-ans summary{
+  cursor:pointer;list-style:none;user-select:none;
+  display:flex;align-items:center;gap:9px;
+  padding:9px 14px;
+  font:600 12.5px var(--mono);color:var(--jev-deep);
+}
+details.ckpt-ans summary::-webkit-details-marker{display:none}
+details.ckpt-ans summary::before{content:"▸";color:var(--jev);transition:transform .2s}
+details.ckpt-ans[open] summary::before{transform:rotate(90deg)}
+details.ckpt-ans summary:hover{background:var(--jev-soft)}
+.ans-body{padding:2px 16px 14px;display:grid;gap:10px}
+.ans-block{border-radius:8px;padding:11px 14px;font-size:14px;line-height:1.85}
+.ans-block.plain{background:var(--jev-soft);border:1px solid #bcdcd6}
+.ans-block.pro{background:var(--paper-deep);border:1px solid var(--line)}
+.ans-tag{display:inline-block;font:700 10px var(--mono);letter-spacing:.12em;padding:2px 9px;border-radius:99px;margin-bottom:7px}
+.ans-block.plain .ans-tag{background:var(--jev);color:#fff}
+.ans-block.pro .ans-tag{background:var(--ink);color:var(--amber)}
+.ans-block p{max-width:none;margin:0 0 8px}
+.ans-block p:last-child{margin:0}
+
+/* ===== 终极测验 ===== */
+.quizbox{width:100%;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;margin:20px 0;overflow:hidden}
+.quiz-head{display:flex;justify-content:space-between;padding:14px 20px;border-bottom:1.5px solid var(--ink);background:var(--paper-deep);font:11px var(--mono)}
+.quiz-body{padding:20px 24px}
+.q-no{font:11px var(--mono);color:var(--ink-faint);margin-bottom:6px}
+.q-text{font-size:17px;font-weight:650;margin-bottom:16px}
+.q-opt{border:1.5px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:14px}
+.q-opt:hover{background:var(--paper-deep)}
+.q-opt.picked{border-color:var(--jev);background:var(--jev-soft)}
+.q-opt.right{border-color:var(--ok);background:#e2ecdd}
+.q-opt.wrong{border-color:var(--bad);background:#f6dede}
+.q-opt.locked{pointer-events:none}
+.q-exp{display:none;border-top:1px dashed var(--line);padding-top:12px;margin-top:12px;color:var(--ink-soft);font-size:14px}
+.q-exp.show{display:block}
+.quiz-foot{display:flex;gap:9px;align-items:center;padding:13px 20px;border-top:1.5px solid var(--ink);background:var(--paper-deep)}
+.q-verdict{font-size:13px;font-weight:700}
+.q-verdict.ok{color:var(--ok)}
+.q-verdict.bad{color:var(--bad)}
+
+/* ===== 参考资料与其他 ===== */
+.source-list{max-width:var(--content-rail);font-size:13px}
+.source-list a{color:var(--accent-deep);overflow-wrap:anywhere}
+.chapter > table{display:block;max-width:100%;overflow-x:auto}
+
+@media(max-width:860px){
+  .ctrl-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

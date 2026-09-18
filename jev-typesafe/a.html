@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>Jev 深入浅出 · 只做判断题的模型 · 交互手册</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属组件样式（不改 topic.css） ===== */
+
+/* ---- 封面 hero ---- */
+.hero{max-width:var(--content-rail);margin:0 0 34px}
+.hero-kicker{font:700 11px var(--mono);letter-spacing:.16em;color:var(--jev);text-transform:uppercase;margin-bottom:10px}
+.hero h1{font:800 clamp(30px,4.6vw,46px)/1.2 var(--serif);letter-spacing:-.01em;margin:0 0 14px}
+.hero h1 em{font-style:normal;color:var(--jev)}
+.hero p{font-size:16.5px;color:var(--ink-soft);max-width:820px}
+.hero .hero-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.hero-cover{width:100%;max-width:var(--content-rail);aspect-ratio:2.35/1;object-fit:cover;border:1.5px solid var(--ink);border-radius:12px;display:block;margin:0 0 18px;box-shadow:0 14px 30px -18px rgba(18,58,54,.45)}
+
+/* ---- A1 四问翻卡 ---- */
+.fourq{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin:16px 0 6px;max-width:var(--content-rail)}
+.fq{perspective:1000px;height:208px;cursor:pointer}
+.fq-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .45s}
+.fq.flipped .fq-inner{transform:rotateY(180deg)}
+.fq-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:1.5px solid var(--ink);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column}
+.fq-face.front{background:#fffdf8;justify-content:space-between}
+.fq-face.back{transform:rotateY(180deg);background:var(--jev-soft)}
+.fq-no{font:800 11px var(--mono);color:var(--jev)}
+.fq-q{font:750 16px var(--serif);line-height:1.5}
+.fq-hint{font:600 10px var(--mono);color:var(--ink-faint)}
+.fq-t{font:800 13px var(--mono);color:var(--jev-deep);margin-bottom:7px}
+.fq-a{font-size:13.5px;line-height:1.7;color:var(--ink-soft)}
+.fq-a strong{color:var(--ink)}
+
+/* ---- B1 实习生 vs 阅卷老师 对比器 ---- */
+.duel{max-width:var(--content-rail)}
+.duel-state{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:12px 16px;margin-bottom:12px;font-size:14px}
+.duel-state b{font:700 11px var(--mono);color:var(--jev-deep);display:block;margin-bottom:4px;letter-spacing:.08em}
+.duel-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.duel-col{border:1.5px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.duel-col.win{border-color:var(--jev)}
+.duel-col h4{margin:0;padding:10px 14px;font:750 12px var(--mono);letter-spacing:.06em;background:var(--paper-deep);border-bottom:1.5px solid var(--line)}
+.duel-col.win h4{background:var(--jev-soft);color:var(--jev-deep);border-color:var(--jev)}
+.duel-out{padding:13px 15px;font:11.5px/1.75 var(--mono);flex:1;overflow:auto;max-height:360px}
+.duel-out .prose{font-size:13px;font-family:var(--sans);color:var(--ink-soft)}
+.duel-out .prose em{font-style:normal;color:var(--ink-faint);font-size:11px;display:block;margin-top:8px;font-family:var(--mono)}
+#b1Jev{background:var(--code-bg);color:var(--code-ink);border-radius:8px;padding:12px 14px;white-space:pre;overflow:auto;font-size:11.3px;line-height:1.78}
+.duel-out .jk{color:#8fb8d8}
+.duel-out .js2{color:#b5c98a}
+.duel-out .jn{color:#e8a23a}
+.duel-out .cmt{color:#8a8065}
+.duel-tag{display:inline-block;font:700 9.5px var(--mono);padding:2px 8px;border-radius:99px;margin-bottom:8px}
+.duel-tag.simi{background:#f3e9d5;color:var(--warn);border:1px solid #ddc9a0}
+.duel-tag.real{background:#dde8dd;color:var(--ok);border:1px solid #bccfbc}
+@media(max-width:760px){.duel-grid{grid-template-columns:1fr}}
+
+/* ---- B2 请求拼装台 ---- */
+.asm-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;align-items:start}
+.asm-q{border:1.5px solid var(--line);border-radius:9px;background:#fffdf8;padding:10px 13px;margin-bottom:8px;cursor:pointer;transition:.15s;user-select:none}
+.asm-q:hover{border-color:var(--jev)}
+.asm-q.on{border-color:var(--jev);background:var(--jev-soft)}
+.asm-q b{font:750 12.5px var(--mono);color:var(--ink)}
+.asm-q small{display:block;font:11px var(--mono);color:var(--ink-faint);margin-top:3px}
+.asm-q .qtype{float:right;font:700 9.5px var(--mono);padding:1.5px 8px;border-radius:99px;background:var(--ink);color:var(--paper)}
+.asm-res{border:1.5px solid var(--ink);border-radius:9px;background:var(--code-bg);padding:13px 15px;font:11.5px/1.8 var(--mono);color:var(--code-ink);min-height:300px;white-space:pre-wrap;overflow:auto}
+.asm-res .jk{color:#8fb8d8}
+.asm-res .js2{color:#b5c98a}
+.asm-res .jn{color:#e8a23a}
+.asm-res .dim{color:#8a8065}
+.asm-fields{margin-top:12px;border-left:3px solid var(--jev);background:var(--paper-deep);padding:10px 14px;font-size:13.5px;line-height:1.75;min-height:56px}
+.asm-fields b{color:var(--jev-deep)}
+@media(max-width:820px){.asm-grid{grid-template-columns:1fr}}
+
+/* ---- B3 题型决策向导 ---- */
+.wiz-step{margin-bottom:12px}
+.wiz-step .wiz-q{font:750 12px var(--mono);color:var(--ink-soft);margin-bottom:7px;letter-spacing:.04em}
+.wiz-opts{display:flex;gap:8px;flex-wrap:wrap}
+.wiz-opt{border:1.5px solid var(--line);border-radius:9px;background:#fffdf8;padding:10px 14px;cursor:pointer;font-size:13.5px;transition:.15s;text-align:left}
+.wiz-opt:hover{border-color:var(--jev)}
+.wiz-opt.active{border-color:var(--jev);background:var(--jev-soft)}
+.wiz-opt small{display:block;font:10.5px var(--mono);color:var(--ink-faint);margin-top:3px}
+.wiz-result{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:15px 18px;min-height:90px}
+.wiz-result .wr-type{font:800 20px var(--mono);color:var(--jev-deep)}
+.wiz-result .wr-badge{float:right;font:700 9.5px var(--mono);padding:2px 9px;border-radius:99px;background:var(--jev);color:#fff}
+.wiz-result .wr-ret{font:12.5px var(--mono);color:var(--ink-soft);margin:7px 0}
+.wiz-result .wr-ret code{font-size:11.5px}
+.wiz-result p{font-size:13.5px;margin:0;color:var(--ink-soft)}
+
+/* ---- B4 歧义工单路由模拟器 ---- */
+.rt-tickets{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.rt-ticket{border:1.5px solid var(--line);border-radius:9px;background:#fffdf8;padding:11px 13px;cursor:pointer;transition:.15s;font-size:13px}
+.rt-ticket:hover{border-color:var(--jev)}
+.rt-ticket.active{border-color:var(--jev);background:var(--jev-soft)}
+.rt-ticket b{font:750 11px var(--mono);color:var(--jev-deep);display:block;margin-bottom:4px;letter-spacing:.06em}
+.rt-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px}
+.rt-panel h4{margin:0 0 8px;font:750 11.5px var(--mono);letter-spacing:.08em;color:var(--ink-soft)}
+.rt-outcome{display:grid;gap:7px}
+.rt-line{display:flex;align-items:center;gap:9px;border:1.5px solid var(--line);border-radius:8px;background:#fffdf8;padding:8px 12px;font-size:13px;transition:.2s}
+.rt-line .rt-dot{width:10px;height:10px;border-radius:50%;background:#c8c1b0;flex:none;transition:.2s}
+.rt-line.fire{border-color:var(--jev);background:var(--jev-soft)}
+.rt-line.fire .rt-dot{background:var(--jev)}
+.rt-line b{font:700 12px var(--mono)}
+.rt-line small{color:var(--ink-faint);font-family:var(--mono);font-size:10.5px;margin-left:auto;text-align:right}
+@media(max-width:760px){.rt-tickets,.rt-two{grid-template-columns:1fr}}
+
+/* ---- B5 等级设计实验台 ---- */
+.lv-lab{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;align-items:start}
+.lv-crit{border:1.5px solid var(--line);border-radius:9px;background:#fffdf8;padding:11px 13px;font:11.5px/1.7 var(--mono);color:var(--ink-soft);min-height:150px}
+.lv-crit .lv-row{display:flex;gap:8px;margin-bottom:6px}
+.lv-crit .lv-no{font-weight:800;color:var(--jev-deep);flex:none}
+.lv-crit .hl{background:#f3e9d5;border-radius:4px;padding:0 4px}
+.lv-read .kpi-grid{margin-bottom:10px}
+.lv-read .prob-row .pr-name{grid-column:1 / -1;text-align:left;margin-bottom:-3px}
+@media(max-width:820px){.lv-lab{grid-template-columns:1fr}}
+
+/* ---- B6 Noul 读数条 ---- */
+.nz-meter{position:relative;height:56px;margin:18px 0 6px;max-width:var(--content-rail)}
+.nz-track{position:absolute;top:24px;left:0;right:0;height:10px;border-radius:99px;border:1.5px solid var(--ink);background:linear-gradient(90deg,#cfe3df 0%,#e9e2cf 38%,#efe9dd 50%,#e9e2cf 62%,#cfe3df 100%)}
+.nz-zones{position:absolute;top:0;left:0;right:0;display:flex;font:600 9.5px var(--mono);color:var(--ink-faint)}
+.nz-zones span{flex:1;text-align:center;transition:.2s}
+.nz-zones span.on{color:var(--jev-deep);font-weight:800}
+.nz-cursor{position:absolute;top:16px;width:4px;height:26px;background:var(--ink);border-radius:3px;transform:translateX(-50%);transition:left .3s cubic-bezier(.2,.8,.2,1);cursor:ew-resize}
+.nz-cursor::after{content:"▼";position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--ink)}
+.nz-slider{width:100%;max-width:var(--content-rail);accent-color:var(--jev)}
+.nz-read{border-left:3px solid var(--jev);background:var(--paper-deep);padding:11px 14px;font-size:13.5px;line-height:1.75;min-height:74px;margin-top:10px}
+.nz-read b{color:var(--jev-deep)}
+.nz-trap{margin-top:14px}
+
+/* ---- B7 校准对比器 ---- */
+.cal-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cal-col h4{margin:0 0 8px;font:750 11.5px var(--mono);letter-spacing:.08em;color:var(--ink-soft)}
+.cal-col.good h4{color:var(--ok)}
+.cal-col.bad h4{color:var(--bad)}
+.cal-cells{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:9px}
+.cal-cell{aspect-ratio:1.6;border:1.5px solid var(--line);border-radius:7px;background:#fffdf8;display:flex;align-items:center;justify-content:center;font:800 15px var(--mono);transition:.2s}
+.cal-cell.hit{border-color:var(--ok);background:#e2ecdd;color:var(--ok)}
+.cal-cell.miss{border-color:var(--bad);background:#f6dede;color:var(--bad)}
+.cal-stat{font:12px var(--mono);color:var(--ink-soft)}
+.cal-stat b{font-weight:800}
+.cal-col.good .cal-stat b{color:var(--ok)}
+.cal-col.bad .cal-stat b{color:var(--bad)}
+@media(max-width:700px){.cal-grid{grid-template-columns:1fr}}
+
+/* ---- B8 风险阈值路由器 ---- */
+.th-ctrl{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px}
+.th-ctrl .ctrl{margin-bottom:0}
+.th-ctrl input[type=range]{width:100%;accent-color:var(--jev)}
+.th-ctrl .th-val{font:800 15px var(--mono);color:var(--jev-deep)}
+.th-rows{display:grid;gap:7px}
+.th-row{display:grid;grid-template-columns:1.5fr 62px 1fr;gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:8px;background:#fffdf8;padding:8px 12px;font-size:12.5px;transition:.2s}
+.th-row .th-msg{color:var(--ink-soft)}
+.th-row .th-msg b{display:block;font-size:12.5px;color:var(--ink)}
+.th-row .th-conf{font:800 13px var(--mono);text-align:center}
+.th-verdict{font:700 10.5px var(--mono);padding:4px 9px;border-radius:6px;border:1.5px solid;text-align:center;white-space:normal}
+.th-verdict.auto{color:var(--ok);border-color:var(--ok);background:#e2ecdd}
+.th-verdict.confirm{color:var(--warn);border-color:var(--warn);background:#f3e9d5}
+.th-verdict.human{color:var(--bad);border-color:var(--bad);background:#f6dede}
+.th-count{margin-top:10px;font:12px var(--mono);color:var(--ink-soft)}
+@media(max-width:760px){.th-ctrl{grid-template-columns:1fr}.th-row{grid-template-columns:1fr;gap:5px}}
+
+/* ---- B9 优先级计算器 ---- */
+.pr-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;align-items:start}
+.pr-scores .sc{border:1.5px solid var(--line);border-radius:9px;background:#fffdf8;padding:10px 13px;margin-bottom:8px}
+.pr-scores .sc .sc-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.pr-scores .sc b{font:750 12px var(--mono);color:var(--ink)}
+.pr-scores .sc .sc-v{font:800 14px var(--mono);color:var(--jev-deep)}
+.pr-scores .sc small{font:10.5px var(--mono);color:var(--ink-faint);display:block}
+.pr-weights{display:grid;gap:10px;margin-bottom:14px}
+.pr-w{display:grid;gap:4px}
+.pr-w label{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--ink-soft)}
+.pr-w label b{font:800 13px var(--mono);color:var(--jev-deep)}
+.pr-w input[type=range]{width:100%;accent-color:var(--jev)}
+.pr-final{border:1.5px solid var(--ink);border-radius:10px;background:var(--jev-soft);padding:14px 17px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pr-final .pf-num{font:800 40px/1 var(--mono);color:var(--jev-deep)}
+.pr-final .pf-exp{font-size:12.5px;color:var(--ink-soft);line-height:1.65}
+.pr-final .pf-exp code{font-size:11px}
+@media(max-width:820px){.pr-grid{grid-template-columns:1fr}}
+
+/* ---- 下一站引导 ---- */
+.next-card{display:flex;justify-content:space-between;align-items:center;gap:14px;max-width:var(--content-rail);border:1.5px solid var(--ink);border-radius:10px;background:var(--jev-soft);padding:16px 20px;margin:18px 0 8px;text-decoration:none;color:var(--ink);transition:.15s}
+.next-card:hover{transform:translateY(-2px);box-shadow:3px 3px 0 var(--jev)}
+.next-card b{font:800 15px var(--mono)}
+.next-card .nc-sub{font-size:13px;color:var(--ink-soft);margin-top:4px}
+.next-card .nc-arrow{font:800 22px var(--mono);color:var(--jev)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">Jev <em>深入浅出</em> · 交互手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 11 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<div class="hero">
+  <div class="hero-kicker">TypeSafe · System One · 校准决策</div>
+  <img class="hero-cover" src="assets/cover.jpg" alt="封面：把一堆材料变成答题卡与概率分布的插画">
+  <h1>Jev：不聊天的模型，<em>只做判断题</em></h1>
+  <p>大模型本来是给人写文章看的；可当你的代码需要一个判断——「这单该派给谁」「这个 bug 严重吗」「客户急不急」——用生成文本的模型就像让作家去填答题卡。Jev 是 TypeSafe 的旗舰模型、第一个「System One 模型」：你交一份材料、一组类型化的问题，它返回程序能直接 <code>if</code>、排序、路由的答案，外加一套概率。这本手册把它的理念、三种题型、校准原理和工程玩法全部拆开。</p>
+  <div class="hero-tags">
+    <span class="badge ui">10 个交互组件 · 全部可点击</span>
+    <span class="badge info">示例与数字取自 docs.typesafe.ai（2026-09 版）· 模拟处已标注</span>
+  </div>
+</div>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">Jev 是什么 —— 不聊天，只做判断题</h2></div>
+  <p class="lede">先把术语说清楚，再打比方：<strong>Jev 是 TypeSafe 公司的旗舰模型，也是第一个「System One 模型」</strong>。System One 模型是专门给软件用的判断模型——读一份材料，回答一组<strong>类型化的问题</strong>，直接返回答案和概率分布。它不生成文本，你的代码也就不需要解析文本。</p>
+
+  <p>先立三个名词，后面全书都用：<strong>TypeSafe</strong> 是做这类模型的公司；<strong>Jev</strong> 是它家的旗舰模型（API 里叫 <code>jev-latest</code>）；<strong>System One</strong> 是这类模型的类别名，出自心理学家卡尼曼《思考，快与慢》——System 1 是快而直觉的思考，System 2 是慢而缜密的推理。Jev 只做 System 1 的活儿：给足上下文后<strong>几秒内能下的判断</strong>；需要长链推理的事，交回给你的代码、通用大模型或者人。</p>
+
+  <p>再打比方（比喻跟在定义后面）：通用 LLM 像一位<strong>会写作的实习生</strong>——你问「这封投诉该给哪个组」，他回你一段漂亮的话，礼貌、周全，但你的程序还得从中抠出「billing」这个词。Jev 像一位<strong>专职阅卷老师</strong>——你递上卷子（材料）和评分标准（问题与选项），他直接填答题卡：选了哪项、每项多少概率、整体多大把握。没有客套话，没有格式漂移。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 四问翻卡</b><span>点卡片翻面</span></div>
+    <div class="lab-body">
+      <div class="fourq" id="a1Grid">
+        <div class="fq"><div class="fq-inner">
+          <div class="fq-face front"><span class="fq-no">Q1</span><span class="fq-q">它解决什么问题？</span><span class="fq-hint">点击翻面 ↻</span></div>
+          <div class="fq-face back"><div><div class="fq-t">让 AI 的判断直接进代码</div><p class="fq-a">LLM 为「人读的文本」而生，塞进自动化流水线就得「生成 → 解析 → 祈祷不出格式错」。Jev 直接返回<strong>类型化答案 + 概率</strong>，代码可以分支、排序、路由，不用解析。</p></div></div>
+        </div></div>
+        <div class="fq"><div class="fq-inner">
+          <div class="fq-face front"><span class="fq-no">Q2</span><span class="fq-q">它不是什么？</span><span class="fq-hint">点击翻面 ↻</span></div>
+          <div class="fq-face back"><div><div class="fq-t">不是聊天机器人</div><p class="fq-a">不写回复、不写代码、不解释推理。你通过「题型 + 选项 / 等级」<strong>定义答案空间</strong>，它只在里面作答。它也不是慢推理模型——那是 RLVR 路线的活儿（第 7 章）。</p></div></div>
+        </div></div>
+        <div class="fq"><div class="fq-inner">
+          <div class="fq-face front"><span class="fq-no">Q3</span><span class="fq-q">名字哪来的？</span><span class="fq-hint">点击翻面 ↻</span></div>
+          <div class="fq-face back"><div><div class="fq-t">卡尼曼的 System 1</div><p class="fq-a">《思考，快与慢》：System 1 快而直觉，System 2 慢而缜密。Jev 是第一个 System One 模型——强调<strong>快、聚焦的判断</strong>，嵌在更大的工作流里当「秒级微判断层」。</p></div></div>
+        </div></div>
+        <div class="fq"><div class="fq-inner">
+          <div class="fq-face front"><span class="fq-no">Q4</span><span class="fq-q">输出长什么样？</span><span class="fq-hint">点击翻面 ↻</span></div>
+          <div class="fq-face back"><div><div class="fq-t">三种形状的答案</div><p class="fq-a">选择题：<code>choice + probabilities + confidence</code>；打分题：<code>score + legend + …</code>；判断题：<code>noul</code>（0–1）。答案<strong>永远限定在你给的选项内</strong>，不会冒出选项外的值。</p></div></div>
+        </div></div>
+      </div>
+    </div>
+    <div class="lab-foot">「几秒内能下的判断」（a gut-check determination）是官方对问题粒度的要求——一个内行拿到上下文后一眼能断的事。</div>
+  </div>
+
+  <h3>同一份输入，两种模型的活儿</h3>
+  <p>分工感最直观的方式是看同一段客服工单分别交给两者。左边是通用 LLM 的典型输出形态（示意文案），右边是 Jev 对同一组问题的真实响应（取自官方快速上手示例）。注意右边每个字段你的代码都能直接用：<code>choice</code> 进 switch，<code>score</code> 比阈值，<code>noul</code> 进 if。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 实习生 vs 阅卷老师</b><span>点「换一份输入」切换工单</span></div>
+    <div class="lab-body">
+      <div class="duel">
+        <div class="duel-state"><b>STATE · 被评估的材料</b><span id="b1State"></span></div>
+        <div class="duel-grid">
+          <div class="duel-col">
+            <h4>通用 LLM（生成文本）</h4>
+            <div class="duel-out"><span class="duel-tag simi">示意 · 典型形态</span><div class="prose" id="b1Llm"></div></div>
+          </div>
+          <div class="duel-col win">
+            <h4>Jev（类型化答案 + 概率）</h4>
+            <div class="duel-out"><span class="duel-tag real">官方文档真实响应</span><div id="b1Jev"></div></div>
+          </div>
+        </div>
+        <div style="margin-top:12px"><button class="sim-btn" id="b1Swap">换一份输入 →</button></div>
+      </div>
+    </div>
+    <div class="lab-foot">左栏为形态示意（真实 LLM 输出因模型而异）；右栏 JSON 逐字取自官方 quickstart 与 Choice 文档示例。</div>
+  </div>
+
+  <table>
+    <thead><tr><th></th><th>通用 LLM / 聊天模型</th><th>Jev（System One 模型）</th></tr></thead>
+    <tbody>
+      <tr><td><b>为谁设计</b></td><td>人读的文本</td><td>软件直接消费的判断</td></tr>
+      <tr><td><b>输出</b></td><td>自由生成的散文（需要再解析）</td><td>类型化答案 + 概率分布（无解析）</td></tr>
+      <tr><td><b>答案空间</b></td><td>开放的，啥都可能说</td><td>你定义的：选项列表 / 有序等级 / 是否</td></tr>
+      <tr><td><b>拿手活</b></td><td>写作、解释、长推理</td><td>秒级、聚焦的单一判断（大量并行）</td></tr>
+      <tr><td><b>不确定性</b></td><td>藏在语气里（常常过度自信）</td><td>显式概率 + confidence（第 8 章）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>边界要知道</b>Jev 目前只收文本：字符串、JSON 对象、文本数组。图片、音频、视频暂不支持。它主要训练语言是英文，中文等 CJK 语言可用但准确率较低——写 <code>state</code>、<code>instructions</code> 和等级描述时，生产环境建议用英文（第 2 章有细则）。</div>
+
+  <details class="quiz"><summary>自测 · 为什么说「让作家去填答题卡」是种错位？</summary><div class="ans">因为目标函数不同：LLM 被优化来产出「人偏好读的文本」，这在自动化里会变成格式漂移、解析失败、语气自信但内容不可靠；而代码需要的是约束在固定答案空间里、带可校准不确定性的结构化输出。Jev 干脆把输出空间收窄成三种题型，从接口层面消灭「解析」这一步。</div></details>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">一次调用长什么样 —— state 与 questions</h2></div>
+  <p class="lede">Jev 的 API 只有一个核心动作：<strong>一份材料（state）+ 一组问题（questions），换回一组类型化答案</strong>。这一章把请求和响应的每个字段拆开，并给你一个可以亲手拼装的模拟台。</p>
+
+  <p>先说 <strong>state</strong>（大白话：你递给评审团的卷宗）。它是被评估的内容——一封客服消息、一段代码、或你应用的当前状态。三种形态都行：</p>
+
+  <table>
+    <thead><tr><th>形态</th><th>适合</th><th>例子</th></tr></thead>
+    <tbody>
+      <tr><td><b>字符串</b></td><td>单段文本的简单场景</td><td><code>"My card was charged twice."</code></td></tr>
+      <tr><td><b>对象</b></td><td>多数请求：各部分有名字、关系清楚</td><td><code>{"message": …, "order_id": "A-104"}</code></td></tr>
+      <tr><td><b>数组</b></td><td>一连串消息或记录</td><td><code>["Hi", "My card was charged twice."]</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>官方建议<strong>多数请求用对象</strong>：把工单、订单、政策这些相关材料放进同一个 state，让需要互相对照的判断在一次调用里完成。问题指向材料哪一段，就在 <code>instructions</code> 里用<strong>带反引号的点路径</strong>点名，比如 <code>Does `ticket.messages[0].text` request a refund?</code>——模型就知道该看哪块卷宗。</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 860 240" xmlns="http://www.w3.org/2000/svg">
+      <rect class="dg-box" x="14" y="60" width="190" height="120" rx="9"/>
+      <text class="dg-title" x="109" y="95" text-anchor="middle">state 卷宗</text>
+      <text class="dg-sub" x="109" y="118" text-anchor="middle">工单 + 订单 + 政策</text>
+      <text class="dg-tiny" x="109" y="140" text-anchor="middle">string / object / array</text>
+      <rect class="dg-accent" x="252" y="24" width="176" height="58" rx="9"/>
+      <text class="dg-title" x="340" y="49" text-anchor="middle">问题 Q1 · Choice</text>
+      <text class="dg-tiny" x="340" y="68" text-anchor="middle">该派给哪个组？</text>
+      <rect class="dg-accent" x="252" y="92" width="176" height="58" rx="9"/>
+      <text class="dg-title" x="340" y="117" text-anchor="middle">问题 Q2 · Score</text>
+      <text class="dg-tiny" x="340" y="136" text-anchor="middle">客户多沮丧？</text>
+      <rect class="dg-accent" x="252" y="160" width="176" height="58" rx="9"/>
+      <text class="dg-title" x="340" y="185" text-anchor="middle">问题 Q3 · Noul</text>
+      <text class="dg-tiny" x="340" y="204" text-anchor="middle">急不急？</text>
+      <line class="dg-line" x1="204" y1="120" x2="252" y2="53"/>
+      <line class="dg-line" x1="204" y1="120" x2="252" y2="121"/>
+      <line class="dg-line" x1="204" y1="120" x2="252" y2="189"/>
+      <text class="dg-lbl-ink" x="228" y="105" text-anchor="middle">同一份</text>
+      <rect class="dg-box" x="478" y="60" width="180" height="120" rx="9"/>
+      <text class="dg-title" x="568" y="90" text-anchor="middle">并行独立评估</text>
+      <text class="dg-sub" x="568" y="112" text-anchor="middle">互不看见、互不污染</text>
+      <text class="dg-tiny" x="568" y="134" text-anchor="middle">加问题 ≈ 不加延迟</text>
+      <line class="dg-flow" x1="428" y1="121" x2="478" y2="120"/>
+      <rect class="dg-green" x="700" y="24" width="146" height="58" rx="9"/>
+      <text class="dg-title" x="773" y="49" text-anchor="middle">billing 0.84</text>
+      <text class="dg-tiny" x="773" y="68" text-anchor="middle">conf 0.596</text>
+      <rect class="dg-green" x="700" y="92" width="146" height="58" rx="9"/>
+      <text class="dg-title" x="773" y="117" text-anchor="middle">score 1.035</text>
+      <text class="dg-tiny" x="773" y="136" text-anchor="middle">conf 0.842</text>
+      <rect class="dg-green" x="700" y="160" width="146" height="58" rx="9"/>
+      <text class="dg-title" x="773" y="185" text-anchor="middle">noul 0.999</text>
+      <text class="dg-tiny" x="773" y="204" text-anchor="middle">P(是) = 99.9%</text>
+      <line class="dg-flow" x1="658" y1="120" x2="700" y2="120"/>
+    </svg>
+    <figcaption>一次调用 = 一份 state × N 个问题，并行出 N 个类型化答案</figcaption>
+  </figure>
+
+  <p>下面是官方快速上手的完整请求：一段 Stripe 连不上、客户在流失的工单，混着三种题型一次问完——</p>
+
+  <div class="codewrap"><span class="filetab">request · POST https://api.typesafe.ai/v1/systemone</span><button class="copybtn">复制</button>
+<pre>{
+  <span class="jk">"state"</span>: <span class="st">"Hi, I've been trying to connect my Stripe account for 3 days and it keeps failing. I'm losing sales. Please help ASAP."</span>,
+  <span class="jk">"model"</span>: <span class="st">"jev-latest"</span>,
+  <span class="jk">"questions"</span>: {
+    <span class="jk">"department"</span>: {
+      <span class="jk">"type"</span>: <span class="st">"choice"</span>,
+      <span class="jk">"instructions"</span>: <span class="st">"Which team should handle this"</span>,
+      <span class="jk">"criteria"</span>: {
+        <span class="jk">"billing"</span>:   <span class="st">"Payment or subscription issues"</span>,
+        <span class="jk">"technical"</span>: <span class="st">"Bugs or integration problems"</span>,
+        <span class="jk">"sales"</span>:     <span class="st">"Pricing or account questions"</span>
+      }
+    },
+    <span class="jk">"frustration"</span>: {
+      <span class="jk">"type"</span>: <span class="st">"score"</span>,
+      <span class="jk">"instructions"</span>: <span class="st">"How frustrated the customer appears"</span>,
+      <span class="jk">"criteria"</span>: [
+        <span class="st">"Calm, just stating facts"</span>,
+        <span class="st">"Frustrated but civil"</span>,
+        <span class="st">"Very angry, strong language"</span>
+      ]
+    },
+    <span class="jk">"is_urgent"</span>: {
+      <span class="jk">"type"</span>: <span class="st">"noul"</span>,
+      <span class="jk">"instructions"</span>: <span class="st">"The message conveys urgency or time-sensitivity"</span>
+    }
+  }
+}</pre></div>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 请求拼装台</b><span>勾选问题 → 点发送，看响应逐块点亮</span></div>
+    <div class="lab-body">
+      <div class="asm-grid">
+        <div>
+          <div class="ctrl"><label><span>state（固定为左侧工单）</span></label>
+            <div style="border:1.5px solid var(--line);border-radius:8px;background:var(--paper);padding:9px 12px;font-size:12.5px;line-height:1.65">"Hi, I've been trying to connect my Stripe account for 3 days and it keeps failing. I'm losing sales. Please help ASAP."</div>
+          </div>
+          <div id="b1Qs"></div>
+          <button class="sim-btn" id="asmSend">发送 → jev-latest</button>
+        </div>
+        <div>
+          <div class="asm-res" id="asmRes"><span class="dim">// 勾选至少一个问题，然后点「发送」
+// 响应数据 = 官方文档真实示例</span></div>
+          <div class="asm-fields" id="asmFields"><b>字段解读</b>：发送后这里逐项解释返回的字段。</div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">真实响应里 usage 为 input 312 / output 48 tokens——注意输出端的 token 极少，因为它不写文章，只「填卡」。</div>
+  </div>
+
+  <h3>四条上手路径</h3>
+  <table>
+    <thead><tr><th>路径</th><th>怎么走</th><th>适合</th></tr></thead>
+    <tbody>
+      <tr><td><b>Playground</b></td><td><a href="https://console.typesafe.ai/playground" target="_blank" rel="noopener">console.typesafe.ai/playground</a>，登录后粘贴任意文字就能问</td><td>零代码试手感</td></tr>
+      <tr><td><b>HTTP API</b></td><td><code>POST api.typesafe.ai/v1/systemone</code>，Bearer token 鉴权</td><td>任何语言</td></tr>
+      <tr><td><b>Python SDK</b></td><td><code>pip install typesafe-sdk</code>（≥3.10），默认读 <code>TYPESAFE_API_KEY</code>、默认 <code>jev-latest</code></td><td>生产集成</td></tr>
+      <tr><td><b>Agent skill</b></td><td><code>npx skills add typesafe-ai/skills --skill typesafe-ai</code>（或 Claude Code 插件市场）</td><td>让编码 agent 替你写集成</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn"><b>中文用户要留意</b>Jev 的主要训练语言是英文；中文等 CJK 文本可用，但官方明确标注当前准确率较低。生产系统里，材料可以用原文，但 <code>instructions</code>、选项与等级描述建议用英文写，再用文档里的真实例句校准手感。</div>
+
+  <details class="quiz"><summary>自测 · 什么时候该把多份材料合并进一个 state？</summary><div class="ans">当判断需要<strong>对照</strong>这些材料时。比如「政策是否支持这笔退款」必须同时看退款请求、交易记录和退款政策——分开问就丢了对照关系。反之，互不相干的判断不必强行塞进一个 state。</div></details>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">三种题型 —— 选择、打分、判断</h2></div>
+  <p class="lede">Jev 的答案空间只有三种形状，对应三种「题型」。选对题型，答案才能直接映射到代码动作——这是整个系统设计里你<strong>唯一要认真做的设计决策</strong>。</p>
+
+  <p>三种题型用大白话说：<strong>Choice 是选择题</strong>（从你给的固定清单里挑一个，清单里的选项之间没有顺序）；<strong>Score 是打分题</strong>（在你给的一串有序档位上找位置，可以落在两档之间）；<strong>Noul 是判断题</strong>（返回「是」的概率，0 到 1）。</p>
+
+  <table>
+    <thead><tr><th>题型</th><th>答案的形状</th><th>返回字段</th><th>代码里长成</th></tr></thead>
+    <tbody>
+      <tr><td><b>Choice</b> 选择</td><td>固定选项里挑一个（无顺序）</td><td><code>choice</code> + <code>probabilities</code> + <code>confidence</code></td><td><code>switch</code> / 路由表</td></tr>
+      <tr><td><b>Score</b> 打分</td><td>有序光谱上的位置</td><td><code>score</code> + <code>legend</code> + <code>probabilities</code> + <code>confidence</code></td><td>阈值判断 / 排序</td></tr>
+      <tr><td><b>Noul</b> 判断</td><td>是 / 否</td><td><code>noul</code>（0–1，无单独 confidence）</td><td><code>if</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 题型决策向导</b><span>两步选出题型</span></div>
+    <div class="lab-body">
+      <div class="wiz-step">
+        <div class="wiz-q">① 你需要的答案，是什么形状？</div>
+        <div class="wiz-opts" id="wiz1">
+          <button class="wiz-opt" data-v="set">从一份固定清单里挑一个<small>如：工单派给 returns / shipping / billing</small></button>
+          <button class="wiz-opt" data-v="spec">一段光谱上的位置<small>如：bug 多严重、客户多沮丧</small></button>
+          <button class="wiz-opt" data-v="bool">是还是否<small>如：客户要退款吗、含个人信息吗</small></button>
+        </div>
+      </div>
+      <div class="wiz-step" id="wiz2wrap" style="display:none">
+        <div class="wiz-q">② 清单里的选项之间，有顺序吗？</div>
+        <div class="wiz-opts" id="wiz2">
+          <button class="wiz-opt" data-v="ordered">有，从低到高排得出来<small>如：0=冷静 1=沮丧 2=愤怒</small></button>
+          <button class="wiz-opt" data-v="unordered">没有，是并列的类别<small>如：python / go / rust</small></button>
+        </div>
+      </div>
+      <div class="wiz-result" id="wizResult"><p style="font-size:13.5px;color:var(--ink-faint)">做完选择，这里给出推荐题型、返回字段与代码形态。</p></div>
+    </div>
+    <div class="lab-foot">官方判准：两种题型都说得通时，选「答案能被代码直接行动」的那个。</div>
+  </div>
+
+  <h3>三个最常见的选题型错误</h3>
+  <ul class="plain">
+    <li><b>把「程度」塞进 Noul。</b>问「这候选人 Python 强吗」得到 0.5——这不是「中等水平」，是「模型对是/否五五开」。测程度请用 Score（无经验 → 有点熟 → 日常用 → 精通）。</li>
+    <li><b>把「有顺序的档位」塞进 Choice。</b>冷静/沮丧/愤怒明明是一条光谱，做成 Choice 就丢了「1.5 档」这种中间位置信息，也没法排序。</li>
+    <li><b>选项清单不设「都不像」。</b>清单可能盖不住所有输入，加一个 <code>other</code> / <code>none of the above</code>，模型才有地方放「这题出错了」。</li>
+  </ul>
+
+  <div class="note"><b>问题要原子</b>每个问题只问一件「内行几秒能断」的小事。要衡量多个独立因素的复杂判断，拆成多个问题、在代码里组合（第 9 章整章讲怎么拆、怎么加权）。「分析这条消息并决定最佳行动方案」不是一道好题——那是慢思考的活儿。</div>
+
+  <p>三种题型的答案还有一个共同的好性质：<strong>受限且独立</strong>。受限——答案永远在你给的选项/等级内，代码不用从散文里抠值；独立——一次调用里各个问题互看不见，加一问、删一问都不会改变其他答案。这个性质是第 9 章「放心并行提问」的前提。</p>
+
+  <details class="quiz"><summary>自测 · 「这条评论是不是垃圾评论」和「这条评论有多像广告」分别该用什么题型？</summary><div class="ans">前者是干净的是非，且概率本身就是信号（0.9 直接拦、0.3 放行）——用 Noul。后者是程度、且你能描述光谱的每一档（正常讨论 → 提到产品 → 纯推销话术）——用 Score。判断口诀：答案形状决定题型，能映射到 <code>if</code> 的是 Noul，能映射到阈值/排序的是 Score。</div></details>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">Choice —— 概率分布会说话</h2></div>
+  <p class="lede">Choice 的答案里最值钱的不是选中的那一项，而是<strong>整张概率分布</strong>：它告诉你模型在犹豫什么、第二名是谁、这份犹豫值不值得你抄送一个团队。</p>
+
+  <p>Choice 的三个返回字段（大白话版）：<code>choice</code> 是<strong>填了哪个格</strong>（概率最高的选项）；<code>probabilities</code> 是<strong>每个格各分到多少把握</strong>（全部加起来等于 1）；<code>confidence</code> 是把分布的形状压成的一个数——<strong>分布越尖，把握越大；摊得越平，越拿不准</strong>。</p>
+
+  <p>看两组真实对比（取自官方文档的鞋店工单示例）。清晰的工单：尺码错了想换——<code>returns</code> 拿走全部概率，confidence 1.0。歧义的工单：晚了两周 + 尺码错了 + 卡上还有两笔扣款——<code>returns</code> 0.60 当选，但 <code>billing</code> 0.38 紧咬，confidence 掉到 0.39。注意：confidence 低不是说「答案错了」，而是「第二名不是噪音」。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 歧义工单路由模拟器</b><span>选一张工单 → 看 department 分布与派单逻辑</span></div>
+    <div class="lab-body">
+      <div class="rt-tickets" id="rtTickets">
+        <div class="rt-ticket active" data-t="clear"><b>TICKET A · 清晰版</b>"My running shoes arrived in the wrong size. Can I swap them for a size 10?"</div>
+        <div class="rt-ticket" data-t="ambig"><b>TICKET B · 歧义版</b>"Shoes arrived two weeks late and in the wrong size. Also I see two charges on my card. What are you going to do about this?"</div>
+      </div>
+      <div class="rt-two">
+        <div class="rt-panel">
+          <h4>department · probabilities + confidence</h4>
+          <div id="rtProbs"></div>
+        </div>
+        <div class="rt-panel">
+          <h4>你的代码怎么走（真实官方示例逻辑）</h4>
+          <div class="rt-outcome" id="rtLogic"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">分布与 confidence 均为官方文档真实响应；派单逻辑取自官方 triage 示例代码：conf &lt; 0.3 转人工、第二名概率 &gt; 0.25 抄送、resolution conf &lt; 0.5 反问客户。</div>
+  </div>
+
+  <h3>把选项清单写好</h3>
+  <ul class="plain">
+    <li><b>给全，别给短名单。</b>一个 Choice 最多 255 个选项，每个选项只花几个 token。团队列表、商品类目直接给全量，比先筛再问准得多。</li>
+    <li><b>描述的作用是「把选项彼此分开」。</b>选项名 + 描述都会发给模型。名称自己能说明白时，描述可以写 <code>null</code>（官方 tone 例题就这么干）。</li>
+    <li><b>容易混淆的选项，升级成结构化对象。</b>官方例子：<code>return_policy</code>（能不能退、怎么退）vs <code>return_status</code>（退的货到哪了）——两个选项都会提到退货退款，于是各写 <code>what</code>（管什么）、<code>not_for</code>(不管什么)、<code>examples</code>（例句），边界立刻清晰。</li>
+  </ul>
+
+  <div class="codewrap"><span class="filetab">易混选项的结构化写法 · 节选自官方示例</span><button class="copybtn">复制</button>
+<pre><span class="jk">"return_topic"</span>: {
+  <span class="jk">"type"</span>: <span class="st">"choice"</span>,
+  <span class="jk">"instructions"</span>: { <span class="jk">"question"</span>: <span class="st">"Which returns topic is the customer asking about?"</span> },
+  <span class="jk">"criteria"</span>: {
+    <span class="jk">"return_policy"</span>: {
+      <span class="jk">"what"</span>:    <span class="st">"Whether and how an item can be returned"</span>,
+      <span class="jk">"not_for"</span>: <span class="st">"Progress of a return already sent"</span>,
+      <span class="jk">"examples"</span>: [<span class="st">"How long do I have to return an order?"</span>]
+    },
+    <span class="jk">"return_status"</span>: {
+      <span class="jk">"what"</span>:    <span class="st">"Progress of a return already sent"</span>,
+      <span class="jk">"not_for"</span>: <span class="st">"Whether and how an item can be returned"</span>,
+      <span class="jk">"examples"</span>: [<span class="st">"When will my refund be paid?"</span>]
+    }
+  }
+}</pre></div>
+
+  <p>字段名 <code>what</code>、<code>not_for</code>、<code>examples</code> 都不是 API 保留字——你自己起名，模型看得见字段名，起短而准的名字即可。要给深目录分类（几百个类目），官方做法是一层一层 Choice 走树，每层把子树当选项描述发给模型，让它在提交前「看见分支下有什么」。</p>
+
+  <details class="quiz"><summary>自测 · department 返回 returns 0.60 / billing 0.38，你的路由代码除了派 returns 还该做什么？</summary><div class="ans">把 billing 也抄送一份。官方示例的规则是：非选中选项概率 &gt; 0.25 就 <code>notify(ticket, team)</code>。0.38 的 billing 不是噪音，是「这个工单一半是账务问题」——让两个团队都知情，比硬选一个更稳。</div></details>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">Score —— 等级设计的陷阱</h2></div>
+  <p class="lede">Score 是三兄弟里最容易踩坑的：它的 <code>criteria</code> 是一串<strong>有序等级</strong>（2 到 10 档），而模型评估每一档的方式和你的直觉完全不同——不理解这一点，分数就会「不对劲」。</p>
+
+  <p>先讲机制（大白话）：Score 问的是「这份材料在光谱的哪一段」。返回的 <code>score</code> 是<strong>档位号的概率加权平均</strong>——三档量表（0、1、2）上，若概率是 0.70 落 1 档、0.30 落 2 档，score = 1×0.70 + 2×0.30 = <strong>1.30</strong>。所以 score 可以落在两档<strong>之间</strong>；<code>legend</code> 把档号映射回你的描述；<code>confidence</code> 同样来自分布形状——官方例子里 0.70/0.30 的分布 confidence 0.54，因为它「分裂」了。</p>
+
+  <div class="note danger"><b>最大的陷阱：每一档都是独立评估的</b>模型看不到档位编号，也看不到相邻档。它拿到的是「一堆描述」，把材料分别与每个描述对照。所以：<strong>「比上一档更严重」这种写法完全无效</strong>（没有「上一档」）；「中等严重」也无效（没有可对照的情境）。每一档必须写成<strong>具体情境</strong>：「功能坏了但有替代方案」是好等级；「比较严重」是坏等级。</div>
+
+  <p>官方做了一个对照实验，值得亲手玩一遍：同一份 bug 报告，三种等级写法，分数天差地别——</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 等级设计实验台</b><span>选工单 × 选等级写法，看 score / confidence 变化</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label><span>被评估的 bug 报告</span></label>
+        <div class="pills" id="lvTickets">
+          <button class="pill active" data-v="safari">Safari 崩溃（有 Chrome 可绕）</button>
+          <button class="pill" data-v="pixels">像素错位（纯外观）</button>
+          <button class="pill" data-v="spinner">导出转圈（绕行存疑）</button>
+        </div>
+      </div>
+      <div class="ctrl"><label><span>severity 的等级（criteria）写法</span></label>
+        <div class="pills" id="lvDesigns">
+          <button class="pill active" data-v="desc">情境描述</button>
+          <button class="pill" data-v="nums">纯数字</button>
+          <button class="pill" data-v="exhit">情境 + 贴脸例子</button>
+          <button class="pill" data-v="exmiss">情境 + 无关例子</button>
+        </div>
+      </div>
+      <div class="lv-lab">
+        <div class="lv-crit" id="lvCrit"></div>
+        <div class="lv-read">
+          <div class="kpi-grid">
+            <div class="kpi jev"><span>score</span><b id="lvScore">–</b></div>
+            <div class="kpi"><span>confidence</span><b id="lvConf">–</b></div>
+            <div class="kpi"><span>一句话解读</span><b style="font-size:13px" id="lvVerdict">–</b></div>
+          </div>
+          <div id="lvProbs"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">所有数字均为官方文档真实实验结果（贴脸/无关例子两组仅公布 score 与 confidence，概率条按 score 公式反推）。</div>
+  </div>
+
+  <p>四个读数背后是四条设计经验：</p>
+  <ul class="plain">
+    <li><b>纯数字是灾难。</b>「Rate 0–2」加 <code>["0","1","2"]</code>：像素错位的报告从 0.0@1.0 掉到 0.57@0.35——模型没有东西可对照，只能瞎摊概率。</li>
+    <li><b>例子要像你的真实输入。</b>「export fails in one browser but works in another」贴住 Safari 报告，confidence 0.54 → 0.90；换成无关例子（搜索坏但浏览分类还在）几乎不帮忙。</li>
+    <li><b>同一个 score 可能来自不同分布。</b>1.0 可以是「全押 1 档」，也可能是「0 档 2 档各半」——含义完全不同。永远把 <code>probabilities</code> 和 <code>confidence</code> 跟 score 一起读。</li>
+    <li><b>一问只测一个维度。</b>等级写「准时、聪明、有经验」是三件事，输入高一项低一项就放不进光谱，confidence 掉、分数失义。拆成三个 Score（第 9 章组合）。</li>
+  </ul>
+
+  <div class="note"><b>两个补充技巧</b>① 顶端有需要区别对待的罕见极端时，单开一档：情绪量表在「很生气」之上加「辱骂或威胁」，分数才能分开这两类。② 完全没有中间态、答案就是几个离散类别时，改用 Choice 或多个 Noul。档数：能描述得多不同就写多少档（上限 10），三档很常用，写不distinct的档别硬加。</div>
+
+  <details class="quiz"><summary>自测 · 为什么「比上一档更严重」「中等严重」都是坏等级描述？</summary><div class="ans">因为每档是独立送评的：模型看不到档位编号、看不到邻居，也做不了程度副词的量化对照。它需要一个能和材料匹配的<strong>情境画像</strong>——「功能坏了、但有绕行方案」这种。程度词给不出画像，模型只好把概率摊开，score 和 confidence 一起失真。</div></details>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">Noul —— 一道判断题的概率</h2></div>
+  <p class="lede">Noul 最简单也最容易被误读：它返回<strong>「是」的概率</strong>，一个 0 到 1 的数。会读这个数，你就掌握了系统里最便宜的「条件判断」。</p>
+
+  <p>用法定义清楚：Noul 评估一个<strong>单一的是非问题或陈述</strong>。返回值 <code>noul</code> 就是 P(是)。靠近 1 是强「是」，靠近 0 是强「否」，<strong>靠近 0.5 是「模型拿不准」</strong>——不是「中等程度」。措辞上让高概率 = 是，答案含义才不拧巴；也可以写成陈述句让模型判真伪（「客户在要求退款」≈ 1 表示为真）。</p>
+
+  <p>是非边界微妙时，可以加可选的 <code>criteria</code>，用 <code>true</code> / <code>false</code> 两段描述钉住边界。官方例题：「客户以前就这事联系过支持吗？」——true = 提到先前尝试/工单/问过；false = 没有任何先前联系的迹象。同一份「I have asked three times now. Can I please just talk to a real person?」返回 0.93。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · Noul 读数条</b><span>拖动滑块，看每个区间的含义与真实例题</span></div>
+    <div class="lab-body">
+      <div class="nz-meter">
+        <div class="nz-zones" id="nzZones">
+          <span data-z="sno">强否 ≤0.1</span><span data-z="no">偏否</span><span data-z="mid">拿不准 ~0.5</span><span data-z="yes">偏是</span><span data-z="syes">强是 ≥0.9</span>
+        </div>
+        <div class="nz-track"></div>
+        <div class="nz-cursor" id="nzCursor"></div>
+      </div>
+      <input class="nz-slider" id="nzSlider" type="range" min="0" max="100" value="93" aria-label="noul 值">
+      <div style="display:flex;gap:14px;align-items:baseline;max-width:var(--content-rail);font:12px var(--mono);color:var(--ink-faint);margin-top:4px"><span>0 强否</span><span style="margin-left:auto">noul = <b id="nzVal" style="color:var(--jev-deep);font-size:14px">0.93</b></span><span style="margin-left:auto">1 强是</span></div>
+      <div class="nz-read" id="nzRead"></div>
+      <div class="lab nz-trap" style="margin:14px 0 0">
+        <div class="lab-head"><b>陷阱演示 · 0.5 ≠ 中等</b><span>点按钮切换问题</span></div>
+        <div class="lab-body" style="padding:14px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="pill active" id="nzGoodQ">「这条消息表达紧急吗？」</button>
+            <button class="pill" id="nzBadQ">「这位候选人 Python 强吗？」</button>
+          </div>
+          <div id="nzTrapBody" style="font-size:13.5px;line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">读数区间的真实锚点：0.999 = Stripe 工单紧急度（quickstart）、0.99 = 要求转人工、0.93 = 重复来访（Noul 文档）。</div>
+  </div>
+
+  <p>工程上你多半会把 <code>noul</code> 阈值化成布尔：≥ 0.9 拦截、≤ 0.3 放行、中间走复核。但要记住它<strong>没有单独的 confidence</strong>——分布本身就只有一维，「拿不准」已经写在 0.5 里。需要「程度」时那是 Score 的领地；需要「几个类别」时是 Choice 的。</p>
+
+  <details class="quiz"><summary>自测 · 「简历里提到分布式系统经验吗」和「候选人的系统设计水平如何」分别用什么？</summary><div class="ans">前者 Noul：干净的是非，0.92 直接过筛、0.4 进复核。后者 Score：水平是光谱，定义好每一档（没做过 → 用过现成框架 → 设计过 → 主导过大规模权衡）才能排出高下。Noul 的 0.5 是「说不准」，永远当不了「中等水平」。</div></details>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">为什么它的概率能信 —— RLCD 与校准</h2></div>
+  <p class="lede">前六章一直在说「概率、概率」——凭什幺 Jev 说的 0.8 就真的八成会发生？答案在一个词：<strong>校准（calibration）</strong>。这一章讲 TypeSafe 为此走的第三条训练路线。</p>
+
+  <p>先大白话定义「校准」：模型报的概率<strong>长期对得上事实的发生频率</strong>。报 0.2 的事，一大批复测里真的约 20% 发生；报 0.8 的约 80% 发生。注意口径：校准是<strong>一群预测的统计性质</strong>，不保证任何单个答案正确——这正是第 8 章 confidence 路由存在的原因。</p>
+
+  <p>预训练之后的语言模型有三条「后训练」路线，目标函数完全不同：</p>
+
+  <table>
+    <thead><tr><th>路线</th><th>优化什么</th><th>造出了什么</th><th>副作用</th></tr></thead>
+    <tbody>
+      <tr><td><b>RLHF</b><br>人类反馈强化学习</td><td>人<strong>更喜欢读</strong>哪种回复</td><td>聊天机器人（InstructGPT / ChatGPT）</td><td>谄媚、听起来自信的幻觉、mode dropping（分布收窄、别的说法被压掉）</td></tr>
+      <tr><td><b>RLVR</b><br>可验证奖励强化学习</td><td>答案能否被<strong>客观验证</strong>（数学、代码）</td><td>推理模型</td><td>慢、贵</td></tr>
+      <tr><td><b>RLCD</b><br>校准决策强化学习</td><td>概率与真实结果的对齐（TypeSafe 的路线）</td><td>决策模型：返回判断 + 校准概率，不生成文本</td><td>不会聊天、不解释——故意的</td></tr>
+    </tbody>
+  </table>
+
+  <p>一个有意思的传承：RLHF 的共同发明人之一 Diogo Almeida，正是 TypeSafe 的联合创始人——他造过「讨人喜欢的模型」，现在造「机器信得过的模型」。TypeSafe 的判断是：大规模自动化里约 <strong>99% 是机器对机器</strong>的交互，机器接口比聊天界面重要。他们称之为 <strong>Machine Native Intelligence</strong>：让 AI 拥有软件的性质——结构化、可靠、可观测、可测试、快、一致、便宜。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 校准对比器</b><span>切预测组，看「说的把握」vs「实际命中率」</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label><span>一批预测，模型都报同一个概率：</span></label>
+        <div class="pills" id="calGroup">
+          <button class="pill active" data-v="hi">报 80% 的 10 个预测</button>
+          <button class="pill" data-v="lo">报 20% 的 10 个预测</button>
+        </div>
+      </div>
+      <div class="cal-grid">
+        <div class="cal-col good">
+          <h4>校准的模型（RLCD 目标）</h4>
+          <div class="cal-cells" id="calGood"></div>
+          <div class="cal-stat" id="calGoodStat"></div>
+        </div>
+        <div class="cal-col bad">
+          <h4>过度自信的模型（示意）</h4>
+          <div class="cal-cells" id="calBad"></div>
+          <div class="cal-stat" id="calBadStat"></div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">校准定义与左列行为出自官方文档；右列「报 80% 只中 5 个」为示意，演示 RLHF 式「听起来自信」的失准形态。</div>
+  </div>
+
+  <div class="note"><b>校准买到的是什么</b>是「阈值可设计性」。概率可信，你才敢写 <code>if noul &gt;= 0.9: 拦截</code> 这样的代码，并且能预估误杀率 ≈ 10%。概率不可信时，任何阈值都是玄学。下一章就把这个思想落成完整的路由架构。</div>
+
+  <p>为什么不用 RLHF 模型凑合做判断？官方给了两个理由：一是它<strong>奖励的是「人爱读」</strong>，与「机器可依赖」是两个目标——一段话可以写得让人信服，却不足以让程序无人值守地执行；二是偏好优化带来 <strong>mode dropping</strong>，输出分布收窄，潜力被压掉。RLHF 依然是聊天模型的好路线，只是生产自动化需要不同的目标函数。</p>
+
+  <details class="quiz"><summary>自测 · 「校准」保证了单个答案正确吗？</summary><div class="ans">不保证。校准是群体统计性质：报 0.8 的预测群里约八成会对——单看某一个，它照样可能落在错的那两成里。所以工程上不是「信单个答案」，而是用 confidence + 阈值设计群体的期望行为（第 8 章），错了有兜底路径。</div></details>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">confidence —— 什么时候自动干，什么时候交给人</h2></div>
+  <p class="lede">校准给了你诚实的概率，<code>confidence</code> 给了你拒绝行动的勇气。这一章是把「我不知道」变成系统架构的一章。</p>
+
+  <p>定义先行：Choice 和 Score 的答案里都带 <code>confidence</code>（0–1），它是<strong>从 probability 分布的形状算出来的统计量</strong>——官方替你算好，最常见场景零成本。分布尖 = 高 confidence；摊平 = 低。Noul 没有 confidence，因为它的「拿不准」就写在 0.5 里。官方同时强调：这不是把你锁死在他们的定义里——完整 <code>probabilities</code> 都在响应里，你要别的度量自己算。</p>
+
+  <p>低 confidence 是有用的信号，不是失败。Choice 上它常意味着「没有哪个选项明显赢」；Score 上常意味着「等级重叠 / 问题测了不止一件事 / 材料不够」。官方给的起始模式是<strong>三档</strong>：</p>
+
+  <table>
+    <thead><tr><th>confidence</th><th>系统行为</th><th>例子</th></tr></thead>
+    <tbody>
+      <tr><td><b>高</b></td><td>自动执行，不打扰人</td><td>清晰工单直接派组</td></tr>
+      <tr><td><b>中</b></td><td>谨慎：请用户确认 / 标记复核 / 先补材料</td><td>转账前多问一句</td></tr>
+      <tr><td><b>低</b></td><td>不行动：转人工、要求澄清、换系统兜底</td><td>歧义工单进人工分诊</td></tr>
+    </tbody>
+  </table>
+
+  <p>关键工程观：<strong>阈值不是一个数，而是随风险缩放的一组数</strong>。官方示例——同一个「用户想干什么」的 Choice，查余额（只读、可恢复）低门槛放行；批准转账（破坏性）必须 confidence &gt; 0.9 才自动走、否则先向用户求证；而 0.5 是全局地板：模型自己都说拿不准的，一律转人工。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 风险阈值路由器</b><span>拖阈值，重放 6 条用户消息，看路由变化</span></div>
+    <div class="lab-body">
+      <div class="th-ctrl">
+        <div class="ctrl"><label><span>只读操作直接执行的下限</span><b class="th-val" id="thLoVal">0.50</b></label><input type="range" id="thLo" min="30" max="95" value="50"></div>
+        <div class="ctrl"><label><span>破坏性操作免确认的下限</span><b class="th-val" id="thHiVal">0.90</b></label><input type="range" id="thHi" min="50" max="100" value="90"></div>
+      </div>
+      <div class="th-rows" id="thRows"></div>
+      <div class="th-count" id="thCount"></div>
+    </div>
+    <div class="lab-foot">消息与其 choice/confidence 为模拟（基于官方 confidence 页场景）；路由规则照抄官方示例代码：地板 0.5 转人工、破坏性操作双阈值。另设「中风险」档演示中间态。</div>
+  </div>
+
+  <div class="note"><b>阈值怎么起步</b>官方建议：从保守值开始，用你自己的数据测，观察结果再调。不同领域的「正确的阈值」没有通解——风险写进你的代码里。</div>
+
+  <details class="quiz"><summary>自测 · 为什么查余额和批准转账不该共用一个 confidence 阈值？</summary><div class="ans">因为错误的代价不对称。显示错余额可以马上纠正（低代价），错批准一笔转账可能追不回（高代价）。阈值本质是<strong>风险_tolerance 的代码化</strong>：代价越高，要求的把握越高，自动化的比例就越低、确认环节越多。</div></details>
+</section>
+
+<!-- 09 -->
+<section class="chapter" id="c9">
+  <div class="chapter-head"><span class="chapter-no">09</span><h2 class="ch">组合拳 —— 并行提问、拆解与代码加权</h2></div>
+  <p class="lede">单发的问题好写，系统的价值在组合。Jev 的组合学有三板斧：<strong>放心多问</strong>（并行）、<strong>拆开问</strong>（原子化）、<strong>代码里合</strong>（加权）。这一章把它们串成完整的工单优先级流水线。</p>
+
+  <h3>第一板斧：放心多问</h3>
+  <p>一次调用里的所有问题<strong>并行、彼此独立</strong>地评估——加问题几乎不增加响应时间，只多花问题本身的几个 token（便宜）。所以官方姿势是「可能用得上就都问」，答案用不用留给代码决定：工单不是退货就不看 severity，不是 shipping 就忽略 shipping_issue。这个模式官方叫 <strong>Speculative fan-out</strong>（投机型扇出）。实测口径：13 个问题合并成一次调用，比 13 次单问<strong>便宜 11.5 倍、快 9.6 倍</strong>，答案不变。上限是请求的 token 预算（state 和问题共享，约 32,000 tokens ≈ 15 万英文字符）。</p>
+
+  <h3>第二板斧：拆开问</h3>
+  <p>「工单优先级」这种复合判断别硬塞一个问题。官方拆法：严重度（3 档）、客户沮丧度（3 档）、报告质量（4 档）三个 Score 一起问。对官方那份「导出转圈、第三次来、附了步骤和浏览器版本」的工单，三个答案是 1.24@0.63、1.45@0.33、3.0@1.0——各自只测一个维度，各自可解释。</p>
+
+  <h3>第三板斧：代码里合</h3>
+  <p>三把尺子刻度不同（0–2、0–2、0–3），先<strong>归一化</strong>：各除以自己的最高档号，全部落到 0–1（0.62、0.725、1.0），再加权求和。权重是你的业务判断，写死在代码里：官方示例 0.6 × 严重度 + 0.3 × 沮丧度 + 0.1 × 报告质量 = <strong>0.69</strong>。下个月老板说「客户情绪优先」，你改一个系数，不用碰任何提示词。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 优先级计算器</b><span>换工单、调权重，看 priority 实时变化</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label><span>输入工单</span></label>
+        <div class="pills" id="prTickets">
+          <button class="pill active" data-v="spinner">官方示例 · 导出转圈（真实答案）</button>
+          <button class="pill" data-v="sim">「登录页崩了」· 模拟答案</button>
+        </div>
+      </div>
+      <div class="pr-grid">
+        <div class="pr-scores" id="prScores"></div>
+        <div>
+          <div class="pr-weights">
+            <div class="pr-w"><label><span>severity 严重度</span><b id="prW1V">0.60</b></label><input type="range" id="prW1" min="0" max="100" value="60"></div>
+            <div class="pr-w"><label><span>frustration 沮丧度</span><b id="prW2V">0.30</b></label><input type="range" id="prW2" min="0" max="100" value="30"></div>
+            <div class="pr-w"><label><span>report_quality 报告质量</span><b id="prW3V">0.10</b></label><input type="range" id="prW3" min="0" max="100" value="10"></div>
+          </div>
+          <div class="pr-final">
+            <div class="pf-num" id="prFinal">0.69</div>
+            <div class="pf-exp" id="prExp">priority = 0.6×0.62 + 0.3×0.725 + 0.1×1.0<br>权重在代码里，改系数不改提示词。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-foot">「导出转圈」三个分数为官方文档真实响应；归一化与加权公式照官方示例代码。权重未归一（和可以 ≠ 1），官方示例如此——排序场景够用。</div>
+  </div>
+
+  <h3>什么时候才需要第二次请求</h3>
+  <p>同请求内的问题互相独立——一个答案<strong>不会</strong>自动成为下一个问题的上下文。真有依赖时（代码必须拿到第一个答案才能：去取更多数据、决定 state 装什么、或挑下一个问题的选项），才发第二个请求。官方口径：<strong>两次请求是例外不是常态</strong>。三个真实例外：先粗排 182 个技能再取前三细评；先判断每行换行是否切断句子、再给拼出的块分类（块在第一问回答前根本不存在）；层级分类里用上一层的 Choice 决定下一层给哪些选项。</p>
+
+  <div class="note"><b>给用 agent 的你</b>官方观察：编码 agent 比人类更容易养成「一问一调用」的坏习惯，所以他们的 agent skill 会专门叮嘱「每次调用多塞问题，包括只对部分输入有意义的问题」。让 agent 写集成时，先装这个 skill。</div>
+
+  <div class="checkpoint">
+    <div class="toc-title" style="margin-bottom:8px">通关条件 · 点亮你的进度</div>
+    <div class="ckpt-item" data-key="jev-c1"><span class="ckpt-box">✓</span><span class="ckpt-text"><b>跑一次真实调用</b>：在官方 Playground 用自己的文字跑一个 Noul + Choice + Score 混合请求。</span></div>
+    <details class="ckpt-ans"><summary>展开看参考答案</summary><div class="ans-body">
+      <div class="ans-block plain"><span class="ans-tag">大白话版</span><p>打开 console.typesafe.ai/playground，随便粘一段你身边的文字（邮件、评论、报错），加三个问题：一个判断题（急不急）、一个选择题（该给谁）、一个打分题（情绪几档）。看三个答案是不是一次全回来。</p></div>
+      <div class="ans-block pro"><span class="ans-tag">专业版</span><p>questions 对象里混三种 type 即可，全部并行返回。对照点：三档情绪的 Score 返回 0–2 之间的小数（如 1.035）；Choice 的 probabilities 给出每个选项的份额；Noul 只有一个 0–1 值。不需要 API key，Playground 登录即用。</p></div>
+    </div></details>
+    <div class="ckpt-item" data-key="jev-c2"><span class="ckpt-box">✓</span><span class="ckpt-text"><b>给自己的业务写一组问题</b>：至少 5 问，混合题型，选项给全、等级写情境。</span></div>
+    <details class="ckpt-ans"><summary>展开看参考答案</summary><div class="ans-body">
+      <div class="ans-block plain"><span class="ans-tag">大白话版</span><p>拿你的工单/评论/简历流写问题清单：路由用 Choice（记得加 other）、程度用 Score（每档写成「什么情况下算这档」）、筛选用 Noul。把「可能用得上」的都列上——反正一次调用并行答，不用白不用。</p></div>
+      <div class="ans-block pro"><span class="ans-tag">专业版</span><p>检查三件事：① 每问只测一个维度，复合判断拆开（在代码里加权）；② Score 的 criteria 每档是情境画像而非程度词，不含「比上一档」式相对表述；③ Choice 易混选项用 {what, not_for, examples} 结构化。instructions 里用带反引号的字段路径指向 state 的具体位置。</p></div>
+    </div></details>
+    <div class="ckpt-item" data-key="jev-c3"><span class="ckpt-box">✓</span><span class="ckpt-text"><b>讲清三个反直觉点</b>：Noul 0.5 ≠ 中等；Score 看不见相邻档；权重放代码不放提示词。</span></div>
+    <details class="ckpt-ans"><summary>展开看参考答案</summary><div class="ans-body">
+      <div class="ans-block plain"><span class="ans-tag">大白话版</span><p>① 判断题的 0.5 是「拿不准」，不是半分——测程度用打分题；② 每一档是单独送评的，模型不知道有编号也不知道邻居，所以等级必须写成具体场景；③ 组合判断的权重是代码里的系数，改优先级改数字，永远不用重写提示词。</p></div>
+      <div class="ans-block pro"><span class="ans-tag">专业版</span><p>① Noul 无 confidence，0.5 本身承载不确定性；Score 的中间值才有「程度」语义（概率加权档号）。② criteria 每档独立对照 state 评估，相对表述与裸数字都会让分布摊平（官方实验：0.0@1.0 → 0.57@0.35）。③ Composite scoring 模式：normalize（除以 len(criteria)-1）后加权，权重即业务策略，可测可版本化。</p></div>
+    </div></details>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="chapter" id="c10">
+  <div class="chapter-head"><span class="chapter-no">10</span><h2 class="ch">实战地图 —— 用例、模式、食谱与生态</h2></div>
+  <p class="lede">题型只是零件，这一章是一张可点的地图：官方把用例按行业铺开、沉淀出四个架构模式、写了十八份带真实结果的 cookbook 食谱；社区这边 skill、SDK、复刻与实测也都已经有了。拿着你自己的业务对号入座。</p>
+
+  <h3>官方用例地图：五大类场景</h3>
+  <p>官方的 <a href="https://docs.typesafe.ai/concepts/use-case-map" target="_blank" rel="noopener">用例地图（Example use cases）</a>按行业列了二十来类用法。先抓它归纳的五大类——每一类都是「为什么非这种模型不可」的一个理由：</p>
+
+  <table>
+    <thead><tr><th>场景大类</th><th>一句话</th></tr></thead>
+    <tbody>
+      <tr><td><b>AI 自动化软件</b></td><td>代码掌管控制流，Jev 管语义判断——无人值守地跑一百万次</td></tr>
+      <tr><td><b>实时应用</b></td><td>官方口径 150ms 级响应：快过人类感知，可做游戏、可嵌进 UI</td></tr>
+      <tr><td><b>大数据 AI Map Reduce</b></td><td>便宜一个数量级之后，巨量语料的搜索、分类、特征提取才做得起</td></tr>
+      <tr><td><b>万能验证</b></td><td>验证另一个 AI 的输入、抽取、推理轨迹、工具调用——成本只要被检 LLM 调用的零头</td></tr>
+      <tr><td><b>Harness 工程</b></td><td>让 agent 框架更聪明：模型路由、语义检索、错误检测、护栏</td></tr>
+    </tbody>
+  </table>
+
+  <p>行业层各挑两个典型判断感受一下广度（完整清单见用例地图页）：客服（工单分类、紧急度/退款检测、路由到队列）、招聘（简历对照岗位标准打分、经验识别、不确定转人工）、销售线索（ICP 匹配、购买意向打分）、保险理赔（出险报告分类、欺诈信号、直通处理 vs 专家审核）、金融犯罪（交易叙事评估、跨名录实体对齐）、法务合规（合同分类、缺条款与违规声明检测）、电商（跨卖家目录归一、禁售与假货信号）、信任与安全（毒性/骚扰/诈骗审核，severity × confidence 定允许/警告/复核/封禁）、游戏（聊天审核、玩家挫败感打分、流失信号）、知识图谱（关系分类、记录间矛盾检测）。官方还给了十种「决策形状」速查——分类、检测、打分、路由、搜索、检索、排序、验证、ML 特征提取、结构化抽取——拆开看全是三种题型的排列组合。</p>
+
+  <h3>四个架构模式</h3>
+  <p><a href="https://docs.typesafe.ai/patterns" target="_blank" rel="noopener">Patterns</a> 页把常见做法沉淀成四个模式，本手册已经拆过三个，剩下那个是 agent 工程里最常用的总纲：</p>
+  <ul class="plain">
+    <li><a href="https://docs.typesafe.ai/patterns/fan-out" target="_blank" rel="noopener">Speculative fan-out 投机型扇出</a>——可能用得上的问题一次全问（第 9 章三板斧之一）；</li>
+    <li><a href="https://docs.typesafe.ai/patterns/confidence-routing" target="_blank" rel="noopener">Confidence-gated routing 置信度门控路由</a>——答案告诉你是「什么」，confidence 告诉你「要不要动手」（第 8 章）；</li>
+    <li><a href="https://docs.typesafe.ai/patterns/composite-scoring" target="_blank" rel="noopener">Composite scoring 复合打分</a>——拆成原子分数、代码里加权（第 9 章优先级计算器）；</li>
+    <li><a href="https://docs.typesafe.ai/patterns/intent-routing" target="_blank" rel="noopener">Intent routing 意图路由</a>——把每个请求分给最优处理者：确定性代码、专家 LLM，或人。</li>
+  </ul>
+
+  <h3>十八份 cookbook：带数字的实战食谱</h3>
+  <p>每份 cookbook 都是可以跑起来的完整示例，多数带前后对比数字。建议先扫一遍标题，挑跟自己业务最近的两三份精读：</p>
+  <table>
+    <thead><tr><th>食谱</th><th>干什么的</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/parallel_questions" target="_blank" rel="noopener">Parallel questions</a></td><td>在 GDPR 维基条目上一次批量问 13 个监管问题，验证「合在一起问」更便宜更快且答案不变</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/rerank_typesafe" target="_blank" rel="noopener">Re-ranking</a></td><td>40 条法律查询：BM25 短名单重排后 top-1 命中 5% → 18%，top-10 命中 38% → 62%</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/semantic_find" target="_blank" rel="noopener">Line-by-line search</a></td><td>GitHub 服务条款 218 行逐行语义搜索：一次 Choice 问题给 218 个行号打分</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/autoformat" target="_blank" rel="noopener">Structure recovery</a></td><td>丢掉格式的纯文本两步恢复成 Markdown：先拼行、再给每个块分类（第 9 章提过的真依赖例子）</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/function_calling" target="_blank" rel="noopener">Function calling</a></td><td>自然语言交易请求 → 普通类型化函数调用：函数名与闭集参数都映射成问题</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/skill_suggestion" target="_blank" rel="noopener">Skill suggestion</a></td><td>182 个 agent 技能里至多挑 1 个：第一问粗排，第二问细读前三并有权全拒</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/entity_alignment" target="_blank" rel="noopener">Entity alignment</a></td><td>两份啤酒目录 450 个候选对：一个 Score 包办「合并 / 不连 / 交人工」三决策，无需拟合阈值</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/classifying_rag_passages" target="_blank" rel="noopener">Classifying RAG passages</a></td><td>给每段检索材料打分，决定谁有资格进回答模型——顺手拦下藏了 prompt injection 的段落</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/citation_check" target="_blank" rel="noopener">Citation check</a></td><td>引文对照原文：一个 Choice 判断引文语境是否支撑论断，confidence 不足就标人工复核</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/llm_guardrails" target="_blank" rel="noopener">LLM guardrails</a></td><td>LLLM 应用的进出双向筛查：越狱检测（Noul）+ 危害程度打分（Score），阈值决定放行/复核/拦截</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/sde_cascade" target="_blank" rel="noopener">SDE cascade</a></td><td>结构化抽取三段级联（小模型 → 验证 → 推理模型）：用零头的价格买到大模型的大部分质量</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/date_extraction_cookbook" target="_blank" rel="noopener">Date extraction</a></td><td>绝对与相对日期抽取：Jev 出零件、代码负责解析与校验</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/pre_parsed_value_extraction_cookbook" target="_blank" rel="noopener">Pre-parsed value extraction</a></td><td>正则找候选邮箱/电话/金额，Jev 选中目标跨度，代码归一化成标准值</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/hierarchical_classification" target="_blank" rel="noopener">Hierarchical classification</a></td><td>专利 / 零售 / 生物医学 / 源码深层级分类：Choice 概率上跑并行 beam search</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/autoresearch_feature_discovery" target="_blank" rel="noopener">Autoresearch features</a></td><td>自动提出问题 → 把文本变数值特征 → 用模型误差迭代训练下游 CatBoost 回归器</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/classification_using_confidence" target="_blank" rel="noopener">Classification using confidence</a></td><td>SEC 年报分 75 个行业组：置信度不够就上报上一级门类，而不是硬猜</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/consistency_noul_cookbook" target="_blank" rel="noopener">Self-consistency: nouls</a></td><td>不确定的概率转人工，同时底层 noul 值保持可见</td></tr>
+      <tr><td><a href="https://docs.typesafe.ai/cookbooks/consistency_choice_cookbook" target="_blank" rel="noopener">Self-consistency: choices</a></td><td>审核决策加一个「不确定」出口，用标注一致性对账自动动作占比</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Agent skill：让编码 agent 替你写集成</h3>
+  <p><a href="https://docs.typesafe.ai/agent-skill" target="_blank" rel="noopener">TypeSafe agent skill</a>是一个即插即用的技能包（<a href="https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md" target="_blank" rel="noopener">SKILL.md 直读</a>），给 Claude Code、Codex 等编码 agent 补全题型、模式与最佳实践上下文。安装：</p>
+  <div class="codewrap"><span class="filetab">两条路，任选其一</span><button class="copybtn">复制</button>
+<pre><span class="cm"># Claude Code 插件市场</span>
+<span class="fn">claude</span> plugin marketplace add typesafe-ai/skills
+<span class="fn">claude</span> plugin install typesafe@typesafe-ai
+
+<span class="cm"># 其他 agent（skills.sh，项目本地装，-g 全局）</span>
+<span class="fn">npx</span> skills add typesafe-ai/skills --skill typesafe-ai</pre></div>
+  <p>官方给的三个起手 prompt 值得直接抄：①「用 TypeSafe skill 扫一遍我的项目，找用语义判断替代脆弱解析的机会」；②「拿我导出的 <code>TYPESAFE_API_KEY</code> 跑些便宜实验，基于最有希望的结果提方案」；③「对照 cookbook 索引看我的代码里有没有类似模式可以重构」。官方经验还提醒：<strong>agent 不擅长写问题</strong>——问题与阈值收拢到一个文件里，和人一起迭代；以及如果你只想要「最好的选项」，直接取最高概率即可，不必处处上 confidence 阈值。</p>
+
+  <h3>SDK 与价格账本</h3>
+  <p>客户端两条路：<a href="https://docs.typesafe.ai/sdk/python" target="_blank" rel="noopener">Python SDK</a>（<code>pip install typesafe-sdk</code>）与 <a href="https://docs.typesafe.ai/sdk/javascript" target="_blank" rel="noopener">JavaScript SDK</a>（<code>@typesafe-ai/sdk</code>），都默认读 <code>TYPESAFE_API_KEY</code>、默认 <code>jev-latest</code>、失败自动退避重试。硬指标（<a href="https://docs.typesafe.ai/models" target="_blank" rel="noopener">models 页</a>，2026-09）：</p>
+  <table>
+    <thead><tr><th>项</th><th>数值 / 口径</th></tr></thead>
+    <tbody>
+      <tr><td><b>当前版本</b></td><td><code>jev-1.13.0</code>（<code>jev-latest</code> / <code>jev-preview</code> 别名都指向它；别名会随新版漂移，调过阈值就锁版本号）</td></tr>
+      <tr><td><b>价格</b></td><td>输入 $42 / Btok（=$0.042 / Mtok）；<strong>输出 token 免费</strong>——因为它不生成文本</td></tr>
+      <tr><td><b>限速</b></td><td>250,000 tokens/s、1,200 请求/分钟（官方注明扩容期动态调整，超额返回 429）</td></tr>
+      <tr><td><b>上下文</b></td><td>每请求 64k tokens：state 32k + 最长问题 32k（问题共享预算，第 9 章）</td></tr>
+      <tr><td><b>定制方式</b></td><td>不做微调 / LoRA：同一套权重服务所有账号，领域知识放 state、边界写进 criteria</td></tr>
+      <tr><td><b>数据</b></td><td>不用客户请求/响应训练；企业可零保留（ZDR）</td></tr>
+      <tr><td><b>发布口径</b></td><td><a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev" target="_blank" rel="noopener">官方发布博文</a>：System One 形状的查询上比 frontier LLM 快 40–200×、便宜最高 400×</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn"><b>先读「毛边」页再上生产</b>官方自己维护着 <a href="https://docs.typesafe.ai/model-jaggedness/jev-1.13" target="_blank" rel="noopener">Jev 1.13 已知毛边（jaggedness）</a>：列了这版模型已知的弱点，包括准确率随 state 变长如何变化。愿意自曝短板是个好信号，但你要在自己的数据上按这页校准预期——尤其中文场景（第 2 章的提醒仍然成立）。</div>
+
+  <h3>社区动态：一周里的生态</h3>
+  <p>Jev 发布才几天，社区已经有复刻、实测与吐槽。挑真实可点的：</p>
+  <ul class="plain">
+    <li><b>热帖</b> · <a href="https://news.ycombinator.com/item?id=49731282" target="_blank" rel="noopener">HN：Reverse-engineered Jev-like model</a>（161 分）——社区逆向「一段文本 + N 个选项 → N 个概率」的做法；Reddit <a href="https://www.reddit.com/r/singularity/comments/1whop6b/" target="_blank" rel="noopener">r/singularity 发布帖</a>同步在吵</li>
+    <li><b>复刻与开源替代</b> · <a href="https://github.com/r-ms/mini-jev" target="_blank" rel="noopener">mini-jev</a>（LLM 上本地实现）、<a href="https://github.com/ikermoel/open-alternative-jev" target="_blank" rel="noopener">open-alternative-jev</a>（自己 GPU 上跑的开源替代）</li>
+    <li><b>实测</b> · <a href="https://github.com/dabit3/jev-experiments" target="_blank" rel="noopener">dabit3/jev-experiments</a>（Devin 搭的延迟测试）、<a href="https://lindfors.no/blog/a-first-look-at-typesafes-jev/" target="_blank" rel="noopener">lindfors.no 早鸟实测「半美分的校准判断」</a></li>
+    <li><b>第三方解读</b> · <a href="https://www.datacamp.com/blog/system-one-models-jev" target="_blank" rel="noopener">DataCamp：Jev 解读</a>、<a href="https://flaviocopes.com/jev" target="_blank" rel="noopener">flaviocopes 深潜（含 JS 示例）</a>、<a href="https://geotoolbox.ai/blog/what-is-jev-ai" target="_blank" rel="noopener">geotoolbox 入门</a></li>
+    <li><b>随笔与视频</b> · <a href="https://backnotprop.com/blog/jev-poker/" target="_blank" rel="noopener">「Jev 是扑克桌上的鱼」</a>（对适用边界的长文思考）、<a href="https://www.youtube.com/watch?v=5Lx4DLLYafM" target="_blank" rel="noopener">YouTube：Coding with the new TypeSafe AI JEV Model</a></li>
+    <li><b>汇总清单</b> · <a href="https://github.com/yibie/awesome-jev" target="_blank" rel="noopener">awesome-jev</a>（社区项目、集成与讨论的持续收录）</li>
+  </ul>
+
+  <details class="quiz"><summary>自测 · 想清楚了再选 Jev：它和「用便宜 LLM 做分类」的边界在哪？</summary><div class="ans">Jev 赢在结构化和校准：答案天然在你定义的空间里、概率经过校准可做阈值设计、输出 token 免费且并行多问几乎免费——适合「高频、窄判断、要进代码」的位置。但如果你的任务需要长推理链、开放生成、或多轮对话中的上下文累积，那还是 LLM 的领地；官方模式（intent routing）本身就是让两者分工：Jev 做门厅的快判断，重活转给 LLM 或人。「扑克桌上的鱼」那篇的提醒也值得记住：把 Jev 用在它被训练的形状上，别硬拗。</div></details>
+</section>
+
+<!-- 11 -->
+<section class="chapter" id="c11">
+  <div class="chapter-head"><span class="chapter-no">11</span><h2 class="ch">终极测验</h2></div>
+  <p class="lede">五道题覆盖全部核心机制。答完每题立即出解析；4 题以上正确算出师。</p>
+  <div class="quizbox">
+    <div class="quiz-head"><span id="qNo">QUESTION 1 / 5</span><span id="quizScore">0 / 5</span></div>
+    <div class="quiz-body">
+      <div class="q-no" id="qNo2" style="display:none"></div>
+      <div class="q-text" id="qText"></div>
+      <div id="qOpts"></div>
+      <div class="q-exp" id="qExp"></div>
+    </div>
+    <div class="quiz-foot">
+      <button class="sim-btn" id="qSubmit" disabled>提交</button>
+      <button class="sim-btn ghost" id="qNext" style="display:none">下一题 →</button>
+      <button class="sim-btn ghost" id="qRestart" style="display:none">重来</button>
+      <span class="q-verdict" id="qVerdict"></span>
+    </div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="chapter" id="c12">
+  <div class="chapter-head"><span class="chapter-no">12</span><h2 class="ch">参考资料</h2></div>
+  <p class="lede">本手册的事实、示例与数字均整理自 TypeSafe 官方文档（2026-09 读到版本），交互组件为本页自制。</p>
+  <ul class="plain source-list">
+    <li>官方文档 · <a href="https://docs.typesafe.ai/introduction" target="_blank" rel="noopener">Introduction</a> · <a href="https://docs.typesafe.ai/introduction/quickstart" target="_blank" rel="noopener">Quick start</a> · <a href="https://docs.typesafe.ai/concepts/system-one" target="_blank" rel="noopener">System One</a> · <a href="https://docs.typesafe.ai/concepts/state" target="_blank" rel="noopener">State</a> —— 第 1、2 章的主源</li>
+    <li>官方文档 · <a href="https://docs.typesafe.ai/primitives" target="_blank" rel="noopener">Primitives 总览</a> · <a href="https://docs.typesafe.ai/primitives/choice" target="_blank" rel="noopener">Choice</a> · <a href="https://docs.typesafe.ai/primitives/score" target="_blank" rel="noopener">Score</a> · <a href="https://docs.typesafe.ai/primitives/noul" target="_blank" rel="noopener">Noul</a> · <a href="https://docs.typesafe.ai/primitives/advanced" target="_blank" rel="noopener">Advanced: structure</a> —— 第 3~5、9 章的题型细节与全部实验数字</li>
+    <li>官方文档 · <a href="https://docs.typesafe.ai/introduction/machine-learning-primer" target="_blank" rel="noopener">AI primer（RLCD 与校准）</a> · <a href="https://docs.typesafe.ai/confidence" target="_blank" rel="noopener">Confidence</a> —— 第 7、8 章的训练叙事与路由示例</li>
+    <li>官方入口 · <a href="https://console.typesafe.ai/playground" target="_blank" rel="noopener">Playground</a> · API <code>POST api.typesafe.ai/v1/systemone</code> · <a href="https://typesafe.ai/manifesto" target="_blank" rel="noopener">TypeSafe Manifesto（Machine Native Intelligence）</a> · <a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev" target="_blank" rel="noopener">发布博文：Introducing System One Models &amp; Jev</a></li>
+    <li>书 · 丹尼尔·卡尼曼《思考，快与慢》—— System One 命名出处</li>
+    <li>延伸 · <a href="https://docs.typesafe.ai/concepts/use-case-map" target="_blank" rel="noopener">用例地图</a>、<a href="https://docs.typesafe.ai/patterns" target="_blank" rel="noopener">patterns</a>、18 份 <a href="https://docs.typesafe.ai/cookbooks/parallel_questions" target="_blank" rel="noopener">cookbooks</a>、<a href="https://docs.typesafe.ai/models" target="_blank" rel="noopener">models（定价/限速/语言支持）</a>、<a href="https://docs.typesafe.ai/agent-skill" target="_blank" rel="noopener">agent skill</a> 已在第 10 章展开索引；完整文档目录见 <a href="https://docs.typesafe.ai/llms.txt" target="_blank" rel="noopener">llms.txt</a>，社区链接（HN、复刻、实测、第三方解读）同样收录在第 10 章</li>
+  </ul>
+
+  <h3>延伸阅读 · 本站相关手册</h3>
+  <table>
+    <thead><tr><th>手册</th><th>关联点</th></tr></thead>
+    <tbody>
+      <tr><td><a href="../llm-prompt-caching/a.html">LLM 前缀缓存</a></td><td>省智能调用成本的两个互补机制：Jev 靠「一次调用并行多问」省请求数，前缀缓存靠复用已算过的前缀状态省计算</td></tr>
+      <tr><td><a href="../subagent-vs-multi-agent/a.html">Subagent vs 多 Agent</a></td><td>编排层怎么分工；Jev 是编排体系里那层「秒级微判断」，慢推理与人兜底在别处</td></tr>
+      <tr><td><a href="../gpu-and-deployment/a.html">GPU 与模型部署实战</a></td><td>模型 API 背后的推理与部署经济学——判断模型再快也要跑在算力账单上</td></tr>
+    </tbody>
+  </table>
+
+  <a class="next-card" href="../index.html">
+    <div><b>回到总目录</b><div class="nc-sub">know-as-ui · 还有 8 个可交互知识点</div></div>
+    <span class="nc-arrow">↗</span>
+  </a>
+
+  <footer class="colophon">jev-typesafe · 事实与数字以 docs.typesafe.ai 为准（2026-09 版）· 封面为 AI 生成插画（豆包 seedream），交互组件与本页图表为自制，模拟数据处均已标注 · RLHF/RLVR/RLCD 对照基于官方 AI primer 叙事</footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ===== TOC + scrollspy + 进度条 ===== */
+const chapters=[...document.querySelectorAll("section.chapter")],toc=document.getElementById("toc"),
+names=["Jev 是什么","一次调用长什么样","三种题型","Choice 概率分布","Score 等级设计","Noul 判断题","RLCD 与校准","置信度路由","组合拳","实战地图","终极测验","参考资料"];
+chapters.forEach((sec,i)=>{const a=document.createElement("a");a.href="#"+sec.id;a.innerHTML=`<span class="no">${String(i+1).padStart(2,"0")}</span>${names[i]}`;toc.appendChild(a)});
+const links=[...toc.querySelectorAll("a")],progFill=document.getElementById("progFill"),progLabel=document.getElementById("progLabel");
+function updateSpy(){const y=scrollY+140;let cur=0;chapters.forEach((s,i)=>{if(s.offsetTop<=y)cur=i});links.forEach((a,i)=>a.classList.toggle("active",i===cur));progFill.style.width=((cur+1)/chapters.length*100)+"%";progLabel.textContent=`${cur+1} / ${chapters.length} 章`}
+addEventListener("scroll",updateSpy,{passive:true});addEventListener("resize",updateSpy);updateSpy();
+
+/* ===== checkpoints（localStorage） ===== */
+const CK="jev-typesafe-ckpt";let ck={};try{ck=JSON.parse(localStorage.getItem(CK)||"{}")}catch(e){}
+document.querySelectorAll(".ckpt-item").forEach(el=>{if(ck[el.dataset.key])el.classList.add("done");el.onclick=()=>{el.classList.toggle("done");ck[el.dataset.key]=el.classList.contains("done");try{localStorage.setItem(CK,JSON.stringify(ck))}catch(e){}}});
+
+/* ===== 复制按钮 ===== */
+document.querySelectorAll(".codewrap").forEach(w=>{const b=w.querySelector(".copybtn");if(!b)return;const pre=w.querySelector("pre");b.onclick=()=>{navigator.clipboard.writeText(pre.innerText).then(()=>{b.textContent="已复制";b.classList.add("done");setTimeout(()=>{b.textContent="复制";b.classList.remove("done")},1600)})}});
+
+/* ===== A1 翻卡 ===== */
+document.querySelectorAll("#a1Grid .fq").forEach(c=>c.onclick=()=>c.classList.toggle("flipped"));
+
+/* ===== B1 实习生 vs 阅卷老师 ===== */
+const b1Data=[
+ {state:'"Hi, I\'ve been trying to connect my Stripe account for 3 days and it keeps failing. I\'m losing sales. Please help ASAP."',
+  llm:'您好！非常抱歉给您带来困扰。关于 Stripe 账户连接失败三天的問題，可能的原因包括 API 密钥配置、网络代理或账户状态异常。建议您先检查……如仍无法解决，我们将为您转接技术支持专员，请保持电话畅通。<em>—— 一段给人读的话：礼貌、周全，但你的程序还得从中解析出「该派给谁」</em>',
+  jev:
+`{
+  <span class="jk">"model"</span>: <span class="st">"jev-latest"</span>,              <span class="cmt">// 哪个模型答的（别名→具体版本）</span>
+  <span class="jk">"answers"</span>: {
+
+    <span class="jk">"department"</span>: {                          <span class="cmt">// ── Choice：选择题</span>
+      <span class="jk">"type"</span>: <span class="st">"choice"</span>,
+      <span class="jk">"choice"</span>: <span class="st">"billing"</span>,                   <span class="cmt">// 填了哪个格 = 概率最高的选项</span>
+      <span class="jk">"probabilities"</span>: {                    <span class="cmt">// 每个格各分到多少把握（和 = 1）</span>
+        <span class="jk">"billing"</span>:   <span class="jn">0.84</span>,                <span class="cmt">//   胜出：账务问题</span>
+        <span class="jk">"technical"</span>: <span class="jn">0.159</span>,               <span class="cmt">//   第二名不是噪音：也沾技术问题</span>
+        <span class="jk">"sales"</span>:     <span class="jn">0.001</span>
+      },
+      <span class="jk">"confidence"</span>: <span class="jn">0.596</span>                 <span class="cmt">// 分布形状→一个数：偏尖但没全押</span>
+    },
+
+    <span class="jk">"frustration"</span>: {                          <span class="cmt">// ── Score：打分题</span>
+      <span class="jk">"type"</span>: <span class="st">"score"</span>,
+      <span class="jk">"score"</span>: <span class="jn">1.035</span>,                    <span class="cmt">// 光谱位置：1 档「沮丧但克制」多一点</span>
+      <span class="jk">"legend"</span>: {                             <span class="cmt">// 档号翻译回你自己写的描述</span>
+        <span class="jk">"0"</span>: <span class="st">"Calm, just stating facts"</span>,
+        <span class="jk">"1"</span>: <span class="st">"Frustrated but civil"</span>,
+        <span class="jk">"2"</span>: <span class="st">"Very angry, strong language"</span>
+      },
+      <span class="jk">"confidence"</span>: <span class="jn">0.842</span>
+      <span class="cmt">// Score 答案同样带各档 probabilities，官方示例此处从略（第 5 章实验台可看到完整形态）</span>
+    },
+
+    <span class="jk">"is_urgent"</span>: {                              <span class="cmt">// ── Noul：判断题</span>
+      <span class="jk">"type"</span>: <span class="st">"noul"</span>,
+      <span class="jk">"noul"</span>: <span class="jn">0.999</span>                     <span class="cmt">// P(是) = 99.9%：几乎确定紧急</span>
+    }
+  },
+  <span class="jk">"usage"</span>: { <span class="jk">"input_tokens"</span>: <span class="jn">312</span>, <span class="jk">"output_tokens"</span>: <span class="jn">48</span> }   <span class="cmt">// 输出只花 48 token：只「填卡」，不写作文</span>
+}`},
+ {state:'"My running shoes arrived in the wrong size. Can I swap them for a size 10?"',
+  llm:'亲爱的顾客，感谢您的来信！收到尺码不符的商品确实令人沮丧。请您不用担心，我们支持 30 天内免费换货……您可以登录账户在订单页发起换货申请，或回复邮件由我们协助处理，预计 3–5 个工作日……<em>—— 245 个 token 的服务话术，路由信息为零增量</em>',
+  jev:
+`{
+  <span class="jk">"model"</span>: <span class="st">"jev-latest"</span>,
+  <span class="jk">"answers"</span>: {
+    <span class="jk">"department"</span>: {                    <span class="cmt">// ── Choice：清晰工单</span>
+      <span class="jk">"type"</span>: <span class="st">"choice"</span>,
+      <span class="jk">"choice"</span>: <span class="st">"returns"</span>,             <span class="cmt">// 换货组全押</span>
+      <span class="jk">"probabilities"</span>: {
+        <span class="jk">"returns"</span>:  <span class="jn">1.0</span>,              <span class="cmt">// 无分裂</span>
+        <span class="jk">"shipping"</span>: <span class="jn">0.0</span>,
+        <span class="jk">"billing"</span>:  <span class="jn">0.0</span>
+      },
+      <span class="jk">"confidence"</span>: <span class="jn">1.0</span>              <span class="cmt">// 一根尖峰 → 满格把握</span>
+    }
+  },
+  <span class="jk">"usage"</span>: { <span class="jk">"input_tokens"</span>: <span class="jn">330</span>, <span class="jk">"output_tokens"</span>: <span class="jn">34</span> }   <span class="cmt">// 同样极省</span>
+}`}
+];
+let b1Idx=0;
+function b1Render(){const d=b1Data[b1Idx];document.getElementById("b1State").textContent=d.state;document.querySelector("#b1Llm").innerHTML=d.llm;document.getElementById("b1Jev").innerHTML=d.jev}
+document.getElementById("b1Swap").onclick=()=>{b1Idx=1-b1Idx;b1Render()};
+b1Render();
+
+/* ===== B2 请求拼装台 ===== */
+const asmQs=[
+ {id:"department",name:"department",type:"choice",desc:"Which team should handle this",on:true},
+ {id:"frustration",name:"frustration",type:"score",desc:"How frustrated the customer appears",on:true},
+ {id:"is_urgent",name:"is_urgent",type:"noul",desc:"The message conveys urgency or time-sensitivity",on:true}
+];
+const asmAns={
+ department:{html:`  <span class="jk">"department"</span>: { <span class="jk">"type"</span>: <span class="st">"choice"</span>, <span class="jk">"choice"</span>: <span class="st">"billing"</span>,
+    <span class="jk">"probabilities"</span>: { <span class="js2">"billing": 0.84, "technical": 0.159, "sales": 0.001</span> },
+    <span class="jk">"confidence"</span>: <span class="jn">0.596</span> }`,
+  field:"<b>department</b>：选中项 billing（0.84），但 technical 拿了 0.159——这不归零的份额就是「下次该关注什么」的线索。"},
+ frustration:{html:`  <span class="jk">"frustration"</span>: { <span class="jk">"type"</span>: <span class="st">"score"</span>, <span class="jk">"score"</span>: <span class="jn">1.035</span>,
+    <span class="jk">"legend"</span>: { <span class="js2">"0": "Calm, just stating facts", "1": "Frustrated but civil", "2": "Very angry, strong language"</span> },
+    <span class="jk">"confidence"</span>: <span class="jn">0.842</span> }`,
+  field:"<b>frustration</b>：1.035 ≈ 落在「沮丧但克制」档多一点。legend 把档号翻译回你的描述。"},
+ is_urgent:{html:`  <span class="jk">"is_urgent"</span>: { <span class="jk">"type"</span>: <span class="st">"noul"</span>, <span class="jk">"noul"</span>: <span class="jn">0.999</span> }`,
+  field:"<b>is_urgent</b>：「I'm losing sales. ASAP」几乎确定是紧急——P(是) = 99.9%，没有单独 confidence。"}
+};
+const b1QsEl=document.getElementById("b1Qs");
+function asmRenderQs(){b1QsEl.innerHTML=asmQs.map(q=>`<div class="asm-q ${q.on?"on":""}" data-id="${q.id}"><span class="qtype">${q.type}</span><b>${q.name}</b><small>${q.desc}</small></div>`).join("");
+ [...b1QsEl.querySelectorAll(".asm-q")].forEach(el=>el.onclick=()=>{const q=asmQs.find(x=>x.id===el.dataset.id);q.on=!q.on;asmRenderQs()})}
+asmRenderQs();
+document.getElementById("asmSend").onclick=()=>{
+ const on=asmQs.filter(q=>q.on);
+ const res=document.getElementById("asmRes"),fld=document.getElementById("asmFields");
+ if(!on.length){res.innerHTML='<span class="dim">// 至少勾选一个问题</span>';fld.innerHTML="<b>字段解读</b>：先勾问题。";return}
+ res.innerHTML='<span class="dim">// thinking…（本地模拟，数据为官方真实示例）</span>';
+ fld.innerHTML="<b>字段解读</b>：马上来。";
+ setTimeout(()=>{
+   let body=on.map(q=>asmAns[q.id].html).join(",\n");
+   res.innerHTML=`{\n  <span class="jk">"model"</span>: <span class="st">"jev-latest"</span>,\n  <span class="jk">"answers"</span>: {\n${body}\n  },\n  <span class="jk">"usage"</span>: { <span class="js2">"input_tokens": 312, "output_tokens": 48</span> }\n}`;
+   fld.innerHTML=on.map(q=>asmAns[q.id].field).join("<br>");
+ },420);
+};
+
+/* ===== B3 题型决策向导 ===== */
+const wizR={
+ noul:{t:"Noul · 判断题",ret:"noul（0–1，无 confidence）",p:"干净的是非题，概率本身就是信号：≥0.9 直接动作、≤0.3 放行、中间复核。例：「客户在要求退款吗」。代码形态：<code>if</code>。",ch:"第 6 章"},
+ score:{t:"Score · 打分题",ret:"score + legend + probabilities + confidence",p:"答案是有序光谱上的位置，你能描述每一档的情境。例：「bug 多严重（外观 / 有绕行 / 全阻）」。代码形态：阈值 / 排序。",ch:"第 5 章"},
+ choice:{t:"Choice · 选择题",ret:"choice + probabilities + confidence",p:"答案是并列类别里挑一个，无顺序。给全清单并加 <code>other</code> 兜底。例：「工单派给哪个组」。代码形态：<code>switch</code> / 路由表。",ch:"第 4 章"}
+};
+let wizV1=null,wizV2=null;
+function wizReset(){wizV1=null;wizV2=null;document.getElementById("wiz2wrap").style.display="none";
+ document.querySelectorAll("#wiz1 .wiz-opt").forEach(b=>b.classList.remove("active"));
+ document.querySelectorAll("#wiz2 .wiz-opt").forEach(b=>b.classList.remove("active"));
+ document.getElementById("wizResult").innerHTML='<p style="font-size:13.5px;color:var(--ink-faint)">做完选择，这里给出推荐题型、返回字段与代码形态。</p>'}
+function wizShow(){let k=null;if(wizV1==="bool")k="noul";else if(wizV1==="spec")k="score";else if(wizV1==="set"&&wizV2==="ordered")k="score";else if(wizV1==="set"&&wizV2==="unordered")k="choice";
+ if(!k)return;const r=wizR[k];
+ document.getElementById("wizResult").innerHTML=`<span class="wr-badge">${r.ch}</span><div class="wr-type">${r.t}</div><div class="wr-ret">返回：<code>${r.ret}</code></div><p>${r.p}</p>`}
+document.querySelectorAll("#wiz1 .wiz-opt").forEach(b=>b.onclick=()=>{wizReset();wizV1=b.dataset.v;b.classList.add("active");if(wizV1==="set")document.getElementById("wiz2wrap").style.display="block";wizShow()});
+document.querySelectorAll("#wiz2 .wiz-opt").forEach(b=>b.onclick=()=>{wizV2=b.dataset.v;document.querySelectorAll("#wiz2 .wiz-opt").forEach(x=>x.classList.remove("active"));b.classList.add("active");wizShow()});
+
+/* ===== B4 歧义工单路由模拟器 ===== */
+const rtData={
+ clear:{probs:[["returns",1.0],["billing",0.0],["shipping",0.02]],conf:1.0,choice:"returns",
+   logic:[["fire","conf 1.0 ≥ 0.3","自动派单 → returns（附 return_reason: wrong_size）"],
+          ["fire","billing 0.00 ≤ 0.25","无需抄送：第二名是噪音"],
+          ["","resolution conf 1.0","客户诉求明确（exchange），走对应流程"]]},
+ ambig:{probs:[["returns",0.60],["billing",0.38],["shipping",0.02]],conf:0.39,choice:"returns",
+   logic:[["fire","conf 0.39 ≥ 0.3","派单 → returns（未跌破 0.3 人工线）"],
+          ["fire","billing 0.38 > 0.25","抄送 billing：「卡上两笔扣款」不是噪音"],
+          ["fire","resolution conf 0.16 < 0.5","反问客户想要什么（exchange 0.37 / refund 0.29 / replacement 0.24 三分天下）"]]}
+};
+function rtRender(key){const d=rtData[key];
+ document.getElementById("rtProbs").innerHTML=
+  `<div class="prob-row win"><span class="pr-name">${d.probs[0][0]}</span><div class="pr-bar"><div class="pr-fill" style="width:${d.probs[0][1]*100}%"></div></div><span class="pr-val">${d.probs[0][1].toFixed(2)}</span></div>`+
+  d.probs.slice(1).map(p=>`<div class="prob-row"><span class="pr-name">${p[0]}</span><div class="pr-bar"><div class="pr-fill" style="width:${p[1]*100}%"></div></div><span class="pr-val">${p[1].toFixed(2)}</span></div>`).join("")+
+  `<div class="kpi" style="margin-top:8px"><span>confidence</span><b style="color:${d.conf<0.5?"var(--warn)":"var(--ok)"}">${d.conf.toFixed(2)}</b></div>`;
+ document.getElementById("rtLogic").innerHTML=d.logic.map(l=>`<div class="rt-line ${l[0]}"><span class="rt-dot"></span><b>${l[2]}</b><small>${l[1]}</small></div>`).join("")}
+document.querySelectorAll("#rtTickets .rt-ticket").forEach(t=>t.onclick=()=>{document.querySelectorAll("#rtTickets .rt-ticket").forEach(x=>x.classList.remove("active"));t.classList.add("active");rtRender(t.dataset.t)});
+rtRender("clear");
+
+/* ===== B5 等级设计实验台 ===== */
+const lvCrits={
+ desc:'<div class="lv-row"><span class="lv-no">0</span><span> Cosmetic; no impact to functionality</span></div><div class="lv-row"><span class="lv-no">1</span><span> Broken or degraded feature, <span class="hl">but workaround exists</span></span></div><div class="lv-row"><span class="lv-no">2</span><span> Blocking issue; no workaround exists</span></div><div style="margin-top:6px;color:var(--ink-faint)">—— 每档一个情境画像</div>',
+ nums:'<div class="lv-row"><span class="lv-no">?</span><span> instructions: "Rate severity from 0 to 2, where 2 is worst"</span></div><div class="lv-row"><span class="lv-no">0</span><span> "0"</span></div><div class="lv-row"><span class="lv-no">1</span><span> "1"</span></div><div class="lv-row"><span class="lv-no">2</span><span> "2"</span></div><div style="margin-top:6px;color:var(--bad)">—— 没有可对照的情境，只剩数字</div>',
+ exhit:'<div class="lv-row"><span class="lv-no">1</span><span> what: "…workaround exists"<br>&nbsp;&nbsp;&nbsp;&nbsp;examples: [<span class="hl">"export fails in one browser but works in another"</span>]</span></div><div style="margin-top:6px;color:var(--ink-faint)">—— 例子贴住 Safari 场景（其余档略）</div>',
+ exmiss:'<div class="lv-row"><span class="lv-no">1</span><span> what: "…workaround exists"<br>&nbsp;&nbsp;&nbsp;&nbsp;examples: [<span class="hl">"search fails, but browsing categories still works"</span>]</span></div><div style="margin-top:6px;color:var(--warn)">—— 例子与浏览器无关，帮不上忙（其余档略）</div>'
+};
+const lvData={
+ safari:{desc:{s:1.30,c:0.54,p:[0,0.7,0.3],v:"0.7 押「有绕行」+ 0.3 押「无绕行」：Safari-only 用户确实没退路"},
+         nums:{s:0.57,c:0.35,p:[0.43,0.57,0],v:"数字版：概率摊到 0/1 两档，分数失去含义"},
+         exhit:{s:1.07,c:0.90,p:[0,0.93,0.07],v:"贴脸例子把分布收拢——confidence 0.54 → 0.90"},
+         exmiss:{s:1.28,c:0.57,p:[0,0.72,0.28],v:"无关例子 ≈ 没加：回到接近裸描述的形态"}},
+ pixels:{desc:{s:0.0,c:1.0,p:[1,0,0],v:"纯外观问题，干净落 0 档"},
+         nums:{s:0.57,c:0.35,p:[0.43,0.57,0],v:"同一份报告，数字版直接失准（0.0@1.0 → 0.57@0.35）"}},
+ spinner:{desc:{s:1.12,c:0.81,p:[0,0.88,0.12],v:"有人能绕（CSV）有人不能，轻度分裂"},
+         exhit:{s:1.06,c:0.91,p:[0,0.94,0.06],v:"结构化等级（what+examples）：confidence 0.81 → 0.91"}}
+};
+function lvRender(tk,ds){
+ const table=lvData[tk],d=table[ds];
+ if(!d){document.getElementById("lvCrit").innerHTML='<div style="color:var(--ink-faint)">这组工单没有对应的官方实验数据，换一组试试。</div>';
+  ["lvScore","lvConf","lvVerdict"].forEach(id=>document.getElementById(id).textContent="–");document.getElementById("lvProbs").innerHTML="";return}
+ document.getElementById("lvCrit").innerHTML=lvCrits[ds];
+ document.getElementById("lvScore").textContent=d.s.toFixed(2);
+ document.getElementById("lvConf").textContent=d.c.toFixed(2);
+ document.getElementById("lvVerdict").textContent=d.v;
+ document.getElementById("lvProbs").innerHTML=d.p.map((pr,i)=>`<div class="prob-row ${pr===Math.max(...d.p)?"win":""}"><span class="pr-name">Level ${i}</span><div class="pr-bar"><div class="pr-fill" style="width:${pr*100}%"></div></div><span class="pr-val">${pr.toFixed(2)}</span></div>`).join("")+
+  `<div style="font:10.5px var(--mono);color:var(--ink-faint);margin-top:4px">score = ${d.p.map((pr,i)=>i+"×"+pr.toFixed(2)).join(" + ")} = ${d.s.toFixed(2)}</div>`;
+}
+let lvTk="safari",lvDs="desc";
+document.querySelectorAll("#lvTickets .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#lvTickets .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");lvTk=b.dataset.v;lvRender(lvTk,lvDs)});
+document.querySelectorAll("#lvDesigns .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#lvDesigns .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");lvDs=b.dataset.v;lvRender(lvTk,lvDs)});
+lvRender("safari","desc");
+
+/* ===== B6 Noul 读数条 ===== */
+const nzExamples=[
+ {max:0.1,z:"sno",t:"强「否」",d:"模型几乎确定不是。例：平静的事实陈述问「是否辱骂威胁」→ noul ≈ 0.0（官方情绪量表首档）。"},
+ {max:0.35,z:"no",t:"偏「否」",d:"倾向于不是，但留了余地。工程上通常放行 + 低成本抽样复核。"},
+ {max:0.65,z:"mid",t:"拿不准",d:"是与否五五开——<b>不是「中等程度」</b>。多半是问题定义不清或材料不足：改写问题、补 state，或交给 Score。"},
+ {max:0.9,z:"yes",t:"偏「是」",d:"倾向于是。例：「I have asked three times now…」问是否重复来访 → <b>0.93</b>（官方 Noul 文档）。"},
+ {max:1.01,z:"syes",t:"强「是」",d:"几乎确定。例：「I'm losing sales. Please help ASAP」问是否紧急 → <b>0.999</b>；「Can I just talk to a real person?」问是否要求转人工 → <b>0.99</b>。"}
+];
+function nzRender(v){document.getElementById("nzVal").textContent=v.toFixed(2);document.getElementById("nzCursor").style.left=(v*100)+"%";
+ const ex=nzExamples.find(e=>v<=e.max);
+ document.querySelectorAll("#nzZones span").forEach(s=>s.classList.toggle("on",s.dataset.z===ex.z));
+ document.getElementById("nzRead").innerHTML=`<b>${ex.t}</b> —— ${ex.d}`}
+const nzSlider=document.getElementById("nzSlider");
+nzSlider.addEventListener("input",()=>nzRender(nzSlider.value/100));
+nzRender(0.93);
+const nzTrap={
+ good:'问题：「这条消息表达紧急吗？」<br>noul = <b>0.999</b> → 强是。「紧急」是可判的是非（时限压力、损失在发生），概率高得可以直接进路由。<br><span style="color:var(--ok)">✔ Noul 是正确的工具：答案本来就是「是/否」，概率本身就是信号。</span>',
+ bad:'问题：「这位候选人 Python 强吗？」<br>noul = <b>0.5</b> → 这是「模型对是/否五五开」，<u>不是</u>「中等水平」！「强」没定义清楚，概率没法解读。<br><span style="color:var(--bad)">✘ 用错了工具：程度该用 Score —— 无经验 / 有点熟 / 日常使用 / 深度精通，四档各写情境。</span>'
+};
+const nzG=document.getElementById("nzGoodQ"),nzB=document.getElementById("nzBadQ"),nzTB=document.getElementById("nzTrapBody");
+nzG.onclick=()=>{nzG.classList.add("active");nzB.classList.remove("active");nzTB.innerHTML=nzTrap.good};
+nzB.onclick=()=>{nzB.classList.add("active");nzG.classList.remove("active");nzTB.innerHTML=nzTrap.bad};
+nzTB.innerHTML=nzTrap.good;
+
+/* ===== B7 校准对比器 ===== */
+const calData={hi:{good:8,bad:5,label:"80%"},lo:{good:2,bad:2,label:"20%"}};
+function calRender(g){const d=calData[g];
+ const cells=(n)=>Array.from({length:10},(_,i)=>`<div class="cal-cell ${i<n?"hit":"miss"}">${i<n?"✓":"✗"}</div>`).join("");
+ document.getElementById("calGood").innerHTML=cells(d.good);
+ document.getElementById("calBad").innerHTML=cells(d.bad);
+ document.getElementById("calGoodStat").innerHTML=`报 ${d.label} 的 10 个预测，命中 <b>${d.good}/10</b>${d.good===8?" —— 频率对上概率，校准✓":" —— 频率对上概率，校准✓"}`;
+ document.getElementById("calBadStat").innerHTML=`报 ${d.label} 的 10 个预测，命中 <b>${d.bad}/10</b>${g==="hi"?" —— 实际只有五成：过度自信（示意）":" —— 恰好也接近两成，这一组碰巧不翻车（示意）"}`;
+}
+document.querySelectorAll("#calGroup .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#calGroup .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");calRender(b.dataset.v)});
+calRender("hi");
+
+/* ===== B8 风险阈值路由器 ===== */
+const thMsgs=[
+ {msg:'"What\x27s my account balance?"',intent:"check_balance",conf:0.97,risk:"ro"},
+ {msg:'"Please approve the pending withdrawal #8841."',intent:"approve_transfer",conf:0.86,risk:"hi"},
+ {msg:'"I think someone else logged into my account yesterday."',intent:"support",conf:0.62,risk:"mid"},
+ {msg:'"approv the withdrwal plz"',intent:"approve_transfer",conf:0.44,risk:"hi"},
+ {msg:'"hello???"',intent:"support",conf:0.31,risk:"mid"},
+ {msg:'"show balance. or last transaction. whatever is easier"',intent:"check_balance",conf:0.55,risk:"ro"}
+];
+function thRoute(){
+ const lo=document.getElementById("thLo").value/100,hi=Math.max(document.getElementById("thHi").value/100,lo+0.01);
+ document.getElementById("thLoVal").textContent=lo.toFixed(2);document.getElementById("thHiVal").textContent=hi.toFixed(2);
+ let n={auto:0,confirm:0,human:0};
+ document.getElementById("thRows").innerHTML=thMsgs.map(m=>{
+  let v,cls;
+  if(m.conf<0.5){v="转人工（<0.5 地板）";cls="human";n.human++}
+  else if(m.risk==="ro"){ if(m.conf>=lo){v="只读 · 直接执行";cls="auto";n.auto++} else {v="只读 · 仍需确认";cls="confirm";n.confirm++} }
+  else if(m.risk==="hi"){ if(m.conf>=hi){v="破坏性 · 免确认执行";cls="auto";n.auto++} else {v="破坏性 · 先向用户求证";cls="confirm";n.confirm++} }
+  else { if(m.conf>=lo){v="中风险 · 带确认执行";cls="confirm";n.confirm++} else {v="中风险 · 转人工";cls="human";n.human++} }
+  return `<div class="th-row"><div class="th-msg"><b>${m.intent}</b>${m.msg}</div><div class="th-conf">${m.conf.toFixed(2)}</div><div class="th-verdict ${cls}">${v}</div></div>`}).join("");
+ document.getElementById("thCount").textContent=`本轮路由：自动 ${n.auto} 条 · 需确认 ${n.confirm} 条 · 转人工 ${n.human} 条 —— 拖高「破坏性下限」，看转账类消息何时跌回「先求证」。`;
+}
+["thLo","thHi"].forEach(id=>document.getElementById(id).addEventListener("input",thRoute));
+thRoute();
+
+/* ===== B9 优先级计算器 ===== */
+const prSets={
+ spinner:[{n:"severity",s:1.24,top:2,note:"conf 0.63 · 有绕行但存疑"},
+          {n:"frustration",s:1.45,top:2,note:"conf 0.33 · 「第三次了，我受够了」 vs 措辞克制，两档重叠"},
+          {n:"report_quality",s:3.0,top:3,note:"conf 1.0 · 步骤 + 浏览器版本都给了"}],
+ sim:[{n:"severity",s:2.0,top:2,note:"conf 0.95 · 全员登录 500（模拟）"},
+      {n:"frustration",s:0.4,top:2,note:"conf 0.88 · 平静报告（模拟）"},
+      {n:"report_quality",s:1.0,top:3,note:"conf 0.7 · 只报了现象（模拟）"}]
+};
+let prSet="spinner";
+function prCalc(){
+ const set=prSets[prSet];
+ document.getElementById("prScores").innerHTML=set.map((x,i)=>`<div class="sc"><div class="sc-h"><b>${x.n}</b><span class="sc-v">${x.s.toFixed(2)} / ${x.top}</span></div><small>归一化 ${(x.s/x.top).toFixed(3)} · ${x.note}</small></div>`).join("");
+ const w1=document.getElementById("prW1").value/100,w2=document.getElementById("prW2").value/100,w3=document.getElementById("prW3").value/100;
+ document.getElementById("prW1V").textContent=w1.toFixed(2);document.getElementById("prW2V").textContent=w2.toFixed(2);document.getElementById("prW3V").textContent=w3.toFixed(2);
+ const n=set.map(x=>x.s/x.top),p=w1*n[0]+w2*n[1]+w3*n[2];
+ document.getElementById("prFinal").textContent=p.toFixed(2);
+ document.getElementById("prExp").innerHTML=`priority = ${w1.toFixed(2)}×${n[0].toFixed(3)} + ${w2.toFixed(2)}×${n[1].toFixed(3)} + ${w3.toFixed(2)}×${n[2].toFixed(3)}<br>权重在代码里，改系数不改提示词。`;
+}
+["prW1","prW2","prW3"].forEach(id=>document.getElementById(id).addEventListener("input",prCalc));
+document.querySelectorAll("#prTickets .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#prTickets .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");prSet=b.dataset.v;prCalc()});
+prCalc();
+
+/* ===== 终极测验 ===== */
+const quiz=[
+ {q:"Score 的等级（criteria）里写「比上一档更严重」，为什么无效？",
+  o:["因为模型厌恶相对表述的语法","因为每一档都是独立送评的，模型看不到档位编号，也看不到相邻档","因为概率加权公式不支持相对等级","因为官方 API 会拒绝这类描述"],a:1,
+  e:"Score 的机制是「每档独立与材料对照」：模型收到的是一组描述，没有序号也没有邻居概念。等级必须写成情境画像（如「功能坏了但有替代方案」）；官方实验里纯数字等级让同份报告从 0.0@1.0 掉到 0.57@0.35。"},
+ {q:"Noul 问题「这位候选人 Python 强吗」返回 0.5，正确的解读是？",
+  o:["候选人水平中等","模型 50% 收费折扣","模型对「是/否」五五开——多半是「强」没定义清楚","应该四舍五入成 1"],a:2,
+  e:"Noul 返回的是 P(是)。0.5 = 是与非各半，即「拿不准」，不是程度刻度。要测程度（无经验→精通）应该用 Score 定义等级；要保留 Noul 就把问题改成可判的是非，如「简历是否写明在工作中使用过 Python」。"},
+ {q:"Choice 答案里的 confidence 是怎么来的？",
+  o:["模型额外生成的一个自评分数","probabilities 分布形状的统计量：分布越尖越高、越平越低","与历史正确率挂钩的在线学习指标","按 token 置信度加权平均"],a:1,
+  e:"confidence 由答案自带的概率分布推导：集中在一个选项 = 高，摊在多个选项 = 低。它不保证单个答案正确（校准是群体性质），官方也说明你可以不用他们的定义——完整 probabilities 都在响应里。Noul 没有这个字段。"},
+ {q:"为什么官方敢让你把 13 个问题塞进一次调用？",
+  o:["因为问题会自动合并成一个大问题","因为调用按问题数打折","因为每个问题并行、独立评估：加问几乎不加延迟，只多花问题 token","因为多余的答案会被 API 丢弃"],a:2,
+  e:"一次调用内所有问题对同一 state 并行独立评估，互不可见、互不污染（无 context-rot）。实测口径：13 问合一比 13 次单问便宜 11.5 倍、快 9.6 倍，答案不变。这就是 Speculative fan-out：可能用得上的都问，代码决定用哪些。"},
+ {q:"路由工单时 department 返回 returns 0.60 / billing 0.38、confidence 0.39，官方示例代码怎么走？",
+  o:["confidence 太低，直接转人工","只派 returns，忽略其他一切","派 returns，同时给 billing 抄送一份（第二名概率 > 0.25）","重发请求直到 confidence > 0.9"],a:2,
+  e:"0.39 未跌破 0.3 的人工线，可自动派单；但 billing 的 0.38 不是噪音——「卡上两笔扣款」让这个工单一半是账务问题，按官方逻辑第二名 > 0.25 就 notify。概率分布是全息的：选中项管路由，其余份额管「谁还该知道」。"}
+];
+let qi=0,qScore=0,qLock=false;
+const qNo=document.getElementById("qNo"),qNo2=document.getElementById("qNo2"),qText=document.getElementById("qText"),qOpts=document.getElementById("qOpts"),qExp=document.getElementById("qExp"),
+qSubmit=document.getElementById("qSubmit"),qNext=document.getElementById("qNext"),qRestart=document.getElementById("qRestart"),qVerdict=document.getElementById("qVerdict"),qScoreEl=document.getElementById("quizScore");
+let qPicked=-1;
+function qRender(){const item=quiz[qi];qNo.textContent=`QUESTION ${qi+1} / ${quiz.length}`;qScoreEl.textContent=`${qScore} / ${quiz.length}`;
+ qText.textContent=item.q;qExp.className="q-exp";qExp.innerHTML="";qVerdict.textContent="";qLock=false;qPicked=-1;qSubmit.disabled=true;qSubmit.style.display="";qNext.style.display="none";qRestart.style.display="none";
+ qOpts.innerHTML=item.o.map((t,i)=>`<div class="q-opt" data-i="${i}">${t}</div>`).join("");
+ [...qOpts.children].forEach(el=>el.onclick=()=>{if(qLock)return;[...qOpts.children].forEach(x=>x.classList.remove("picked"));el.classList.add("picked");qPicked=+el.dataset.i;qSubmit.disabled=false})}
+qSubmit.onclick=()=>{if(qPicked<0||qLock)return;qLock=true;const item=quiz[qi];
+ [...qOpts.children].forEach((el,i)=>{el.classList.add("locked");if(i===item.a)el.classList.add("right");if(i===qPicked&&i!==item.a)el.classList.add("wrong")});
+ if(qPicked===item.a){qScore++;qVerdict.textContent="✓ 正确";qVerdict.className="q-verdict ok"}else{qVerdict.textContent="✗ 再想想";qVerdict.className="q-verdict bad"}
+ qScoreEl.textContent=`${qScore} / ${quiz.length}`;
+ qExp.innerHTML=item.e;qExp.classList.add("show");
+ qSubmit.style.display="none";qNext.style.display="";};
+qNext.onclick=()=>{if(qi<quiz.length-1){qi++;qRender()}else{
+ qOpts.innerHTML="";qText.textContent=qScore>=4?`出师了：${qScore} / ${quiz.length}。Jev 的世界观你已经拿到手——去 Playground 用自己的业务跑一组问题吧。`:`再刷一遍：${qScore} / ${quiz.length}。错题的解析都在上面，重点回看第 5、7、9 章的机制细节。`;
+ qNo.textContent="FINAL";qExp.className="q-exp";qSubmit.style.display="none";qNext.style.display="none";qRestart.style.display="";}};
+qRestart.onclick=()=>{qi=0;qScore=0;qRender()};
+qRender();
+</script>
+</body>
+</html>
