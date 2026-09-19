@@ -52,7 +52,7 @@ dsh-cordis/
 └── assets/                    # 配图（出自腾讯技术工程原文）
 
 jev-typesafe/
-├── a.html                     # Jev 深入浅出：TypeSafe 判断模型交互手册（请求拼装台、歧义工单路由、等级设计实验台、Noul 读数条、校准对比器、风险阈值路由器、优先级计算器、实战地图：用例/模式/18 份 cookbook/skill/社区链接）
+├── a.html                     # Jev 深入浅出：TypeSafe 判断模型交互手册（概率翻译机、请求拼装台、歧义工单路由、等级设计实验台、Noul 天平、校准对比器、风险阈值路由器、优先级计算器、实战地图：十类玩法/模式/18 份 cookbook/skill/社区链接）
 ├── topic.css                  # 系列共享样式
 └── assets/                    # 封面
 ```

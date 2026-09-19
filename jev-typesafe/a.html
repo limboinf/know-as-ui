@@ -121,16 +121,50 @@
 .lv-crit .hl{background:#f3e9d5;border-radius:4px;padding:0 4px}
 .lv-read .kpi-grid{margin-bottom:10px}
 .lv-read .prob-row .pr-name{grid-column:1 / -1;text-align:left;margin-bottom:-3px}
+.lv-ruler{position:relative;height:28px}
+.lv-ruler .lv-rail{position:absolute;left:0;right:0;top:13px;height:2px;background:var(--line)}
+.lv-ruler .lv-mark{position:absolute;top:3px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid var(--accent);transform:translateX(-50%);transition:left .4s cubic-bezier(.2,.8,.2,1)}
 @media(max-width:820px){.lv-lab{grid-template-columns:1fr}}
 
-/* ---- B6 Noul 读数条 ---- */
-.nz-meter{position:relative;height:56px;margin:18px 0 6px;max-width:var(--content-rail)}
-.nz-track{position:absolute;top:24px;left:0;right:0;height:10px;border-radius:99px;border:1.5px solid var(--ink);background:linear-gradient(90deg,#cfe3df 0%,#e9e2cf 38%,#efe9dd 50%,#e9e2cf 62%,#cfe3df 100%)}
-.nz-zones{position:absolute;top:0;left:0;right:0;display:flex;font:600 9.5px var(--mono);color:var(--ink-faint)}
+/* ---- C3+ 概率翻译机（一张概率表，三种读法） ---- */
+.pt-intro{font-size:14.5px;color:var(--ink-soft);max-width:var(--content-rail);margin:0 0 14px}
+.pt-stage{border:1.5px solid var(--line);border-radius:10px;background:#fffdf8;padding:16px 18px 14px;margin-top:12px}
+.pt-canvas{position:relative;height:196px;max-width:640px}
+.pt-rail{position:absolute;left:6%;right:6%;top:152px;height:3px;background:var(--ink);border-radius:2px}
+.pt-tick{position:absolute;top:146px;width:2px;height:14px;background:var(--ink);transform:translateX(-50%)}
+.pt-ticklbl{position:absolute;top:166px;transform:translateX(-50%);font:700 11px var(--mono);color:var(--ink-soft);white-space:nowrap}
+.pt-block{position:absolute;bottom:46px;width:58px;transform:translateX(-50%);border:1.5px solid var(--ink);border-radius:6px 6px 0 0;background:var(--jev-soft);transition:height .4s cubic-bezier(.2,.8,.2,1);display:flex;align-items:flex-start;justify-content:center;overflow:hidden}
+.pt-block b{font:700 10.5px var(--mono);color:var(--jev-deep);padding-top:2px}
+.pt-marker{position:absolute;bottom:26px;display:flex;flex-direction:column;align-items:center;transform:translateX(-50%);transition:left .4s cubic-bezier(.2,.8,.2,1);z-index:2;pointer-events:none}
+.pt-marker .m-tag{font:800 12px var(--mono);color:var(--paper);background:var(--accent);border-radius:6px;padding:2px 10px;white-space:nowrap;margin-bottom:2px}
+.pt-marker .m-line{width:2.5px;height:104px;background:var(--accent)}
+.pt-marker .m-tri{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:11px solid var(--accent)}
+.pt-formula{font:12px var(--mono);color:var(--ink-soft);background:var(--paper-deep);border-left:3px solid var(--jev);padding:8px 12px;margin-top:10px;overflow-wrap:anywhere}
+.pt-caption{font-size:13.5px;color:var(--ink-soft);margin-top:9px;line-height:1.75}
+.pt-read{font:800 19px var(--mono);color:var(--jev-deep);margin:12px 0 2px}
+.pt-read small{display:block;font:600 11px var(--mono);color:var(--ink-faint);letter-spacing:.04em}
+.pt-lvllbl{position:absolute;bottom:186px;transform:translateX(-50%);font:600 10px var(--mono);color:var(--ink-faint);max-width:120px;text-align:center;line-height:1.4}
+.pt-sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+.pt-sliders .pr-w{display:grid;gap:3px}
+.pt-sliders label{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--ink-soft)}
+.pt-sliders label b{font:800 13px var(--mono);color:var(--jev-deep)}
+.pt-sliders input[type=range]{width:100%;accent-color:var(--jev)}
+@media(max-width:700px){.pt-sliders{grid-template-columns:1fr}}
+
+/* ---- Noul 是/否 分割条（第 3 章翻译机与第 6 章读数条共用） ---- */
+.nz2-wrap{max-width:var(--content-rail)}
+.nz2-bar{position:relative;height:54px;border:1.5px solid var(--ink);border-radius:9px;background:#fffdf8;display:flex;overflow:hidden}
+.nz2-no{background:#ecdfc8;transition:width .35s cubic-bezier(.2,.8,.2,1);display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden}
+.nz2-yes{background:var(--jev-soft);transition:width .35s cubic-bezier(.2,.8,.2,1);display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;flex:1}
+.nz2-no b,.nz2-yes b{font:800 13px var(--mono);color:var(--ink-soft);white-space:nowrap}
+.nz2-yes b{color:var(--jev-deep)}
+.nz2-needle{position:absolute;top:-5px;bottom:-5px;width:3.5px;background:var(--ink);transition:left .35s cubic-bezier(.2,.8,.2,1);z-index:2}
+.nz2-needle::after{content:"▼";position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--ink)}
+.nz2-val{position:relative;text-align:center;font:800 26px var(--mono);color:var(--jev-deep);margin:2px 0 10px}
+.nz2-val small{font:600 11px var(--mono);color:var(--ink-faint);display:block;letter-spacing:.05em}
+.nz-zones{display:flex;gap:6px;max-width:var(--content-rail);font:600 9.5px var(--mono);color:var(--ink-faint);margin:14px 0 0}
 .nz-zones span{flex:1;text-align:center;transition:.2s}
 .nz-zones span.on{color:var(--jev-deep);font-weight:800}
-.nz-cursor{position:absolute;top:16px;width:4px;height:26px;background:var(--ink);border-radius:3px;transform:translateX(-50%);transition:left .3s cubic-bezier(.2,.8,.2,1);cursor:ew-resize}
-.nz-cursor::after{content:"▼";position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--ink)}
 .nz-slider{width:100%;max-width:var(--content-rail);accent-color:var(--jev)}
 .nz-read{border-left:3px solid var(--jev);background:var(--paper-deep);padding:11px 14px;font-size:13.5px;line-height:1.75;min-height:74px;margin-top:10px}
 .nz-read b{color:var(--jev-deep)}
@@ -212,7 +246,7 @@
   <h1>Jev：不聊天的模型，<em>只做判断题</em></h1>
   <p>大模型本来是给人写文章看的；可当你的代码需要一个判断——「这单该派给谁」「这个 bug 严重吗」「客户急不急」——用生成文本的模型就像让作家去填答题卡。Jev 是 TypeSafe 的旗舰模型、第一个「System One 模型」：你交一份材料、一组类型化的问题，它返回程序能直接 <code>if</code>、排序、路由的答案，外加一套概率。这本手册把它的理念、三种题型、校准原理和工程玩法全部拆开。</p>
   <div class="hero-tags">
-    <span class="badge ui">10 个交互组件 · 全部可点击</span>
+    <span class="badge ui">11 个交互组件 · 全部可点击</span>
     <span class="badge info">示例与数字取自 docs.typesafe.ai（2026-09 版）· 模拟处已标注</span>
   </div>
 </div>
@@ -432,6 +466,29 @@
     </tbody>
   </table>
 
+  <h3>底层其实是同一件事：一张概率表</h3>
+  <p>三个题型看着不一样，底层共享同一条逻辑：模型心里握着<strong>一张概率表</strong>——「答案落在每个可能位置的可能性各是多少」。三种题型只是<strong>答案空间的形状</strong>不同：Choice 是一排并立的选项袋，Score 是一把带刻度的尺子，Noul 是一架只有两端的天平。返回值都是把这张表「读」出来的方式：</p>
+  <ul class="plain">
+    <li><b>Choice</b> 把表原样给你（<code>probabilities</code>），并帮你圈出最大的那格（<code>choice</code>）；</li>
+    <li><b>Score</b> 把表沿刻度压成一个数（<code>score</code>，即概率的加权平均，下面亲手拖一下就懂）；</li>
+    <li><b>Noul</b> 的表只有两格——是、否——直接报「是」那格的读数（<code>noul</code>）。</li>
+  </ul>
+
+  <div class="lab">
+    <div class="lab-head"><b>交互 · 概率翻译机</b><span>切题型 / 拖概率，看同一个底层怎么读出不同答案</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label><span>题型</span></label>
+        <div class="pills" id="ptType">
+          <button class="pill active" data-v="score">Score · 刻度尺上的砝码</button>
+          <button class="pill" data-v="choice">Choice · 选项袋</button>
+          <button class="pill" data-v="noul">Noul · 两端天平</button>
+        </div>
+      </div>
+      <div class="pt-stage" id="ptStage"></div>
+    </div>
+    <div class="lab-foot">Score 预设的五个分布均为官方文档真实结果（bug 严重度三档量表）；Choice 用第 4 章歧义工单的真实分布。</div>
+  </div>
+
   <div class="lab">
     <div class="lab-head"><b>交互 · 题型决策向导</b><span>两步选出题型</span></div>
     <div class="lab-body">
@@ -534,7 +591,13 @@
   <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">Score —— 等级设计的陷阱</h2></div>
   <p class="lede">Score 是三兄弟里最容易踩坑的：它的 <code>criteria</code> 是一串<strong>有序等级</strong>（2 到 10 档），而模型评估每一档的方式和你的直觉完全不同——不理解这一点，分数就会「不对劲」。</p>
 
-  <p>先讲机制（大白话）：Score 问的是「这份材料在光谱的哪一段」。返回的 <code>score</code> 是<strong>档位号的概率加权平均</strong>——三档量表（0、1、2）上，若概率是 0.70 落 1 档、0.30 落 2 档，score = 1×0.70 + 2×0.30 = <strong>1.30</strong>。所以 score 可以落在两档<strong>之间</strong>；<code>legend</code> 把档号映射回你的描述；<code>confidence</code> 同样来自分布形状——官方例子里 0.70/0.30 的分布 confidence 0.54，因为它「分裂」了。</p>
+  <p>先建立直觉（第 3 章的概率翻译机可以亲手拖）：模型对每一档各押一份概率，<strong>像在 0、1、2 三个刻度上放砝码</strong>；返回的 <code>score</code> 就是这堆砝码的<strong>平衡点（重心）</strong>。官方例子里，0.70 押「有绕行」、0.30 押「无绕行」——重心停在 1×0.70 + 2×0.30 = <strong>1.30</strong>，两档<strong>之间</strong>。所以小数分数不是什么「模型的犹豫值」，就是概率重量压出来的落点。四个返回字段这样分工：</p>
+  <ul class="plain">
+    <li><code>score</code> —— 重心落在刻度的哪里（0 到最高档号之间，含小数）；</li>
+    <li><code>legend</code> —— 把档号翻译回你写的描述；</li>
+    <li><code>probabilities</code> —— 每块砝码有多重（加起来 = 1）；</li>
+    <li><code>confidence</code> —— 砝码是集中还是摊开。0.70/0.30 这种「分裂」分布，confidence 就低（官方例子里是 0.54）。</li>
+  </ul>
 
   <div class="note danger"><b>最大的陷阱：每一档都是独立评估的</b>模型看不到档位编号，也看不到相邻档。它拿到的是「一堆描述」，把材料分别与每个描述对照。所以：<strong>「比上一档更严重」这种写法完全无效</strong>（没有「上一档」）；「中等严重」也无效（没有可对照的情境）。每一档必须写成<strong>具体情境</strong>：「功能坏了但有替代方案」是好等级；「比较严重」是坏等级。</div>
 
@@ -591,23 +654,25 @@
   <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">Noul —— 一道判断题的概率</h2></div>
   <p class="lede">Noul 最简单也最容易被误读：它返回<strong>「是」的概率</strong>，一个 0 到 1 的数。会读这个数，你就掌握了系统里最便宜的「条件判断」。</p>
 
-  <p>用法定义清楚：Noul 评估一个<strong>单一的是非问题或陈述</strong>。返回值 <code>noul</code> 就是 P(是)。靠近 1 是强「是」，靠近 0 是强「否」，<strong>靠近 0.5 是「模型拿不准」</strong>——不是「中等程度」。措辞上让高概率 = 是，答案含义才不拧巴；也可以写成陈述句让模型判真伪（「客户在要求退款」≈ 1 表示为真）。</p>
+  <p>用法定义清楚：Noul 评估一个<strong>单一的是非问题或陈述</strong>。把它的概率表想清楚就一通百通——这张表<strong>只有两格：是、否</strong>，加起来永远 = 1；<code>noul</code> 就是「是」那格的份额，读数方式天然直观：靠近 1 是强「是」，靠近 0 是强「否」，<strong>正中间 0.5 是两边一样重——「模型拿不准」</strong>，不是「中等程度」。措辞上让高概率 = 是，答案含义才不拧巴；也可以写成陈述句让模型判真伪（「客户在要求退款」≈ 1 表示为真）。</p>
 
   <p>是非边界微妙时，可以加可选的 <code>criteria</code>，用 <code>true</code> / <code>false</code> 两段描述钉住边界。官方例题：「客户以前就这事联系过支持吗？」——true = 提到先前尝试/工单/问过；false = 没有任何先前联系的迹象。同一份「I have asked three times now. Can I please just talk to a real person?」返回 0.93。</p>
 
   <div class="lab">
-    <div class="lab-head"><b>交互 · Noul 读数条</b><span>拖动滑块，看每个区间的含义与真实例题</span></div>
+    <div class="lab-head"><b>交互 · Noul 天平</b><span>拖动滑块：是/否两格怎么分，读数就是什么</span></div>
     <div class="lab-body">
-      <div class="nz-meter">
+      <div class="nz2-wrap">
+        <div class="nz2-val"><span id="nzVal">0.93</span><small id="nzSplit">P(是) = 93% · P(否) = 7% —— 一张只有两格的概率表</small></div>
+        <div class="nz2-bar">
+          <div class="nz2-no" id="nzNo" style="width:7%"><b>否</b></div>
+          <div class="nz2-yes" id="nzYes"><b>是</b></div>
+          <div class="nz2-needle" id="nzNeedle" style="left:93%"></div>
+        </div>
         <div class="nz-zones" id="nzZones">
           <span data-z="sno">强否 ≤0.1</span><span data-z="no">偏否</span><span data-z="mid">拿不准 ~0.5</span><span data-z="yes">偏是</span><span data-z="syes">强是 ≥0.9</span>
         </div>
-        <div class="nz-track"></div>
-        <div class="nz-cursor" id="nzCursor"></div>
-      </div>
-      <input class="nz-slider" id="nzSlider" type="range" min="0" max="100" value="93" aria-label="noul 值">
-      <div style="display:flex;gap:14px;align-items:baseline;max-width:var(--content-rail);font:12px var(--mono);color:var(--ink-faint);margin-top:4px"><span>0 强否</span><span style="margin-left:auto">noul = <b id="nzVal" style="color:var(--jev-deep);font-size:14px">0.93</b></span><span style="margin-left:auto">1 强是</span></div>
-      <div class="nz-read" id="nzRead"></div>
+        <input class="nz-slider" id="nzSlider" type="range" min="0" max="100" value="93" aria-label="noul 值" style="margin-top:8px">
+        <div class="nz-read" id="nzRead"></div>
       <div class="lab nz-trap" style="margin:14px 0 0">
         <div class="lab-head"><b>陷阱演示 · 0.5 ≠ 中等</b><span>点按钮切换问题</span></div>
         <div class="lab-body" style="padding:14px">
@@ -787,6 +852,25 @@
 <section class="chapter" id="c10">
   <div class="chapter-head"><span class="chapter-no">10</span><h2 class="ch">实战地图 —— 用例、模式、食谱与生态</h2></div>
   <p class="lede">题型只是零件，这一章是一张可点的地图：官方把用例按行业铺开、沉淀出四个架构模式、写了十八份带真实结果的 cookbook 食谱；社区这边 skill、SDK、复刻与实测也都已经有了。拿着你自己的业务对号入座。</p>
+
+  <h3>先看社区把它玩成了什么样：十类高频用法</h3>
+  <p>Jev 发布于 2026 年 9 月 15 日。响应速度官方口径 150ms 级、社区实测约 70–500ms（随 state 大小浮动）；输入 $0.042/Mtok、输出不计费——<strong>「一次判断不到一美分」是下面这些玩法共同的前提</strong>：判断便宜到可以每个 tick 都问、每封邮件都筛、每段上下文都过滤。下表整理自 <a href="https://github.com/yibie/awesome-jev" target="_blank" rel="noopener">awesome-jev</a> 与社区实测帖（数字为发布者口径）：</p>
+  <table>
+    <thead><tr><th>玩法类别</th><th>它在判断什么</th><th>社区实测例子</th></tr></thead>
+    <tbody>
+      <tr><td><b>分类与路由</b></td><td>文本/工单/日志分到固定标签；紧急程度、是否需要人工</td><td>客服邮件分诊、500 封邮件批量分类、税务 PDF 识别</td></tr>
+      <tr><td><b>动作选择<br>（Computer Use）</b></td><td>读页面/桌面的结构化状态，选「点哪个元素、执行哪类操作」</td><td><a href="https://dev.to/valyuai/how-to-use-jev-a-practical-guide-to-typesafes-system-one-model-g5e" target="_blank" rel="noopener">Browser Use 创始人用 Jev 订机票</a>：苏黎世→伦敦 7.1 秒 / $0.0039，单步响应 ~70ms（X 上 180 万播放，<a href="https://www.youtube.com/watch?v=SNJ3yuJ_QwY" target="_blank" rel="noopener">完整实测视频</a>）；macOS 桌面控制</td></tr>
+      <tr><td><b>Agent 监督与护栏</b></td><td>agent 跑没跑偏、工具调用安不安全、该停/重试/升级</td><td>漂移检测、危险工具调用拦截、完成度与卡死判断</td></tr>
+      <tr><td><b>代码与质量检查</b></td><td>给 PR/生成代码打风险分、选审查重点、判规范符合性</td><td>代码审查仪表盘、14 项 PR 风险检查、AI 生成代码评分</td></tr>
+      <tr><td><b>检索与过滤</b></td><td>片段相不相关、该不该进上下文、保留还是丢弃</td><td>RAG 重排、记忆压缩（保留/删除）、网页去广告、自然语言过滤时间线</td></tr>
+      <tr><td><b>评分与评估</b></td><td>按量表给紧急度、严重度、质量、匹配度打分</td><td>广告卖点拆解、帖子潜力、标题与摘要筛选</td></tr>
+      <tr><td><b>实时控制与游戏</b></td><td>每个 tick 读结构化状态，选下一步动作</td><td>Doom 演示、Super Mario（读模拟器 RAM）、国际象棋、无人机战术建议</td></tr>
+      <tr><td><b>交易与策略</b></td><td>根据行情/规则状态给买/卖/持有或风险判断</td><td>链上做市、对冲基金回测、实时下注决策</td></tr>
+      <tr><td><b>安全与合规</b></td><td>是否注入、是否违规、命令是否危险</td><td>Prompt injection 检测、有害文本审核、shell 命令安全判断</td></tr>
+      <tr><td><b>模拟与群体决策</b></td><td>为大量实体并行判断「下一步意图」</td><td>NPC 行为、大规模 3D agent 并行决策</td></tr>
+    </tbody>
+  </table>
+  <p>这些玩法的公共形状，就是第 3 章那句「答案空间预先定义好」：动作清单、风险档位、保留/删除——全是选择题、打分题、判断题的排列组合。个别例子收录在 awesome-jev（链接见本章末社区动态）。</p>
 
   <h3>官方用例地图：五大类场景</h3>
   <p>官方的 <a href="https://docs.typesafe.ai/concepts/use-case-map" target="_blank" rel="noopener">用例地图（Example use cases）</a>按行业列了二十来类用法。先抓它归纳的五大类——每一类都是「为什么非这种模型不可」的一个理由：</p>
@@ -1071,6 +1155,87 @@ function wizShow(){let k=null;if(wizV1==="bool")k="noul";else if(wizV1==="spec")
 document.querySelectorAll("#wiz1 .wiz-opt").forEach(b=>b.onclick=()=>{wizReset();wizV1=b.dataset.v;b.classList.add("active");if(wizV1==="set")document.getElementById("wiz2wrap").style.display="block";wizShow()});
 document.querySelectorAll("#wiz2 .wiz-opt").forEach(b=>b.onclick=()=>{wizV2=b.dataset.v;document.querySelectorAll("#wiz2 .wiz-opt").forEach(x=>x.classList.remove("active"));b.classList.add("active");wizShow()});
 
+/* ===== C3+ 概率翻译机：一张概率表，三种读法 ===== */
+const ptState={type:"score",score:[0,70,30],ret:60,noul:0.93};
+const ptScorePresets=[
+ {n:"像素错位（纯外观）",p:[100,0,0]},
+ {n:"PDF 按钮坏了、能导 CSV",p:[0,100,0]},
+ {n:"转圈工单（绕行存疑）",p:[0,88,12]},
+ {n:"Safari 崩溃（部分人无绕行）",p:[0,70,30]},
+ {n:"全员 500 登录不了",p:[0,0,100]}
+];
+const ptScoreLbls=["0 · 外观问题","1 · 坏了但有绕行","2 · 彻底堵死"];
+function ptChips(id,arr,cur){return `<div class="pills" style="margin-bottom:12px" id="${id}">${arr.map((x,i)=>`<button class="pill${i===cur?" active":""}" data-i="${i}">${x.n}</button>`).join("")}</div>`}
+function ptScorePaint(){
+ const p=ptState.score,score=(p[1]+2*p[2])/100,anchors=[15,50,85];
+ const stage=document.getElementById("ptStage");
+ [...stage.querySelectorAll(".pt-block")].forEach((b,i)=>{const v=p[i];b.style.height=(v>0?5+v*1.06:2)+"px";b.querySelector("b").textContent=v>0?(v/100).toFixed(2):""});
+ const m=stage.querySelector(".pt-marker");m.style.left=(15+70*score/2)+"%";m.querySelector(".m-tag").textContent="score "+score.toFixed(2);
+ stage.querySelector(".pt-formula").innerHTML=`score = 0×${(p[0]/100).toFixed(2)} + 1×${(p[1]/100).toFixed(2)} + 2×${(p[2]/100).toFixed(2)} = <b>${score.toFixed(2)}</b>　（1 档概率自动补足剩余额度）`;
+ const s0=stage.querySelector("#ptP0"),s2=stage.querySelector("#ptP2");
+ s0.max=100-p[2];s2.max=100-p[0];s0.value=p[0];s2.value=p[2];
+ stage.querySelector("#ptP0V").textContent=(p[0]/100).toFixed(2);stage.querySelector("#ptP2V").textContent=(p[2]/100).toFixed(2);
+}
+function ptRender(){
+ const stage=document.getElementById("ptStage");
+ if(ptState.type==="score"){
+  const p=ptState.score,anchors=[15,50,85];
+  stage.innerHTML=ptChips("ptSP",ptScorePresets,3)+
+  `<div class="pt-canvas"><div class="pt-rail"></div>${p.map((v,i)=>`<div class="pt-tick" style="left:${anchors[i]}%"></div><div class="pt-ticklbl" style="left:${anchors[i]}%">Level ${i}</div><div class="pt-lvllbl" style="left:${anchors[i]}%">${ptScoreLbls[i]}</div><div class="pt-block" style="left:${anchors[i]}%"><b></b></div>`).join("")}
+   <div class="pt-marker"><div class="m-tag"></div><div class="m-line"></div><div class="m-tri"></div></div></div>
+  <div class="pt-sliders">
+   <div class="pr-w"><label><span>P(0 档) 外观问题</span><b id="ptP0V"></b></label><input type="range" id="ptP0" min="0" max="100" value="${p[0]}"></div>
+   <div class="pr-w"><label><span>P(2 档) 彻底堵死</span><b id="ptP2V"></b></label><input type="range" id="ptP2" min="0" max="100" value="${p[2]}"></div>
+  </div>
+  <div class="pt-formula"></div>
+  <p class="pt-caption">拖动两个滑块：score 不是模型「感觉」出来的数字，而是三块砝码在刻度尺上压出来的<strong>平衡点（重心）</strong>——砝码集中在一档，重心落在档位上；摊在两档，重心就停在<strong>两档之间</strong>。砝码越摊开，confidence 越低（第 5、8 章）。</p>`;
+  ptScorePaint();
+  stage.querySelectorAll("#ptSP .pill").forEach(b=>b.onclick=()=>{stage.querySelectorAll("#ptSP .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");ptState.score=[...ptScorePresets[+b.dataset.i].p];ptScorePaint()});
+  stage.querySelector("#ptP0").addEventListener("input",e=>{const p=ptState.score;p[0]=Math.min(+e.target.value,100-p[2]);p[1]=100-p[0]-p[2];ptScorePaint()});
+  stage.querySelector("#ptP2").addEventListener("input",e=>{const p=ptState.score;p[2]=Math.min(+e.target.value,100-p[0]);p[1]=100-p[0]-p[2];ptScorePaint()});
+ }else if(ptState.type==="choice"){
+  const presets=[{n:"清晰工单（尺码错想换）",ret:100},{n:"歧义工单（+ 卡上两笔扣款）",ret:60}];
+  stage.innerHTML=ptChips("ptCP",presets,1)+`<div id="ptcBars"></div>
+  <div class="pt-sliders" style="grid-template-columns:1fr"><div class="pr-w"><label><span>拔河：概率质量从 billing 搬向 returns</span><b id="ptCV"></b></label><input type="range" id="ptC" min="0" max="100" value="${ptState.ret}"></div></div>
+  <div class="pt-read" id="ptcRead"></div>
+  <p class="pt-caption">choice = 概率最高的那袋，其余份额是<strong>情报</strong>：官方歧义工单里 billing 的 0.38 触发抄送（第 4 章）。拖过 50% 的瞬间 choice 翻面——两边一样重时，就是「拿不准」。</p>`;
+  const paint=()=>{
+   const r=ptState.ret/100;
+   document.getElementById("ptcBars").innerHTML=
+    `<div class="prob-row ${r>=0.5?"win":""}"><span class="pr-name">returns</span><div class="pr-bar"><div class="pr-fill" style="width:${r*100}%"></div></div><span class="pr-val">${r.toFixed(2)}</span></div>`+
+    `<div class="prob-row ${r<0.5?"win":""}"><span class="pr-name">billing</span><div class="pr-bar"><div class="pr-fill" style="width:${(1-r)*100}%"></div></div><span class="pr-val">${(1-r).toFixed(2)}</span></div>`;
+   document.getElementById("ptCV").textContent=r.toFixed(2);
+   document.getElementById("ptcRead").innerHTML=Math.abs(r-0.5)<0.005?`choice = <span style="color:var(--warn)">并列 50 : 50 —— 拿不准</span><small>低 confidence，转人工或改问题</small>`:`choice = <span style="color:var(--jev-deep)">${r>0.5?"returns":"billing"}</span><small>概率最高的那袋；其余份额是情报</small>`;
+  };
+  paint();
+  stage.querySelectorAll("#ptCP .pill").forEach(b=>b.onclick=()=>{stage.querySelectorAll("#ptCP .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");ptState.ret=presets[+b.dataset.i].ret;stage.querySelector("#ptC").value=ptState.ret;paint()});
+  stage.querySelector("#ptC").addEventListener("input",e=>{ptState.ret=+e.target.value;paint()});
+ }else{
+  const presets=[{n:"「在丢销售额，ASAP」紧急吗",v:0.999},{n:"「问了三次了」是重复来访吗",v:0.93},{n:"问题定义不清（反面教材）",v:0.5},{n:"平静陈述是否辱骂威胁",v:0.05}];
+  stage.innerHTML=ptChips("ptNP",presets,1)+
+  `<div class="nz2-val"><span id="ptnVal"></span><small id="ptnSplit"></small></div>
+  <div class="nz2-bar"><div class="nz2-no" id="ptnNo"><b>否</b></div><div class="nz2-yes"><b>是</b></div><div class="nz2-needle" id="ptnNeedle"></div></div>
+  <div class="pt-sliders" style="grid-template-columns:1fr;margin-top:10px"><div class="pr-w"><label><span>P(是)：天平往「是」端倾斜多少</span><b id="ptnV"></b></label><input type="range" id="ptN" min="0" max="100" value="${Math.round(ptState.noul*100)}"></div></div>
+  <div class="pt-read" id="ptnZone"></div>
+  <p class="pt-caption">Noul 的概率表只有两格：<code>noul</code> 就是「是」那格的份额。0.5 = 两边一样重 = <strong>拿不准</strong>，不是「中等程度」。要测程度（多强、多严重），换成 Score 的刻度尺。第 6 章有完整读数区与工程阈值。</p>`;
+  const paint=()=>{
+   const v=ptState.noul;
+   document.getElementById("ptnVal").textContent=v.toFixed(2);
+   document.getElementById("ptnSplit").textContent=`P(是) = ${(v*100).toFixed(0)}% · P(否) = ${((1-v)*100).toFixed(0)}%`;
+   document.getElementById("ptnNo").style.width=((1-v)*100)+"%";
+   document.getElementById("ptnNeedle").style.left=(v*100)+"%";
+   document.getElementById("ptnV").textContent=v.toFixed(2);
+   const z=v>=0.9?["强是","≥0.9：直接进路由，几乎不用人"]:v>=0.65?["偏是","放行 + 低成本抽样复核"]:v>0.35?["拿不准","五五开：改写问题、补材料，或转 Score"]:v>=0.1?["偏否","倾向于否，留了余地"]:["强否","≤0.1：基本可排除"];
+   document.getElementById("ptnZone").innerHTML=`${z[0]}<small>${z[1]}</small>`;
+  };
+  paint();
+  stage.querySelectorAll("#ptNP .pill").forEach(b=>b.onclick=()=>{stage.querySelectorAll("#ptNP .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");ptState.noul=presets[+b.dataset.i].v;stage.querySelector("#ptN").value=Math.round(ptState.noul*100);paint()});
+  stage.querySelector("#ptN").addEventListener("input",e=>{ptState.noul=+e.target.value/100;paint()});
+ }
+}
+document.querySelectorAll("#ptType .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#ptType .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");ptState.type=b.dataset.v;ptRender()});
+ptRender();
+
 /* ===== B4 歧义工单路由模拟器 ===== */
 const rtData={
  clear:{probs:[["returns",1.0],["billing",0.0],["shipping",0.02]],conf:1.0,choice:"returns",
@@ -1117,14 +1282,15 @@ function lvRender(tk,ds){
  document.getElementById("lvConf").textContent=d.c.toFixed(2);
  document.getElementById("lvVerdict").textContent=d.v;
  document.getElementById("lvProbs").innerHTML=d.p.map((pr,i)=>`<div class="prob-row ${pr===Math.max(...d.p)?"win":""}"><span class="pr-name">Level ${i}</span><div class="pr-bar"><div class="pr-fill" style="width:${pr*100}%"></div></div><span class="pr-val">${pr.toFixed(2)}</span></div>`).join("")+
-  `<div style="font:10.5px var(--mono);color:var(--ink-faint);margin-top:4px">score = ${d.p.map((pr,i)=>i+"×"+pr.toFixed(2)).join(" + ")} = ${d.s.toFixed(2)}</div>`;
+  `<div style="font:10.5px var(--mono);color:var(--ink-faint);margin-top:6px">score = ${d.p.map((pr,i)=>i+"×"+pr.toFixed(2)).join(" + ")} = ${d.s.toFixed(2)}</div>`+
+  `<div class="prob-row" style="margin-top:2px"><span class="pr-name" style="color:var(--accent-deep);font-weight:800">score 重心 ↓</span><div class="lv-ruler"><div class="lv-rail"></div><div class="lv-mark" style="left:${(d.s/(d.p.length-1)*100).toFixed(1)}%"></div></div><span class="pr-val" style="font-size:9.5px">0‥${d.p.length-1}</span></div>`;
 }
 let lvTk="safari",lvDs="desc";
 document.querySelectorAll("#lvTickets .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#lvTickets .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");lvTk=b.dataset.v;lvRender(lvTk,lvDs)});
 document.querySelectorAll("#lvDesigns .pill").forEach(b=>b.onclick=()=>{document.querySelectorAll("#lvDesigns .pill").forEach(x=>x.classList.remove("active"));b.classList.add("active");lvDs=b.dataset.v;lvRender(lvTk,lvDs)});
 lvRender("safari","desc");
 
-/* ===== B6 Noul 读数条 ===== */
+/* ===== B6 Noul 天平 ===== */
 const nzExamples=[
  {max:0.1,z:"sno",t:"强「否」",d:"模型几乎确定不是。例：平静的事实陈述问「是否辱骂威胁」→ noul ≈ 0.0（官方情绪量表首档）。"},
  {max:0.35,z:"no",t:"偏「否」",d:"倾向于不是，但留了余地。工程上通常放行 + 低成本抽样复核。"},
@@ -1132,7 +1298,11 @@ const nzExamples=[
  {max:0.9,z:"yes",t:"偏「是」",d:"倾向于是。例：「I have asked three times now…」问是否重复来访 → <b>0.93</b>（官方 Noul 文档）。"},
  {max:1.01,z:"syes",t:"强「是」",d:"几乎确定。例：「I'm losing sales. Please help ASAP」问是否紧急 → <b>0.999</b>；「Can I just talk to a real person?」问是否要求转人工 → <b>0.99</b>。"}
 ];
-function nzRender(v){document.getElementById("nzVal").textContent=v.toFixed(2);document.getElementById("nzCursor").style.left=(v*100)+"%";
+function nzRender(v){
+ document.getElementById("nzVal").textContent=v.toFixed(2);
+ document.getElementById("nzSplit").textContent=`P(是) = ${(v*100).toFixed(0)}% · P(否) = ${((1-v)*100).toFixed(0)}% —— 一张只有两格的概率表`;
+ document.getElementById("nzNo").style.width=((1-v)*100)+"%";
+ document.getElementById("nzNeedle").style.left=(v*100)+"%";
  const ex=nzExamples.find(e=>v<=e.max);
  document.querySelectorAll("#nzZones span").forEach(s=>s.classList.toggle("on",s.dataset.z===ex.z));
  document.getElementById("nzRead").innerHTML=`<b>${ex.t}</b> —— ${ex.d}`}
