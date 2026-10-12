@@ -3,7 +3,7 @@ PORT    ?= 8000
 URL      = http://localhost:$(PORT)/
 PIDFILE  = .http-server.pid
 
-.PHONY: open serve stop help
+.PHONY: open serve stop seo help
 
 help: ## 显示可用命令
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F'## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -30,3 +30,6 @@ stop: ## 停止后台服务器（make open 启动的那个）
 	else \
 		echo ">> 没有运行中的后台服务器"; \
 	fi
+
+seo: ## 按 topics.js 重新生成 SEO 标签、首页预渲染目录、sitemap.xml、robots.txt
+	node scripts/seo.mjs

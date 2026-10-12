@@ -6,7 +6,11 @@
 
 ```text
 know-as-ui/
-├── index.html                 # 总索引，所有知识点从这里进入
+├── index.html                 # 总索引，所有知识点从这里进入（由 topics.js 渲染）
+├── topics.js                  # 知识目录数据源：分类 + 主题清单
+├── catalog.js                 # 首页目录渲染函数（浏览器与 SEO 预渲染共用）
+├── scripts/seo.mjs            # make seo：生成 SEO 标签、预渲染目录、sitemap、robots
+├── sitemap.xml / robots.txt   # 由 scripts/seo.mjs 生成
 ├── README.md                  # 项目约定
 ├── wrangler.jsonc             # Cloudflare Workers Static Assets 配置
 ├── .assetsignore              # 发布时排除开发文件
@@ -43,13 +47,23 @@ gpu-and-deployment/
 ├── b.html                     # 第二页 B：推理、量化与本地/线上部署（推理时间线、并发模拟器）
 ├── c.html                     # 第三页 C：微调实战（知识库 vs 微调面试题、LoRA/QLoRA、训练显存沙盘、需求分流挑战）
 ├── d.html                     # 第四页 D：GPU 选型、成本与真实工程案例（部署架构搭建器）
-├── topic.css                  # 四页共享样式
+├── topic.css                  # 五页共享样式
 └── calc.js                    # 四页共享显存/成本公式（硬件表、KV、训练账单、$/1M）
 
 dsh-cordis/
 ├── a.html                     # dsh Cordis 与插件开发交互手册（插件树装卸模拟、fiber 动画、waterfall 决策链、patch 叠层、工具/钩子插件实战）
 ├── topic.css                  # 系列共享样式
 └── assets/                    # 配图（出自腾讯技术工程原文）
+
+rag-vector-db/
+├── a.html                     # 第一页 A：RAG 直觉（流水线步进器、余弦圆盘、BM25×向量×混合对撞、方案选择与成本账）
+├── b.html                     # 第二页 B：检索质量（切块实验台、维度存储账、RRF 调参台、MaxSim 与重排截断、多意图改写、检索指标计算器）
+├── c.html                     # 第三页 C：向量库内核（规模计算器、IVF 片区探测、HNSW 搜索回放、量化召回实测、过滤缺口、分段架构模拟器）
+├── d.html                     # 第四页 D：选型与实战（选型向导、问题路由器、成本计算器、pgvector 与 Milvus 混合检索实战、排障决策树）
+├── e.html                     # 第五页 E：更新治理与问题手册（幽灵答案复现、增量更新实验台、更新时序模拟器、蓝绿切换演练、增量同步开源项目地图、知识库体检、常见问题手册）
+├── topic.css                  # 五页共享样式
+├── common.js                  # 五页共用：目录/进度/打卡/测验引擎
+└── lib.js                     # 玩具检索引擎（BM25、词向量、RRF），A/B 页共用
 
 jev-typesafe/
 ├── a.html                     # Jev 深入浅出：TypeSafe 判断模型交互手册（概率翻译机、请求拼装台、歧义工单路由、等级设计实验台、Noul 天平、校准对比器、风险阈值路由器、优先级计算器、实战地图：十类玩法/模式/18 份 cookbook/skill/社区链接）
@@ -61,9 +75,10 @@ jev-typesafe/
 
 1. 创建一个小写短横线命名的主题目录，例如 `browser-automation/`。
 2. 在目录内创建 `a.html`。页面尽量自包含，优先使用内嵌 CSS、SVG 和 JavaScript，保证直接双击 HTML 也能打开。
-3. 在根目录 `index.html` 的知识卡片区域增加一个入口，链接到 `./browser-automation/a.html`。
+3. 在根目录 `topics.js` 的 `topics` 数组追加一条记录（`slug`、`category`、`date`、`pages`、`title`、`desc`、`tags`、`keywords`），首页自动按分类分组、编号和计数，不用改 `index.html`。需要新分类时在 `categories` 里加一项。
 4. 如果同一个知识点需要拆成多个视角，再在该目录里增加 `b.html`、`c.html`，不要把不相关主题混在同一个目录。
 5. 需要图片、数据或其他专用文件时，放在该主题目录自己的 `assets/` 下。
+6. 运行 `make seo`（即 `node scripts/seo.mjs`），按 `topics.js` 重新生成各页 `<!-- seo:start -->` 区块（description、canonical、Open Graph、JSON-LD）、首页静态预渲染目录、`sitemap.xml` 和 `robots.txt`，把结果一起提交。分享卡片图约定放在 `<slug>/assets/og.jpg`（首页为 `assets/og.jpg`，1200×630），存在即自动挂 `summary_large_image` 大图卡片；用 apimart-image-gen 按现有图的同款风格提示词生成后裁切即可。脚本幂等，生成区块不要手改。
 
 ## 页面约定
 

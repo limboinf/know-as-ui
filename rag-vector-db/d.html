@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>RAG 与向量数据库 · D 选型与实战</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<!-- seo:start -->
+<meta name="description" content="RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<link rel="canonical" href="https://dev.limbo101.win/rag-vector-db/d">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="know-as-ui">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="RAG 与向量数据库 · D 选型与实战">
+<meta property="og:description" content="RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<meta property="og:url" content="https://dev.limbo101.win/rag-vector-db/d">
+<meta property="og:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="RAG 与向量数据库 · D 选型与实战">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta name="twitter:creator" content="@limbopeng">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"RAG 与向量数据库 · D 选型与实战","description":"RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。","url":"https://dev.limbo101.win/rag-vector-db/d","inLanguage":"zh-CN","datePublished":"2026-10-05","dateModified":"2026-10-05","keywords":"rag 检索增强生成 向量数据库 vector database embedding 嵌入 bm25 hybrid 混合检索 rrf rerank 重排 chunking 切块 hnsw ivf 量化 rabitq pgvector milvus qdrant 选型 graphrag agentic 评估 recall 增量更新 incremental upsert 对账 删除 别名 alias 蓝绿 重建 治理 元数据 faq 常见问题 排障","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc"}</script>
+<!-- seo:end -->
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属 ===== */
+.wiz{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 22px}
+@media(max-width:760px){.wiz{grid-template-columns:1fr}}
+.rank{display:grid;gap:10px;margin-top:6px}
+.rk-card{border:1.5px solid var(--line);border-radius:10px;background:var(--paper);padding:11px 14px}
+.rk-card.first{border-color:var(--ink);box-shadow:3px 3px 0 var(--rag);background:#fffdf8}
+.rk-card .t{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rk-card .t b{font:800 16px var(--serif)} .rk-card .t i{font:700 11px var(--mono);color:var(--rag);font-style:normal}
+.rk-card .no{font:800 12px var(--mono);color:var(--accent)}
+.rk-card ul{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--ink-soft)} .rk-card li{margin-bottom:2px}
+.rk-card .warn{margin-top:6px;font-size:12.5px;color:var(--warn)}
+.score-row{display:grid;grid-template-columns:170px 1fr 36px;gap:10px;align-items:center;font:12px var(--mono);margin:3px 0}
+.score-row .tr{height:12px;border:1px solid var(--line);border-radius:99px;background:var(--paper);overflow:hidden} .score-row .tr i{display:block;height:100%;background:var(--rag);border-radius:99px}
+@media(max-width:560px){.score-row{grid-template-columns:110px 1fr 30px}}
+
+.flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:10px 0}
+.fl{border:1.5px solid var(--ink);border-radius:8px;background:#fffdf8;padding:7px 11px;font-size:12.5px;line-height:1.5;position:relative}
+.fl small{display:block;font:10px var(--mono);color:var(--ink-faint)}
+.fl.llm{background:var(--hyb-soft);border-color:var(--hyb)} .fl.ret{background:var(--rag-soft);border-color:var(--rag)} .fl.out{background:#e2ecdd;border-color:var(--ok)}
+.fl+.fl::before{content:"→";position:absolute;left:-12px;top:50%;transform:translateY(-50%);font:700 12px var(--mono);color:var(--ink-faint)}
+.fl{margin-left:12px} .fl:first-child{margin-left:0}
+
+.cost-bars{display:grid;gap:6px;margin-top:8px}
+.cb{display:grid;grid-template-columns:130px 1fr 84px;gap:10px;align-items:center;font:12px var(--mono)}
+.cb .tr{height:16px;border:1px solid var(--line);border-radius:99px;background:var(--paper);overflow:hidden} .cb .tr i{display:block;height:100%;border-radius:99px}
+.cb.max b{color:var(--accent)}
+@media(max-width:560px){.cb{grid-template-columns:90px 1fr 70px}}
+
+.four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:8px 0 18px}
+.four .c{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:12px 14px} .four b{font:800 15px var(--serif);display:block;margin-bottom:3px} .four p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:0}
+@media(max-width:760px){.four{grid-template-columns:1fr}}
+
+.stackpick{display:flex;gap:6px;margin:14px 0 0;max-width:var(--content-rail)}
+.stackpick button{flex:1;border:1.5px solid var(--ink);border-bottom:0;border-radius:8px 8px 0 0;background:var(--paper-deep);padding:9px 12px;font:700 13px var(--sans);cursor:pointer;color:var(--ink-soft)}
+.stackpick button.on{background:var(--ink);color:#fff}
+.codewrap pre .nm{color:#8fb8d8}
+
+.tree{border:1.5px dashed var(--line);border-radius:10px;background:var(--paper);padding:14px 16px;min-height:150px}
+.tree .crumbs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font:11px var(--mono)} .tree .crumbs span{border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:#fffdf8;color:var(--ink-soft)}
+.tree .q{font:800 16px/1.6 var(--serif);margin-bottom:10px}
+.tree .ans-btns{display:flex;gap:8px;flex-wrap:wrap}
+.tree .leaf{border-left:4px solid var(--accent);background:#fffdf8;border-radius:0 8px 8px 0;padding:10px 14px;font-size:14px;line-height:1.8}
+.tree .leaf b{display:block;font:800 15px var(--serif);margin-bottom:3px} .tree .leaf a{color:var(--accent-deep)}
+.cmp td:first-child{white-space:nowrap}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">RAG <em>与向量数据库</em> · D 选型与实战</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="五页导航">
+  <span class="sn-label">RAG 与向量库 · 五部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>直觉</a>
+  <a class="sn-item" href="b.html"><b>B</b>检索质量</a>
+  <a class="sn-item" href="c.html"><b>C</b>向量库内核</a>
+  <a class="sn-item is-current" href="d.html"><b>D</b>选型与实战</a>
+  <a class="sn-item" href="e.html"><b>E</b>更新与排障</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一家公司的客服知识库</span>
+  <span class="cs-act done">序幕 · 十篇文档的原型</span>
+  <span class="cs-act done">第二幕 · 答得不准，调质量</span>
+  <span class="cs-act done">第三幕 · 一千万篇，扛规模</span>
+  <span class="cs-act current">第四幕 · 上线，选型与实战</span>
+  <span class="cs-act">第五幕 · 活下去，更新与治理</span>
+</div>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">选型地图 —— 别从「哪个最快」开始问</h2></div>
+  <p class="lede">知识库要上线了，该选哪个向量数据库？2026 年的答案比两年前更分化：有的是「Postgres 里加个扩展」，有的是为十亿级设计的分布式系统，有的是跑在对象存储上的无服务器服务。</p>
+
+  <p>先说一个反直觉的结论：<strong>在大多数业务里，性能不是选型的第一变量</strong>。当规模在千万条以内，几个主流方案在延迟和召回上的差距，远小于「你的团队已经会运维什么」「你需要混合检索吗」「有多少租户」这些问题带来的差距。下面的向导把这几个变量问一遍，给出倾向，而不是标准答案。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 1.1 · 选型向导</b><span>规则打分，非定论；规则见下方脚注</span></div>
+    <div class="lab-body">
+      <div class="wiz">
+        <div class="ctrl"><label>向量规模</label><div class="pills" id="wScale"></div></div>
+        <div class="ctrl"><label>团队现状</label><div class="pills" id="wPg"></div></div>
+        <div class="ctrl"><label>混合检索（关键词 + 向量）</label><div class="pills" id="wHyb"></div></div>
+        <div class="ctrl"><label>租户规模</label><div class="pills" id="wTen"></div></div>
+        <div class="ctrl"><label>运维偏好</label><div class="pills" id="wOps"></div></div>
+        <div class="ctrl"><label>冷数据 / 成本敏感</label><div class="pills" id="wCold"></div></div>
+      </div>
+      <div class="rank" id="wRank"></div>
+      <div id="wAll" style="margin-top:12px"></div>
+    </div>
+    <div class="lab-foot">打分规则（全部在本页脚本里，可审）：规模适配 −3～+3；已有 Postgres 且规模不大给 pgvector +3；需要混合检索时，自带 BM25 或稀疏检索的 +1～+2；海量租户偏向支持租户分区/按租户索引的方案；偏好托管偏向 Pinecone、turbopuffer 等；嵌入式偏向 LanceDB；冷数据多偏向对象存储架构。这是经验启发，不是基准测试。</div>
+  </div>
+
+  <h3>几类方案的定位</h3>
+  <table class="cmp">
+    <thead><tr><th>方案</th><th>一句话定位</th><th>资料里的信号</th></tr></thead>
+    <tbody>
+      <tr><td><b>pgvector / pgvectorscale</b></td><td>Postgres 的扩展，向量与业务数据同库、同事务</td><td>ACID 与关系数据联查是最大优势；多篇 2026 博客认为超过约 1000 万～5000 万条后运维开始吃力 <span class="tag-vendor">博客观点</span></td></tr>
+      <tr><td><b>Qdrant</b></td><td>Rust 实现的专用向量库，过滤与低延迟见长</td><td>多篇对比里单节点延迟领先 <span class="tag-vendor">厂商/博客数据</span></td></tr>
+      <tr><td><b>Milvus</b></td><td>分布式、索引类型最全（IVF、HNSW、DiskANN、GPU 等），面向超大规模</td><td>索引构建快、可上 GPU；小规模也可用 Lite / standalone <span class="tag-vendor">博客观点</span></td></tr>
+      <tr><td><b>LanceDB</b></td><td>嵌入式、基于 Lance 列存格式，天然适合对象存储</td><td>适合本地原型、边缘与数据湖场景；支持 RaBitQ 量化</td></tr>
+      <tr><td><b>turbopuffer</b></td><td>建在对象存储上的无服务器检索，冷数据成本低</td><td>仅托管；冷启动查询延迟需实测</td></tr>
+      <tr><td><b>Pinecone</b></td><td>全托管，开箱即用</td><td>省运维，规模上去后成本需评估；闭源</td></tr>
+      <tr><td><b>Elasticsearch / OpenSearch</b></td><td>已有搜索集群时顺手加向量</td><td>原生 BM25 + 向量混合；内存与调优成本需评估</td></tr>
+    </tbody>
+  </table>
+  <div class="note warn"><b>关于 benchmark 数字</b>市面上的对比数字（如「某方案在 5000 万条上 QPS 是另一方案的 11 倍」）绝大多数来自厂商或博客，数据集、硬件、召回目标、参数都不统一，不能横向直接比。本手册刻意不把它们放进向导的打分里。选型最可靠的做法：用你自己的 100 万条真实向量、你的真实过滤条件，在 2～3 个候选上各跑一遍，对比召回、p95 延迟和运维感受。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-c1"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出选型时最先要问的 3 个问题，并解释为什么不该直接拿厂商 benchmark 做决定</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>先问：数据有多少、团队已经会运维什么、要不要关键词搜索加向量搜索一起用、有多少个客户要隔离。benchmark 像厂商自己出的考试成绩，题目、考场都是他们选的，只能当参考，要拿自己的数据去考一遍。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>决定变量：规模量级、既有技术栈（如已有 Postgres）、混合检索需求、租户模型与过滤选择性、运维模式（托管/自运维/嵌入式）、冷热数据成本。厂商基准的数据集、召回目标、硬件与参数不一致，且常只报单一召回点上的 QPS，不可横向比较。</p></div>
+  </div></details>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">进阶架构 —— 不是每个问题都配得上同一条流水线</h2></div>
+  <p class="lede">上线后会发现：「退款几天」这种问题一次检索就够，「对比三份合同里的违约条款」一次检索根本不够，而「今年工单的整体趋势」几乎不可能靠检索几个块回答。一条固定的流水线，对三类问题是同一个答案：都不太行。</p>
+
+  <p>2026 年的主流做法叫 <strong>Adaptive RAG（自适应）</strong>：前面放一个轻量的路由，先判断问题属于哪一类，再走对应的流水线。检索也从「固定前置步骤」变成可被调用的工具，这就是 <strong>Agentic RAG</strong>：模型自己决定查什么、查几次、查完是否够用。选哪条路径，直接决定了你要付出几次模型调用和多少延迟。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 2.1 · 问题路由器</b><span>选一类问题，看它该走哪条流水线</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>用户的问题属于……</label><div class="pills" id="rtPills"></div></div>
+      <div id="rtQ" class="note" style="margin:0 0 10px"></div>
+      <div class="flow" id="rtFlow"></div>
+      <div class="kpi-grid" id="rtKpi"></div>
+    </div>
+    <div class="lab-foot">调用次数与延迟倍数是典型形态下的示意，实际取决于你的模型、检索器与迭代上限。建议给 Agentic 路径设最大轮数（如 3～5 轮）和总 token 预算，避免失控。</div>
+  </div>
+
+  <h3>GraphRAG：什么时候值得为「关系」付钱</h3>
+  <p>有些问题的答案不在任何一个块里，而在块与块的<strong>关系</strong>里：「A 事故和 B 变更有什么关联」「所有提到供应商 X 的合同里，付款条款有何共性」。GraphRAG 的做法是在建库时让模型抽取实体和关系，构成知识图谱，再在图上做检索与摘要。代价主要在建库：据 2026 年一篇实践博客的对比，对 500 页语料建索引，LightRAG 约 3 分钟、$0.5，微软 GraphRAG 约 $50～200（博客数据，量级参考）。</p>
+  <ul class="plain"><li><strong>适合</strong>：知识天然互相引用（制度引用制度、事故关联变更）、需要多跳推理或全局主题归纳。</li><li><strong>不适合</strong>：扁平的 FAQ 与文档问答，普通混合检索 + 重排已经够用，上图是为复杂度付费。</li><li><strong>起步顺序</strong>：先把混合检索做好，评估后确有「关系类问题答不好」再引入，从 LightRAG 这类轻量方案试起。</li></ul>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-c2"><div class="ckpt-box">✓</div><div class="ckpt-text">能为「简单事实、多意图、多跳、全局总结」四类问题各选一条路径，并说出 Agentic 的代价</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>简单问题直接查一次；一句话含几件事，拆开分别查；要一层层追问的，让模型边查边想；要「总体上怎么样」的，靠图谱或预先做好的摘要。越复杂的路径，模型调用越多，越慢越贵，所以要先分诊再开药。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>简单事实 → 单次混合检索 + 重排；多意图 → 问题分解 + 多路检索 + RRF；多跳 → Agentic 迭代检索（带轮数/预算上限）；全局归纳 → GraphRAG 或层级摘要（map-reduce）。Agentic 的代价是 LLM 调用数与延迟的放大，以及对失控循环的治理需求。</p></div>
+  </div></details>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">上线的四件事 —— 权限、新鲜度、溯源与成本账</h2></div>
+  <p class="lede">原型能跑和生产能用之间，隔着四件和检索算法无关、却最容易出事故的事。</p>
+
+  <div class="four">
+    <div class="c"><b>① 权限：在检索层拦，不要在生成层拦</b><p>用户不该看到的文档，一旦进了提示词，模型就可能复述出来。正确做法是检索时就带上用户身份的过滤条件（租户、部门、文档密级），连候选都不让它进来。别指望「让模型别说」。</p></div>
+    <div class="c"><b>② 新鲜度：知道每一块是几号的</b><p>块上存 <code>doc_id</code>、<code>version</code>、<code>updated_at</code>；文档更新时按 doc_id 删旧块再写新块（不是追加）。更换嵌入模型要整库重嵌入，所以要保留原文与块版本，别只存向量。</p></div>
+    <div class="c"><b>③ 溯源：每个结论带出处</b><p>提示词里给每块编号，要求模型引用编号；回答里把编号映射回文档链接和段落。这既是用户信任的来源，也是你排查错误答案时的第一手线索。</p></div>
+    <div class="c"><b>④ 成本账：大头通常不在向量库</b><p>每次提问最贵的是把检索到的块送进大模型。先优化 top-k、块大小、是否真需要重排，往往比换一个更便宜的向量库省得多。下面的计算器让你亲手核一遍。</p></div>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 3.1 · 月度成本计算器</b><span>每一项单价都是可改的假设</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>每天问答次数 <b id="v-kQ"></b></label><input type="range" id="kQ" min="0" max="100" value="45"></div>
+        <div class="ctrl"><label>top-k（送给模型的块数） <b id="v-kK"></b></label><input type="range" id="kK" min="1" max="20" value="5"></div>
+        <div class="ctrl"><label>块大小（token） <b id="v-kC"></b></label><input type="range" id="kC" min="100" max="1500" step="50" value="500"></div>
+        <div class="ctrl"><label>向量条数 <b id="v-kN"></b></label><input type="range" id="kN" min="0" max="100" value="45"></div>
+        <div class="ctrl"><label>大模型输入价（$/百万 token） <b id="v-kPi"></b></label><input type="range" id="kPi" min="0.1" max="15" step="0.1" value="3"></div>
+        <div class="ctrl"><label>大模型输出价（$/百万 token） <b id="v-kPo"></b></label><input type="range" id="kPo" min="0.5" max="75" step="0.5" value="15"></div>
+        <div class="ctrl"><label>重排价（$/千次检索） <b id="v-kR"></b></label><input type="range" id="kR" min="0" max="5" step="0.1" value="2"></div>
+        <div class="ctrl"><label>内存单价（$/GB·月） <b id="v-kM"></b></label><input type="range" id="kM" min="1" max="15" step="0.5" value="6"></div>
+      </div>
+      <div class="ctrl"><label>是否使用重排</label><div class="pills" id="kRR"></div></div>
+      <div class="kpi-grid" id="kKpi"></div>
+      <div class="cost-bars" id="kBars"></div>
+    </div>
+    <div class="lab-foot">假设：每次请求提示词固定开销 800 token、输出 300 token；向量 1024 维 float32，HNSW 索引按 +30% 估算，2 副本；一次性建库嵌入按 $0.10/百万 token 估算；其余价格请换成你实际的报价。目的是看清各项占比，不是预测账单。</div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-c3"><div class="ckpt-box">✓</div><div class="ckpt-text">能说清为什么权限要在检索层做，并用计算器找出你的场景里成本的最大一项</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>权限像图书馆门禁：不让不该看的人进书库，比让他进去再叮嘱「别乱说」可靠得多。成本方面，把计算器的默认值跑一遍，会发现大模型读取那些块的费用远超向量库的内存费用，所以优先瘦身 top-k 和块大小。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>权限：将 ACL 作为检索过滤条件（元数据过滤），保证未授权内容不进入上下文。成本：LLM 输入 token = top-k × 块大小 + 固定开销，随 QPS 线性增长；向量库成本主要是内存（向量 + 索引）。优化顺序：降低 top-k/块大小、重排后截断、缓存高频问题，再考虑量化与换库。</p></div>
+  </div></details>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">实战 A · pgvector —— 在 Postgres 里搭一套混合检索</h2></div>
+  <p class="lede">把前面三页串起来：同一个客服知识库，用 Postgres + pgvector 做到「向量 + 关键词 + RRF 融合 + 租户过滤」。已经有 Postgres 的团队，这是成本最低的路径。</p>
+
+  <h3>1. 起一个带 pgvector 的 Postgres</h3>
+  <div class="codewrap"><span class="filetab">shell</span><pre>docker run -d --name kb-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=pw pgvector/pgvector:pg17</pre></div>
+
+  <h3>2. 建表与索引</h3>
+  <div class="codewrap"><span class="filetab">schema.sql</span><pre><span class="kw">CREATE EXTENSION IF NOT EXISTS</span> vector;
+
+<span class="kw">CREATE TABLE</span> chunks (
+  id          bigserial <span class="kw">PRIMARY KEY</span>,
+  tenant_id   text          <span class="kw">NOT NULL</span>,
+  doc_id      text          <span class="kw">NOT NULL</span>,
+  version     int           <span class="kw">NOT NULL DEFAULT</span> 1,
+  content     text          <span class="kw">NOT NULL</span>,           <span class="cm">-- 原文，给模型和用户看</span>
+  content_seg text          <span class="kw">NOT NULL</span>,           <span class="cm">-- 应用层分词后用空格连接（中文必需，见下方说明）</span>
+  embedding   vector(1024)  <span class="kw">NOT NULL</span>,
+  tsv         tsvector <span class="kw">GENERATED ALWAYS AS</span> (to_tsvector(<span class="st">'simple'</span>, content_seg)) <span class="kw">STORED</span>
+);
+
+<span class="cm">-- 向量索引：m / ef_construction 为 pgvector 默认值，建库后不再改</span>
+<span class="kw">CREATE INDEX</span> chunks_hnsw <span class="kw">ON</span> chunks <span class="kw">USING</span> hnsw (embedding vector_cosine_ops)
+  <span class="kw">WITH</span> (m = 16, ef_construction = 64);
+<span class="kw">CREATE INDEX</span> chunks_tsv    <span class="kw">ON</span> chunks <span class="kw">USING</span> gin (tsv);
+<span class="kw">CREATE INDEX</span> chunks_tenant <span class="kw">ON</span> chunks (tenant_id);</pre></div>
+
+  <div class="note warn"><b>中文全文检索的坑</b>Postgres 内置的 <code>simple</code> 配置只按空格和标点分词，不认识中文词界，直接对中文原文建 tsvector 基本等于没有。三条路：① 应用层先用 jieba 之类分词，存空格连接的 <code>content_seg</code>（本例，适合托管 Postgres，不用装插件）；② 装 zhparser、pg_jieba 等分词插件；③ 用 ParadeDB 等提供真 BM25 的扩展。另外，<code>ts_rank_cd</code> 不是 BM25（没有语料级的 IDF），只是够用的排序函数。</div>
+
+  <h3>3. 写入与混合检索（Python）</h3>
+  <div class="codewrap"><span class="filetab">kb_pg.py（pip install psycopg[binary] pgvector numpy jieba）</span><pre><span class="kw">import</span> jieba, numpy <span class="kw">as</span> np, psycopg
+<span class="kw">from</span> pgvector.psycopg <span class="kw">import</span> register_vector
+
+conn = psycopg.connect(<span class="st">"postgresql://postgres:pw@localhost:5432/postgres"</span>, autocommit=<span class="kw">True</span>)
+register_vector(conn)                                  <span class="cm"># 让 numpy 数组可直接作为 vector 参数</span>
+
+seg = <span class="kw">lambda</span> s: <span class="st">" "</span>.join(jieba.lcut(s))
+
+<span class="kw">def</span> <span class="fn">upsert_doc</span>(tenant, doc_id, version, chunks, embed):
+    <span class="cm"># 更新 = 先删旧版本的块，再写新块（不要只追加）</span>
+    conn.execute(<span class="st">"DELETE FROM chunks WHERE tenant_id=%s AND doc_id=%s"</span>, (tenant, doc_id))
+    <span class="kw">for</span> text <span class="kw">in</span> chunks:
+        conn.execute(
+            <span class="st">"INSERT INTO chunks (tenant_id, doc_id, version, content, content_seg, embedding) VALUES (%s,%s,%s,%s,%s,%s)"</span>,
+            (tenant, doc_id, version, text, seg(text), np.array(embed(text))))
+
+HYBRID_SQL = <span class="st">"""
+WITH vec AS (
+  SELECT id, row_number() OVER (ORDER BY embedding &lt;=&gt; %(qv)s) AS rnk
+  FROM chunks WHERE tenant_id = %(tenant)s
+  ORDER BY embedding &lt;=&gt; %(qv)s LIMIT 20
+), lex AS (
+  SELECT id, row_number() OVER (ORDER BY ts_rank_cd(tsv, q) DESC) AS rnk
+  FROM chunks, to_tsquery('simple', %(qs)s) q
+  WHERE tenant_id = %(tenant)s AND tsv @@ q
+  ORDER BY ts_rank_cd(tsv, q) DESC LIMIT 20
+)
+SELECT c.id, c.doc_id, c.content,
+       COALESCE(1.0 / (60 + vec.rnk), 0) + COALESCE(1.0 / (60 + lex.rnk), 0) AS rrf
+FROM vec FULL OUTER JOIN lex USING (id)
+JOIN chunks c USING (id)
+ORDER BY rrf DESC LIMIT 5
+"""</span>
+
+<span class="kw">def</span> <span class="fn">search</span>(tenant, question, embed):
+    terms = [t <span class="kw">for</span> t <span class="kw">in</span> jieba.lcut(question) <span class="kw">if</span> t.strip() <span class="kw">and</span> t.isalnum()]
+    qs = <span class="st">" | "</span>.join(terms) <span class="kw">or</span> <span class="st">"''"</span>              <span class="cm"># 关键词路用 OR 连接，提升召回</span>
+    conn.execute(<span class="st">"SET hnsw.ef_search = 100"</span>)                 <span class="cm"># 查询期调召回/延迟</span>
+    conn.execute(<span class="st">"SET hnsw.iterative_scan = strict_order"</span>)   <span class="cm"># 带过滤时自动继续扫索引（pgvector 0.8+）</span>
+    <span class="kw">return</span> conn.execute(HYBRID_SQL, {<span class="st">"qv"</span>: np.array(embed(question)), <span class="st">"qs"</span>: qs, <span class="st">"tenant"</span>: tenant}).fetchall()</pre></div>
+
+  <h3>4. 验证它真的在用索引</h3>
+  <div class="codewrap"><span class="filetab">psql</span><pre><span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>, BUFFERS)
+<span class="kw">SELECT</span> id <span class="kw">FROM</span> chunks <span class="kw">WHERE</span> tenant_id = <span class="st">'acme'</span> <span class="kw">ORDER BY</span> embedding &lt;=&gt; <span class="st">'[0.1, 0.2, ...]'</span> <span class="kw">LIMIT</span> 20;
+<span class="cm">-- 期望看到：Index Scan using chunks_hnsw ...</span>
+<span class="cm">-- 如果是 Seq Scan：检查向量维度、距离算子是否与索引的 vector_cosine_ops 一致（&lt;=&gt;）</span></pre></div>
+
+  <p><strong>三个常见的踩坑点</strong>：① 距离算子要和索引的操作类对应（余弦用 <code>vector_cosine_ops</code> 配 <code>&lt;=&gt;</code>），不一致时索引不会被使用，不报错只变慢；② 带 <code>WHERE</code> 过滤时，HNSW 可能先扫出 <code>ef_search</code> 条再过滤导致不足，pgvector 0.8 的迭代扫描就是为此（<code>strict_order</code> 保证距离顺序，<code>relaxed_order</code> 更快但可能轻微乱序）；③ 大批量导入时，先导数据再建 HNSW 索引通常比边插边建快得多。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-c4"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出这套方案里哪一段是向量路、哪一段是关键词路、RRF 在哪里发生，以及中文分词为什么要在应用层做</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>SQL 里 <code>vec</code> 那一段是按语义找，<code>lex</code> 那一段是按关键词找，最后 SELECT 里把两边的名次换算成分数相加就是 RRF。Postgres 自带的全文检索看不懂中文怎么断词，所以要先在代码里切好词再存。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>vec CTE：HNSW 近邻（cosine）取 top-20 并用 row_number 记名次；lex CTE：GIN tsvector 匹配 + ts_rank_cd 取 top-20；外层 FULL OUTER JOIN 后按 Σ 1/(60+rank) 融合。simple 配置不做中文分词，故在应用层分词写入 content_seg，查询侧同样分词并以 OR 组合。带租户过滤用 hnsw.iterative_scan 避免过滤后结果不足。</p></div>
+  </div></details>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">实战 B · Milvus —— 用专用向量库做同一件事</h2></div>
+  <p class="lede">同一个任务，换成 Milvus：它把「全文检索」做成了内置的 BM25 函数，混合检索是一等公民，不用自己写 SQL 拼融合。</p>
+
+  <h3>1. 启动 Milvus（Docker 单机版）</h3>
+  <div class="codewrap"><span class="filetab">shell</span><pre>curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
+bash standalone_embed.sh start        <span class="cm"># 默认监听 19530</span>
+pip install -U pymilvus</pre></div>
+  <p>也可以先用本地文件版的 Milvus Lite（<code>MilvusClient("./kb.db")</code>）做原型；全文检索、混合检索等较新的能力是否在 Lite 里可用，请以当前版本文档为准，下面按 standalone 写。</p>
+
+  <h3>2. 建集合：稠密向量 + BM25 稀疏向量 + 租户分区键</h3>
+  <div class="codewrap"><span class="filetab">kb_milvus.py</span><pre><span class="kw">from</span> pymilvus <span class="kw">import</span> (MilvusClient, DataType, Function, FunctionType,
+                     AnnSearchRequest, RRFRanker)
+
+client = MilvusClient(uri=<span class="st">"http://localhost:19530"</span>)
+
+schema = client.create_schema(auto_id=<span class="kw">True</span>)
+schema.add_field(<span class="st">"id"</span>, DataType.INT64, is_primary=<span class="kw">True</span>)
+schema.add_field(<span class="st">"tenant_id"</span>, DataType.VARCHAR, max_length=64, is_partition_key=<span class="kw">True</span>)  <span class="cm"># 多租户：分区键</span>
+schema.add_field(<span class="st">"doc_id"</span>, DataType.VARCHAR, max_length=128)
+schema.add_field(<span class="st">"text"</span>, DataType.VARCHAR, max_length=8192,
+                 enable_analyzer=<span class="kw">True</span>, analyzer_params={<span class="st">"type"</span>: <span class="st">"chinese"</span>})      <span class="cm"># 中文分析器；英文用 "standard"，以官方文档为准</span>
+schema.add_field(<span class="st">"dense"</span>, DataType.FLOAT_VECTOR, dim=1024)
+schema.add_field(<span class="st">"sparse"</span>, DataType.SPARSE_FLOAT_VECTOR)                          <span class="cm"># 由 BM25 函数自动生成</span>
+
+schema.add_function(Function(name=<span class="st">"text_bm25"</span>, function_type=FunctionType.BM25,
+                             input_field_names=[<span class="st">"text"</span>], output_field_names=[<span class="st">"sparse"</span>]))
+
+index = client.prepare_index_params()
+index.add_index(field_name=<span class="st">"dense"</span>, index_type=<span class="st">"HNSW"</span>, metric_type=<span class="st">"COSINE"</span>,
+                params={<span class="st">"M"</span>: 16, <span class="st">"efConstruction"</span>: 200})
+index.add_index(field_name=<span class="st">"sparse"</span>, index_type=<span class="st">"SPARSE_INVERTED_INDEX"</span>, metric_type=<span class="st">"BM25"</span>)
+
+client.create_collection(<span class="st">"kb"</span>, schema=schema, index_params=index)</pre></div>
+
+  <h3>3. 写入与混合检索</h3>
+  <div class="codewrap"><span class="filetab">kb_milvus.py（续）</span><pre><span class="kw">def</span> <span class="fn">upsert_doc</span>(tenant, doc_id, chunks, embed):
+    client.delete(<span class="st">"kb"</span>, filter=<span class="st">f'tenant_id == "{tenant}" and doc_id == "{doc_id}"'</span>)   <span class="cm"># 先删旧块</span>
+    client.insert(<span class="st">"kb"</span>, [{<span class="st">"tenant_id"</span>: tenant, <span class="st">"doc_id"</span>: doc_id, <span class="st">"text"</span>: t, <span class="st">"dense"</span>: embed(t)} <span class="kw">for</span> t <span class="kw">in</span> chunks])
+    <span class="cm"># 注意：不用自己算 sparse，BM25 函数会根据 text 自动生成</span>
+
+<span class="kw">def</span> <span class="fn">search</span>(tenant, question, embed):
+    flt = <span class="st">f'tenant_id == "{tenant}"'</span>
+    dense_req  = AnnSearchRequest(data=[embed(question)], anns_field=<span class="st">"dense"</span>,
+                                  param={<span class="st">"metric_type"</span>: <span class="st">"COSINE"</span>, <span class="st">"params"</span>: {<span class="st">"ef"</span>: 100}}, limit=20, expr=flt)
+    sparse_req = AnnSearchRequest(data=[question], anns_field=<span class="st">"sparse"</span>,           <span class="cm"># 直接传查询文本</span>
+                                  param={<span class="st">"metric_type"</span>: <span class="st">"BM25"</span>}, limit=20, expr=flt)
+    res = client.hybrid_search(<span class="st">"kb"</span>, reqs=[dense_req, sparse_req],
+                               ranker=RRFRanker(60), limit=5, output_fields=[<span class="st">"doc_id"</span>, <span class="st">"text"</span>])
+    <span class="kw">return</span> [(h[<span class="st">"entity"</span>][<span class="st">"doc_id"</span>], h[<span class="st">"entity"</span>][<span class="st">"text"</span>], h[<span class="st">"distance"</span>]) <span class="kw">for</span> h <span class="kw">in</span> res[0]]</pre></div>
+
+  <div class="note"><b>和 pgvector 版对照着看</b>pgvector 版里你自己写了：分词、tsvector、两路 CTE、RRF 公式。Milvus 版里这些都由 schema 里的 <code>Function</code> 与 <code>RRFRanker</code> 承担，代码短得多，代价是多运维一个组件、多学一套概念。注意示例里的 filter 字符串拼接仅为演示，生产环境请对租户 ID 做校验或使用参数化方式，防止表达式注入。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-c5"><div class="ckpt-box">✓</div><div class="ckpt-text">能指出 Milvus 版里「BM25 稀疏向量」「RRF 融合」「租户隔离」分别由哪一行代码实现</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>BM25 由 schema 里那个 <code>Function</code> 自动把文本变成稀疏向量；RRF 由 <code>hybrid_search</code> 里的 <code>RRFRanker(60)</code> 完成；租户隔离靠 <code>tenant_id</code> 的 <code>is_partition_key</code> 加上每次检索带的 filter。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>schema.add_function(BM25) 生成 sparse 字段；SPARSE_INVERTED_INDEX + metric BM25 建索引；两路 AnnSearchRequest（dense / sparse）经 hybrid_search + RRFRanker 融合；is_partition_key=True 按租户哈希分区，expr 过滤只扫相关分区。</p></div>
+  </div></details>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">对照与排障 —— 两套怎么选，答案错了怎么查</h2></div>
+  <p class="lede">两套方案都能把客服知识库跑起来。差别不在「能不能」，而在你愿意把复杂度放在哪。</p>
+
+  <table class="cmp">
+    <thead><tr><th>维度</th><th>pgvector</th><th>Milvus</th></tr></thead>
+    <tbody>
+      <tr><td><b>起步成本</b></td><td>已有 Postgres 时几乎为零</td><td>多一个服务（standalone）或一个集群</td></tr>
+      <tr><td><b>关键词路</b></td><td>tsvector + 自己分词，非 BM25</td><td>内置 BM25 函数与分析器</td></tr>
+      <tr><td><b>融合</b></td><td>自己写 SQL（RRF 十几行）</td><td><code>RRFRanker</code> 一行</td></tr>
+      <tr><td><b>事务与联查</b></td><td>与业务表同库同事务，可直接 JOIN</td><td>需在应用层关联业务数据</td></tr>
+      <tr><td><b>规模上限</b></td><td>博客多认为千万到数千万级后吃力</td><td>为亿级到十亿级设计，索引类型丰富</td></tr>
+      <tr><td><b>多租户</b></td><td>字段过滤 + 迭代扫描；可用分区表</td><td>partition key 原生支持</td></tr>
+      <tr><td><b>运维</b></td><td>沿用现有 DBA 体系（备份、监控、权限）</td><td>需学习新组件；也可用托管版</td></tr>
+    </tbody>
+  </table>
+  <p><strong>建议路径</strong>：已有 Postgres 且预计千万级以内，从 pgvector 起步，把精力放在切块、混合检索、评估上；等到规模、过滤复杂度或写入吞吐真的顶到天花板，再迁移，因为你保留了原文与块版本，迁移只是重新嵌入加导入，不是推倒重来。（这也是「架构决策往长了做」的体现：数据结构设计对，换引擎不疼。）</p>
+
+  <h3>答案不对：一棵排障决策树</h3>
+  <p>用户反馈「答错了」，别急着换模型。按下面的顺序一层层排除，每个叶子都指向前面对应的章节。</p>
+  <div class="lab">
+    <div class="lab-head"><b>LAB 6.1 · RAG 排障决策树</b><span>点「是 / 否」，一路走到根因</span></div>
+    <div class="lab-body"><div class="tree" id="tree"></div></div>
+    <div class="lab-foot">这棵树的前提是你有可复现的错误问题，并且能拿到「理应命中的那一块」。这就是为什么 B 页第 6 章强调要有一份带标注的黄金集。</div>
+  </div>
+
+  <div class="note"><b>补一句：什么时候别用向量库</b>如果你的内容是代码或日志、词汇确定、规模不大，让 Agent 用 grep / 关键词工具直接翻文件，往往比建向量库更省事，不少编程 Agent 就是这么做的。向量检索真正不可替代的场景，是词汇不匹配（同义改写）、非文本内容、需要低延迟的大规模语料，以及要求权限与审计的企业场景。先从最简单的开始，用评估数据证明需要再升级。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-c6"><div class="ckpt-box">✓</div><div class="ckpt-text">能在排障树里完整走通一条「召回缺失」路径和一条「生成不忠」路径，并说出各自的处理方向</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-block plain" style="margin:0 12px 12px"><span class="ans-tag">大白话</span><p>先看正确内容有没有在库里，再看有没有被找出来、有没有排进送给模型的前几名，最后才看模型有没有照着资料回答。每一层有不同的药：补文档、改检索、调排序、收紧提示词。</p></div></details>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">终极测验 · 5 题验收</h2></div>
+  <p class="lede">答对 4 题以上，你就能带着这一整套去落地了。</p>
+  <div id="quizMount"></div>
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="d-quiz"><div class="ckpt-box">✓</div><div class="ckpt-text">终极测验 5 题答对 ≥ 4（答完自动勾选）</div></div></div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">产品能力与代码接口会随版本更新，本页代码核对于 2026-10-05，使用前请对照官方文档。博客类来源标为「观点」。</p>
+  <h3>官方文档（代码出处）</h3>
+  <ul class="plain source-list">
+    <li>pgvector README（HNSW 参数、<code>hnsw.ef_search</code>、迭代扫描、混合检索）· <a href="https://github.com/pgvector/pgvector" target="_blank" rel="noopener">github.com/pgvector/pgvector</a></li>
+    <li>pgvector-python 混合检索示例（RRF）· <a href="https://github.com/pgvector/pgvector-python/blob/master/examples/hybrid_search/rrf.py" target="_blank" rel="noopener">examples/hybrid_search/rrf.py</a></li>
+    <li>Milvus · Full Text Search（BM25 Function）· <a href="https://milvus.io/docs/full-text-search.md" target="_blank" rel="noopener">milvus.io/docs/full-text-search.md</a></li>
+    <li>Milvus · Multi-Vector Hybrid Search（AnnSearchRequest、RRFRanker）· <a href="https://milvus.io/docs/multi-vector-search.md" target="_blank" rel="noopener">milvus.io/docs/multi-vector-search.md</a></li>
+    <li>Milvus · Use Partition Key（多租户）· <a href="https://milvus.io/docs/use-partition-key.md" target="_blank" rel="noopener">milvus.io/docs/use-partition-key.md</a></li>
+  </ul>
+  <h3>2026 年的资料</h3>
+  <ul class="plain source-list">
+    <li>Best Vector Databases in 2026: Pricing, Scale Limits, and Architecture Tradeoffs Across Nine Leading Systems（MarkTechPost，2026-05）· <a href="https://www.marktechpost.com/2026/05/10/best-vector-databases-in-2026-pricing-scale-limits-and-architecture-tradeoffs-across-nine-leading-systems/" target="_blank" rel="noopener">marktechpost.com</a></li>
+    <li>Choosing the Foundation for Your RAG System: pgvector vs Qdrant vs Milvus (2026)（观点）· <a href="https://dev.to/linou518/choosing-the-foundation-for-your-rag-system-pgvector-vs-qdrant-vs-milvus-2026-4i5o" target="_blank" rel="noopener">dev.to</a></li>
+    <li>Best Vector Databases in 2026: A Complete Comparison Guide（观点）· <a href="https://www.firecrawl.dev/blog/best-vector-databases" target="_blank" rel="noopener">firecrawl.dev</a></li>
+    <li>Vector Database Benchmark 2026（厂商数据，注意口径）· <a href="https://www.salttechno.ai/datasets/vector-database-performance-benchmark-2026/" target="_blank" rel="noopener">salttechno.ai</a></li>
+    <li>GraphRAG in 2026: What to Use, When to Use It, and What to Watch Out For（成本与适用场景，观点）· <a href="https://medium.com/@tongbing00/graphrag-in-2026-what-to-use-when-to-use-it-and-what-to-watch-out-for-a1fa1c283023" target="_blank" rel="noopener">medium.com</a></li>
+    <li>Graph RAG in 2026: What Works in Production（观点）· <a href="https://www.paperclipped.de/en/blog/graph-rag-production/" target="_blank" rel="noopener">paperclipped.de</a></li>
+    <li>RAG Best Practices 2026: Chunking, Reranking, Hybrid Search（Adaptive RAG、RRF k=60，观点）· <a href="https://www.callmissed.com/en/blog/rag-best-practices-2026" target="_blank" rel="noopener">callmissed.com</a></li>
+    <li>Is RAG Dead? Long Context, Grep, and the End of the Mandatory Vector DB（2026-04，观点）· <a href="https://akitaonrails.com/en/2026/04/06/rag-is-dead-long-context/" target="_blank" rel="noopener">akitaonrails.com</a></li>
+  </ul>
+  <p>选型向导的打分规则与成本计算器的所有单价，都是本页脚本里可读可改的假设，不构成对任何产品的评测结论。</p>
+  <a class="next-card" href="e.html"><div><b>下一页 · E 更新治理与问题手册</b><div class="nc-sub">增量更新实验台 · 先删后写还是先写后删 · 蓝绿切换换模型 · 知识库体检 · 29 条常见问题手册</div></div><span class="nc-arrow">→</span></a>
+  <p>回到起点：<a href="a.html" style="color:var(--accent-deep)">A 页 · 直觉</a>　·　<a href="../index.html" style="color:var(--accent-deep)">首页</a></p>
+  <footer class="colophon">资料核对日期：2026-10-05 · 产品能力、价格与榜单会变化，请以官方页面为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="lib.js"></script>
+<script src="common.js"></script>
+<script>
+KB.initPage({ key: 'd', names: ['选型地图', '进阶架构', '上线四件事', '实战 A · pgvector', '实战 B · Milvus', '对照与排障', '终极测验', '参考资料'] });
+const $ = id => document.getElementById(id), esc = KB.esc;
+const mkPills = (el, items, onPick, start = 0) => { el.innerHTML = ''; items.forEach((t, i) => { const b = document.createElement('button'); b.className = 'pill' + (i === start ? ' active' : ''); b.textContent = t; b.onclick = () => { [...el.children].forEach(c => c.classList.remove('active')); b.classList.add('active'); onPick(i); }; el.appendChild(b); }); };
+
+/* ===== LAB 1.1 选型向导 ===== */
+(function () {
+  const S = { scale: 1, pg: 0, hyb: 1, ten: 0, ops: 1, cold: 0 };
+  const PRODUCTS = [
+    { id: 'pgvector', name: 'pgvector / pgvectorscale', fit: [3, 3, 1, -3], note: '中文全文检索需自己分词或装插件；规模上去后运维吃力（博客观点：约 1000 万～5000 万条）。' },
+    { id: 'qdrant', name: 'Qdrant', fit: [3, 3, 3, 2], note: '自托管需自己运维集群；也有云服务。' },
+    { id: 'milvus', name: 'Milvus', fit: [1, 2, 3, 3], note: '分布式部署组件多，小规模请用 standalone 或托管版，避免过度设计。' },
+    { id: 'lancedb', name: 'LanceDB', fit: [3, 3, 3, 2], note: '偏嵌入式与数据湖场景，高并发在线服务需自行评估。' },
+    { id: 'turbopuffer', name: 'turbopuffer', fit: [2, 3, 3, 3], note: '仅托管；缓存未命中时的查询延迟需实测。' },
+    { id: 'pinecone', name: 'Pinecone', fit: [3, 3, 3, 2], note: '闭源托管，成本随规模上升；数据驻留与合规需评估。' },
+    { id: 'es', name: 'Elasticsearch / OpenSearch', fit: [2, 3, 3, 2], note: '向量是搜索引擎之上的能力，内存与调优成本需评估；适合已有集群的团队。' },
+    { id: 'weaviate', name: 'Weaviate', fit: [3, 3, 3, 1], note: '开源与云两种形态；自托管需运维。' },
+  ];
+  const HYB = { pgvector: 0, qdrant: 1, milvus: 2, lancedb: 1, turbopuffer: 1, pinecone: 1, es: 2, weaviate: 2 };
+  const TEN = { pgvector: -1, qdrant: 2, milvus: 1, lancedb: 1, turbopuffer: 2, pinecone: 1, es: 0, weaviate: 1 };
+  const OPS = { // 0 托管 1 自运维 2 嵌入式
+    0: { pinecone: 3, turbopuffer: 3, pgvector: 2, qdrant: 1, milvus: 1, weaviate: 1, es: 1, lancedb: 0 },
+    1: { qdrant: 2, pgvector: 2, milvus: 1, weaviate: 1, es: 1, lancedb: 0, pinecone: -3, turbopuffer: -3 },
+    2: { lancedb: 4, pgvector: -1, qdrant: 0, milvus: 0, weaviate: 0, es: -1, pinecone: -4, turbopuffer: -4 },
+  };
+  const COLD = { turbopuffer: 3, lancedb: 2, milvus: 1 };
+  const LV = ['< 100 万', '100 万～1000 万', '1000 万～1 亿', '> 1 亿'];
+  function calc() {
+    return PRODUCTS.map(p => {
+      let s = 0; const why = [];
+      const f = p.fit[S.scale]; s += f; why.push([f, `规模「${LV[S.scale]}」适配度 ${f > 0 ? '+' : ''}${f}`]);
+      if (S.pg === 1 && p.id === 'pgvector') { const b = S.scale <= 1 ? 3 : 1; s += b; why.push([b, '团队已有 Postgres：同库同事务，运维零增量']); }
+      if (S.hyb === 1) { const b = HYB[p.id]; s += b; if (b) why.push([b, b >= 2 ? '内置关键词（BM25）+ 向量混合检索' : '支持稀疏 / 全文 + 向量的混合查询']); }
+      const t = [0, 0, 1][S.ten] === 1 ? TEN[p.id] : 0; if (S.ten === 2) { s += t; if (t) why.push([t, t > 0 ? '对海量租户有原生支持（分区键 / 租户索引 / 命名空间）' : '海量租户下过滤与索引管理压力大']); }
+      const o = OPS[S.ops][p.id] || 0; s += o; if (o) why.push([o, o > 0 ? ['', '托管省心', '自运维契合', '嵌入式契合'][[0, 1, 2].indexOf(S.ops) + 1] : '与运维偏好不匹配']);
+      if (S.cold === 1 && COLD[p.id]) { s += COLD[p.id]; why.push([COLD[p.id], '对象存储 / 磁盘友好，冷数据成本低']); }
+      return { ...p, s, why: why.filter(w => w[0] > 0).sort((a, b) => b[0] - a[0]).map(w => w[1]) };
+    }).sort((a, b) => b.s - a.s);
+  }
+  function draw() {
+    const R = calc(), mx = Math.max(...R.map(r => r.s)), mn = Math.min(...R.map(r => r.s));
+    $('wRank').innerHTML = R.slice(0, 3).map((r, i) => `<div class="rk-card ${i === 0 ? 'first' : ''}"><div class="t"><span class="no">#${i + 1}</span><b>${r.name}</b><i>${r.s} 分</i></div><ul>${r.why.slice(0, 4).map(w => `<li>${w}</li>`).join('')}</ul><div class="warn">⚠ ${r.note}</div></div>`).join('');
+    $('wAll').innerHTML = R.map(r => `<div class="score-row"><span>${r.name}</span><span class="tr"><i style="width:${Math.max(3, (r.s - mn) / Math.max(1, mx - mn) * 100)}%"></i></span><b>${r.s}</b></div>`).join('');
+  }
+  mkPills($('wScale'), LV, i => { S.scale = i; draw(); }, 1);
+  mkPills($('wPg'), ['没有特定栈', '已有 Postgres'], i => { S.pg = i; draw(); }, 0);
+  mkPills($('wHyb'), ['不需要', '需要'], i => { S.hyb = i; draw(); }, 1);
+  mkPills($('wTen'), ['单租户 / 少量', '海量租户（上万）'], i => { S.ten = i === 1 ? 2 : 0; draw(); }, 0);
+  mkPills($('wOps'), ['想托管', '能自运维', '嵌入式 / 本地'], i => { S.ops = i; draw(); }, 1);
+  mkPills($('wCold'), ['不敏感', '冷数据多、成本敏感'], i => { S.cold = i; draw(); }, 0);
+  draw();
+})();
+
+/* ===== LAB 2.1 路由器 ===== */
+(function () {
+  const R = [
+    { n: '简单事实', q: '「企业版退款期限是几天？」答案就在某一块里。', steps: [['ret', '混合检索 top-20', '1 次检索'], ['ret', '重排 → top-5', ''], ['llm', '生成并引用', '1 次 LLM'], ['out', '回答', '']], llm: 1, ret: 1, lat: '1×', tip: '绝大多数问题走这条，别为了「先进」把它复杂化。' },
+    { n: '多意图', q: '「账号登不进去，付款也失败了，服务器还宕机」：一句话三件事。', steps: [['llm', '分解为 3 个子问题', '1 次 LLM'], ['ret', '3 路并行混合检索', '3 次检索'], ['ret', 'RRF 融合 + 重排', ''], ['llm', '综合回答', '1 次 LLM'], ['out', '回答', '']], llm: 2, ret: 3, lat: '≈1.6×', tip: '子问题可以并行检索，延迟增加主要来自多出的那次分解调用。' },
+    { n: '多跳', q: '「负责支付模块的那位工程师的上级，最近处理过哪些故障？」前一步的答案是后一步的查询。', steps: [['ret', '检索：支付模块负责人', '第 1 轮'], ['llm', '读结果，决定下一步', '1 次 LLM'], ['ret', '检索：该人的上级', '第 2 轮'], ['llm', '读结果，决定下一步', '1 次 LLM'], ['ret', '检索：上级处理的故障', '第 3 轮'], ['llm', '汇总回答', '1 次 LLM'], ['out', '回答', '']], llm: 4, ret: 3, lat: '≈3～4×', tip: 'Agentic 迭代检索：后一步依赖前一步，没法并行。务必设轮数与 token 上限。' },
+    { n: '全局归纳', q: '「今年工单反映最多的问题模式有哪些？」没有任何单块能回答。', steps: [['llm', '离线：抽取实体与关系 / 分层摘要', '建库期，昂贵'], ['ret', '在图或摘要层检索社区 / 主题', '1 次检索'], ['llm', 'map-reduce 汇总各社区摘要', '多次 LLM'], ['out', '回答', '']], llm: '多次', ret: 1, lat: '2～5×', tip: 'GraphRAG 把成本前置到建库。500 页语料：LightRAG 约 $0.5，GraphRAG 约 $50～200（博客数据）。' },
+    { n: '无需检索', q: '「帮我把这句话翻译成英文」：答案不依赖知识库。', steps: [['llm', '路由判断：无需检索', '轻量分类'], ['llm', '直接生成', '1 次 LLM'], ['out', '回答', '']], llm: 1, ret: 0, lat: '<1×', tip: '路由器的另一个价值：省掉不必要的检索，也避免无关资料干扰模型。' },
+  ];
+  const draw = i => {
+    const r = R[i]; $('rtQ').innerHTML = `<b>${r.n}</b>${r.q}`;
+    $('rtFlow').innerHTML = r.steps.map(s => `<div class="fl ${s[0]}">${s[1]}<small>${s[2]}</small></div>`).join('');
+    $('rtKpi').innerHTML = `<div class="kpi"><span>LLM 调用</span><b>${r.llm}</b></div><div class="kpi rag"><span>检索次数</span><b>${r.ret}</b></div><div class="kpi ${i >= 2 && i <= 3 ? 'warn' : 'ok'}"><span>相对延迟（示意）</span><b>${r.lat}</b></div><div class="kpi" style="grid-column:span 2"><span>提示</span><b style="font-size:12.5px;font-family:var(--sans);font-weight:600">${r.tip}</b></div>`;
+  };
+  mkPills($('rtPills'), R.map(x => x.n), draw); draw(0);
+})();
+
+/* ===== LAB 3.1 成本计算器 ===== */
+(function () {
+  let rr = 1; const lg = (v, lo, hi) => Math.round(lo * Math.pow(hi / lo, v / 100));
+  const $$ = x => x >= 1000 ? '$' + (x / 1000).toFixed(1) + 'K' : x >= 10 ? '$' + x.toFixed(0) : '$' + x.toFixed(2);
+  const draw = () => {
+    const qpd = lg(+$('kQ').value, 100, 1e6), k = +$('kK').value, c = +$('kC').value, n = lg(+$('kN').value, 1e5, 1e9), pi = +$('kPi').value, po = +$('kPo').value, rp = +$('kR').value, mp = +$('kM').value;
+    $('v-kQ').textContent = KB.fmtN(qpd) + ' 次'; $('v-kK').textContent = k; $('v-kC').textContent = c; $('v-kN').textContent = KB.fmtN(n) + ' 条'; $('v-kPi').textContent = '$' + pi.toFixed(1); $('v-kPo').textContent = '$' + po.toFixed(1); $('v-kR').textContent = '$' + rp.toFixed(1); $('v-kM').textContent = '$' + mp.toFixed(1);
+    const q30 = qpd * 30, inTok = k * c + 800, llmIn = q30 * inTok / 1e6 * pi, llmOut = q30 * 300 / 1e6 * po, rerank = rr ? q30 / 1000 * rp : 0, qEmb = q30 * 40 / 1e6 * .1, memGB = n * 1024 * 4 * 1.3 * 2 / 1e9, db = memGB * mp, oneTime = n * c / 1e6 * .1;
+    const items = [['大模型 · 输入', llmIn, '#b5893a'], ['大模型 · 输出', llmOut, '#c2491d'], ['重排', rerank, '#2a7f72'], ['向量库内存', db, '#5d564a'], ['查询嵌入', qEmb, '#8a8172']], total = items.reduce((s, x) => s + x[1], 0), mx = Math.max(...items.map(x => x[1]));
+    $('kKpi').innerHTML = `<div class="kpi rag"><span>月度合计（不含建库）</span><b>${$$(total)}</b></div><div class="kpi"><span>单次问答</span><b>${$$(total / q30).replace('$0.00', '<$0.01')}</b></div><div class="kpi"><span>一次性建库嵌入</span><b>${$$(oneTime)}</b></div><div class="kpi"><span>每次送入模型</span><b>${KB.fmtN(inTok)} token</b></div>`;
+    $('kBars').innerHTML = items.map(([n2, v, col]) => `<div class="cb ${v === mx ? 'max' : ''}"><span>${n2}</span><span class="tr"><i style="width:${Math.max(1, v / mx * 100)}%;background:${col}"></i></span><b>${$$(v)}</b></div>`).join('') + `<div style="font:11.5px var(--mono);color:var(--ink-soft);margin-top:4px">向量库内存估算：${KB.fmtBytes(memGB * 1e9)}（含索引 +30% 与 2 副本）</div>`;
+  };
+  mkPills($('kRR'), ['不使用重排', '使用重排'], i => { rr = i; draw(); }, 1);
+  ['kQ', 'kK', 'kC', 'kN', 'kPi', 'kPo', 'kR', 'kM'].forEach(id => $(id).oninput = draw); draw();
+})();
+
+/* ===== LAB 6.1 排障决策树 ===== */
+(function () {
+  const T = {
+    start: { q: '先问：用户问题的正确答案，所在的那一块文档，在知识库里吗？', y: 'recall', n: ['leaf', '知识缺口', '库里根本没有，检索再强也没用。补文档；检查摄取流水线是否漏了这类文件（格式解析失败、权限导致没入库）、内容是否已过期未更新。', 'c3', '回看：上线四件事 · 新鲜度'] },
+    recall: { q: '这一块有没有进入检索的候选（top-20 / top-50）？', y: 'rank', n: 'why' },
+    why: { q: '问题是不是包含错误码、型号、人名这类需要字面匹配的词？', y: ['leaf', '缺少关键词路', '纯向量对精确标识符不可靠。加上 BM25 / 稀疏检索做混合，再用 RRF 融合。', 'b#c3', '回看：B 页 · 混合检索与 RRF'], n: 'why2' },
+    why2: { q: '把这一块和问题放一起看：答案是被切断了，或者这一块脱离原文后看不出在讲什么吗？', y: ['leaf', '切块问题', '调整切法（结构感知）、块大小与重叠，给块补标题路径或背景说明，然后重建索引。', 'b#c1', '回看：B 页 · 切块'], n: ['leaf', '嵌入或问法问题', '换更适合你语言与领域的嵌入模型（并确认查询 / 文档前缀正确）；尝试问题改写（multi-query、分解）。务必用黄金集对比 recall@k。', 'b#c2', '回看：B 页 · 嵌入模型与改写'] },
+    rank: { q: '这一块有没有排进最终送给模型的 top-5？', y: 'use', n: ['leaf', '排序问题', '加上重排（并确认候选长度没有超过重排器上限被静默截断）；适当调大召回数量再精排；检查 top-k 是否设得太小。', 'b#c4', '回看：B 页 · 重排'] },
+    use: { q: '模型的回答，有没有忠于这一块的内容？', y: ['leaf', '检索没问题：可能是评估或问法问题', '检查标注是否准确、问题本身是否有歧义（需要澄清追问）、是否存在多块互相矛盾的内容（版本冲突，回到新鲜度）。', 'd#c3', '回看：上线四件事'], n: ['leaf', '生成问题', '收紧提示词（只依据资料、没有就说不知道）、要求引用块编号、减少无关块、降低温度，必要时换更强的生成模型。', 'a#c2', '回看：A 页 · 最小流水线'] },
+  };
+  let path = [], node = 'start';
+  const label = { start: '知识库里有？', recall: '进候选？', why: '含精确词？', why2: '切断/缺背景？', rank: '进 top-5？', use: '模型忠实？' };
+  const draw = () => {
+    const n = T[node], crumbs = path.map(p => `<span>${label[p[0]]} → ${p[1] ? '是' : '否'}</span>`).join('');
+    $('tree').innerHTML = `<div class="crumbs">${crumbs || '<span>开始</span>'}</div><div class="q">${n.q}</div><div class="ans-btns"><button class="sim-btn" data-a="1">是</button><button class="sim-btn ghost" data-a="0">否</button>${path.length ? '<button class="sim-btn ghost" data-a="back">← 上一步</button>' : ''}</div>`;
+    $('tree').querySelectorAll('button').forEach(b => b.onclick = () => {
+      if (b.dataset.a === 'back') { const p = path.pop(); node = p[0]; draw(); return; }
+      const y = b.dataset.a === '1', nx = y ? n.y : n.n; path.push([node, y]);
+      if (Array.isArray(nx)) { const link = nx[3].includes('#') ? nx[3].split('#') : [nx[3], null]; const href = link[1] ? `${link[0]}.html#${link[1]}` : `${link[0]}.html#c3`; $('tree').innerHTML = `<div class="crumbs">${path.map(p => `<span>${label[p[0]]} → ${p[1] ? '是' : '否'}</span>`).join('')}</div><div class="leaf"><b>${nx[1]}</b>${nx[2]}<br><a href="${nx[3] === 'c3' ? '#c3' : href}">${nx[4]} →</a></div><div class="ans-btns" style="margin-top:10px"><button class="sim-btn ghost" id="trBack">← 上一步</button><button class="sim-btn ghost" id="trRe">重新开始</button></div>`; $('trBack').onclick = () => { const p = path.pop(); node = p[0]; draw(); }; $('trRe').onclick = () => { path = []; node = 'start'; draw(); }; }
+      else { node = nx; draw(); }
+    });
+  };
+  draw();
+})();
+
+/* ===== 测验 ===== */
+KB.initQuiz({ title: '选型与实战', pass: 4, doneKey: 'd-quiz', questions: [
+  { q: '团队已有 Postgres，预计 500 万条向量，需要租户隔离和与业务表联查，最合理的起点是？', opts: ['直接上分布式的 Milvus 集群', 'pgvector：同库同事务，规模在其舒适区', '自己写一个向量索引', '用长上下文代替检索'], a: 1, exp: '规模在千万以内、已有 Postgres、需要联查和事务：pgvector 的运维零增量。规模或过滤复杂度顶到天花板再迁移，因为原文与块版本都保留着。' },
+  { q: '用户只能看自己部门的文档，权限应该在哪一层强制？', opts: ['生成层：提示词里叮嘱模型别泄露', '检索层：按身份做元数据过滤，未授权内容不进入候选', '前端：隐藏引用链接', '不用管，模型会自觉'], a: 1, exp: '一旦未授权内容进了提示词，就可能被复述。检索时带过滤条件，让它压根进不了上下文。' },
+  { q: '在成本计算器里用默认参数，通常占比最大的一项是？', opts: ['向量库的内存费用', '把检索到的块送进大模型的输入 token', '查询嵌入的费用', '建库的一次性嵌入'], a: 1, exp: '每次提问都要把 top-k × 块大小的 token 送进大模型，随 QPS 线性增长，通常是大头。先优化 top-k 和块大小。' },
+  { q: '「对比三份合同里违约条款的差异」这类问题，最需要哪种路径？', opts: ['单次向量检索', '多轮 / 分解检索（Agentic），必要时用长上下文', '微调', '只用 BM25'], a: 1, exp: '答案散落在多处且需要对比，一次召回几块很吃亏。分解或迭代检索，或在语料不大时直接给长上下文。' },
+  { q: '答案不对，排障的第一步应该是？', opts: ['换更大的生成模型', '确认正确的那一块在不在库里、有没有被检索到', '重建整个向量库', '把 top-k 调到 100'], a: 1, exp: '先分清是检索的锅还是生成的锅：正确内容在不在库里、进没进候选、排没排进前几名，最后才看模型是否忠实。' },
+] });
+</script>
+</body>
+</html>

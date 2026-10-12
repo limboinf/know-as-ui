@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>RAG 与向量数据库 · B 检索质量</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<!-- seo:start -->
+<meta name="description" content="RAG 与向量数据库 · B 检索质量｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<link rel="canonical" href="https://dev.limbo101.win/rag-vector-db/b">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="know-as-ui">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="RAG 与向量数据库 · B 检索质量">
+<meta property="og:description" content="RAG 与向量数据库 · B 检索质量｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<meta property="og:url" content="https://dev.limbo101.win/rag-vector-db/b">
+<meta property="og:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="RAG 与向量数据库 · B 检索质量">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta name="twitter:creator" content="@limbopeng">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"RAG 与向量数据库 · B 检索质量","description":"RAG 与向量数据库 · B 检索质量｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。","url":"https://dev.limbo101.win/rag-vector-db/b","inLanguage":"zh-CN","datePublished":"2026-10-05","dateModified":"2026-10-05","keywords":"rag 检索增强生成 向量数据库 vector database embedding 嵌入 bm25 hybrid 混合检索 rrf rerank 重排 chunking 切块 hnsw ivf 量化 rabitq pgvector milvus qdrant 选型 graphrag agentic 评估 recall 增量更新 incremental upsert 对账 删除 别名 alias 蓝绿 重建 治理 元数据 faq 常见问题 排障","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc"}</script>
+<!-- seo:end -->
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属 ===== */
+.strip{position:relative;height:84px;border:1.5px solid var(--ink);border-radius:8px;background:var(--paper);margin:10px 0 6px;overflow:hidden}
+.strip .ck{position:absolute;height:20px;border-radius:4px;font:700 9.5px/20px var(--mono);color:#fff;text-align:center;overflow:hidden;white-space:nowrap;opacity:.92}
+.strip .ans{position:absolute;top:0;bottom:0;background:#c2491d22;border-left:2px solid var(--accent);border-right:2px solid var(--accent)}
+.strip .ans::after{content:"答案";position:absolute;top:2px;left:4px;font:800 9px var(--mono);color:var(--accent)}
+.chunks{display:grid;gap:6px;max-height:260px;overflow-y:auto;margin-top:10px;padding-right:4px}
+.cc{border:1px solid var(--line);border-radius:7px;background:var(--paper);padding:6px 10px;font-size:12.5px;line-height:1.7}
+.cc.ret{border-color:var(--ink);box-shadow:2px 2px 0 var(--rag)}
+.cc .h{font:700 10px var(--mono);color:var(--ink-faint);display:flex;gap:8px;margin-bottom:2px}
+.cc .h .tagr{color:#fff;background:var(--rag);border-radius:4px;padding:0 5px}
+.cc .pre{color:var(--hyb);font:11px var(--mono)}
+.cc mark{background:#f7e3d8;color:var(--accent-deep);padding:0 1px}
+.cc .ov{background:#dcefea}
+
+.models{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:8px 0 18px}
+.model{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:12px 14px}
+.model b{font:800 15px var(--serif)} .model i{font:700 10px var(--mono);color:var(--rag);font-style:normal;letter-spacing:.08em;display:block;margin-bottom:3px}
+.model p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:4px 0 0}
+@media(max-width:760px){.models{grid-template-columns:1fr}}
+
+.fuse{width:100%;border-collapse:collapse;font-size:12.5px;display:table!important;margin:10px 0 0}
+.fuse th{font-size:10.5px;padding:6px 8px} .fuse td{padding:6px 8px}
+.fuse .d{font:700 11px var(--mono)} .fuse .num{font:12px var(--mono);text-align:right;white-space:nowrap}
+.fuse tr.move td{background:#f4e8d2!important}
+.badge-up{font:800 11px var(--mono);color:var(--ok)} .badge-dn{font:800 11px var(--mono);color:var(--bad)}
+
+.fam{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:8px 0 18px}
+.fam .f{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:12px 14px;border-top-width:4px}
+.fam .f:nth-child(1){border-top-color:var(--lex)} .fam .f:nth-child(2){border-top-color:var(--rag)} .fam .f:nth-child(3){border-top-color:var(--hyb)}
+.fam b{display:block;font:800 14.5px var(--serif);margin-bottom:3px}
+.fam i{display:block;font:700 11px var(--mono);color:var(--ink-faint);margin-bottom:6px;font-style:normal}
+.fam p{font-size:12.5px;line-height:1.75;color:var(--ink-soft);margin:0}
+@media(max-width:760px){.fam{grid-template-columns:1fr}}
+
+.evalrows{display:grid;gap:5px;margin:8px 0 12px}
+.er{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:7px;background:var(--paper);padding:5px 10px;font-size:12.5px;cursor:pointer}
+.er .rk{font:800 12px var(--mono);width:22px;color:var(--ink-faint)} .er.rel{background:var(--rag-soft);border-color:var(--rag)} .er.cut{opacity:.4}
+.er .ck{width:16px;height:16px;border:2px solid var(--ink-soft);border-radius:4px;display:grid;place-items:center;font-size:11px;color:transparent;flex:none} .er.rel .ck{background:var(--rag);border-color:var(--rag);color:#fff}
+.q-in-row{display:flex;gap:8px;margin-bottom:10px}
+.rwcols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.rwcols{grid-template-columns:1fr}}
+.rwcols .trio-col h4{margin-bottom:6px}
+
+/* ===== 页首引言（承上启下） ===== */
+.page-intro{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1.25fr);
+  gap:12px;
+  align-items:stretch;
+  margin:0 0 34px;
+}
+.pi-block{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px}
+.pi-block.prev{background:var(--paper-deep);border-left:4px solid var(--ink-soft)}
+.pi-block.this{border-left:4px solid var(--rag);background:#fffdf8}
+.pi-tag{display:inline-block;font:700 10px var(--mono);letter-spacing:.12em;padding:2px 9px;border-radius:99px;margin-bottom:8px;text-transform:uppercase}
+.pi-block.prev .pi-tag{background:var(--ink);color:var(--paper)}
+.pi-block.this .pi-tag{background:var(--rag);color:#fff}
+.pi-block p{max-width:none;margin:0;font-size:14px;line-height:1.85;color:var(--ink-soft)}
+.pi-block p strong{color:var(--ink)}
+.pi-arrow{display:grid;place-items:center;font:800 22px var(--serif);color:var(--rag);user-select:none}
+
+.pi-roadmap{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 14px;
+  border:1.5px solid var(--line);
+  border-radius:8px;
+  background:var(--paper-deep);
+  font:11.5px var(--mono);
+}
+.pi-rm-title{
+  color:var(--ink-faint);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  flex:none;
+  font-weight:700;
+}
+.pi-rm-steps{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.pi-rm-steps .step{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:2px 8px;
+  border-radius:6px;
+  border:1px solid var(--line);
+  color:var(--ink-faint);
+  background:var(--paper);
+}
+.pi-rm-steps .step b{font-weight:800}
+.pi-rm-steps .step.done{
+  border-color:var(--ok);
+  color:var(--ok);
+  background:#e2ecdd;
+}
+.pi-rm-steps .step.active{
+  border:1.5px solid var(--rag);
+  color:#fff;
+  background:var(--rag);
+  font-weight:700;
+}
+.pi-rm-steps .step.next{
+  border-style:dashed;
+}
+.pi-rm-steps .step-sep{color:var(--ink-faint);font-size:10.5px;user-select:none}
+
+@media(max-width:760px){
+  .page-intro{grid-template-columns:1fr;gap:10px}
+  .pi-arrow{transform:rotate(90deg);padding:2px 0}
+  .pi-roadmap{flex-direction:column;align-items:flex-start;gap:6px}
+}
+
+/* ===== 进阶切块折叠卡片与架构图 ===== */
+details.adv-chunk{
+  width:100%;max-width:var(--content-rail);
+  border:1.5px solid var(--ink);border-radius:10px;
+  background:#fffdf8;margin:22px 0 28px;overflow:hidden;
+}
+details.adv-chunk summary{
+  cursor:pointer;list-style:none;user-select:none;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 18px;background:var(--paper-deep);
+  border-bottom:1.5px solid transparent;
+  font:700 14px var(--sans);color:var(--ink);
+  transition:background .15s;
+}
+details.adv-chunk summary::-webkit-details-marker{display:none}
+details.adv-chunk summary:hover{background:#e8dfcf}
+details.adv-chunk[open] summary{border-bottom-color:var(--ink);background:#e8dfcf}
+.adv-tag{
+  display:inline-block;font:700 10.5px var(--mono);
+  background:var(--rag);color:#fff;
+  padding:2px 8px;border-radius:99px;margin-right:10px;
+  vertical-align:middle;letter-spacing:.06em;
+}
+.adv-arrow{
+  font:700 14px var(--mono);color:var(--rag);
+  transition:transform .2s ease;
+}
+details.adv-chunk[open] .adv-arrow{transform:rotate(180deg)}
+.adv-body{padding:18px 20px 22px}
+.adv-lead{font-size:14.5px;line-height:1.8;color:var(--ink-soft);margin-bottom:16px}
+.adv-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0 10px}
+.adv-card{
+  border:1.5px solid var(--line);border-radius:8px;
+  background:var(--paper);padding:13px 15px;
+}
+.adv-card.full{margin-top:14px;border-color:var(--rag);background:var(--rag-soft)}
+.adv-card b{display:block;font:800 14px var(--serif);color:var(--ink);margin-bottom:6px}
+.adv-card p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:0 0 6px}
+.adv-card p:last-child{margin-bottom:0}
+@media(max-width:760px){
+  .adv-cards{grid-template-columns:1fr}
+}
+
+/* ===== RRF 通俗化展示卡片 ===== */
+.cards3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:14px 0 20px}
+.cards3 .c{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px}
+.cards3 .c b{display:block;font:800 15px var(--serif);margin-bottom:6px;color:var(--ink)}
+.cards3 .c i{font:700 10.5px var(--mono);letter-spacing:.08em;color:var(--rag);font-style:normal;display:block;margin-bottom:4px}
+.cards3 .c p{font-size:13px;line-height:1.75;margin:0;color:var(--ink-soft)}
+@media(max-width:760px){.cards3{grid-template-columns:1fr}}
+
+.rrf-vs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-width:var(--content-rail);margin:14px 0 20px}
+.rrf-card{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px;position:relative}
+.rrf-card.win{border-color:var(--ok);border-width:2px;background:#f6faf5}
+.rrf-card.bias{border-color:var(--ink-soft);background:var(--paper)}
+.rrf-tag{display:inline-block;font:700 10px var(--mono);letter-spacing:.08em;padding:2px 8px;border-radius:99px;margin-bottom:8px}
+.rrf-card.bias .rrf-tag{background:var(--ink-faint);color:#fff}
+.rrf-card.win .rrf-tag{background:var(--ok);color:#fff}
+.rrf-card b{display:block;font:800 15px var(--serif);margin-bottom:6px}
+.rrf-card p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:0 0 6px}
+.rrf-math{font:700 11.5px/1.8 var(--mono);background:rgba(38,34,27,.06);padding:6px 10px;border-radius:6px;margin:8px 0;display:block;color:var(--ink);overflow-x:auto;white-space:nowrap}
+@media(max-width:760px){.rrf-vs{grid-template-columns:1fr}}
+
+/* ===== 评估章节增强组件 ===== */
+.eval-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:14px 0 20px}
+.eval-card{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:13px 15px}
+.eval-card b{display:block;font:800 14.5px var(--serif);color:var(--ink);margin-bottom:4px}
+.eval-card i{display:block;font:700 10.5px var(--mono);color:var(--rag);margin-bottom:6px;font-style:normal;letter-spacing:.04em}
+.eval-card p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:0 0 6px}
+.eval-card .math-pill{font:700 11px var(--mono);background:rgba(38,34,27,.06);padding:3px 8px;border-radius:4px;display:inline-block;color:var(--ink);margin-bottom:6px}
+.eval-card p:last-child{margin-bottom:0}
+
+.triad-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:14px 0 20px}
+.triad-card{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px;border-top-width:4px}
+.triad-card:nth-child(1){border-top-color:var(--bad)}
+.triad-card:nth-child(2){border-top-color:var(--rag)}
+.triad-card:nth-child(3){border-top-color:var(--hyb)}
+.triad-card b{display:block;font:800 14.5px var(--serif);color:var(--ink);margin-bottom:3px}
+.triad-card i{display:block;font:700 10.5px var(--mono);color:var(--ink-faint);margin-bottom:6px;font-style:normal}
+.triad-card p{font-size:12.5px;line-height:1.75;color:var(--ink-soft);margin:0}
+
+.steps-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:14px 0 20px}
+.step-card{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px;position:relative}
+.step-badge{display:inline-block;font:700 10px var(--mono);letter-spacing:.08em;padding:2px 8px;border-radius:99px;margin-bottom:8px;background:var(--ink);color:var(--paper)}
+.step-card:nth-child(2) .step-badge{background:var(--accent)}
+.step-card:nth-child(3) .step-badge{background:var(--rag)}
+.step-card b{display:block;font:800 14.5px var(--serif);color:var(--ink);margin-bottom:6px}
+.step-card p{font-size:12.5px;line-height:1.75;color:var(--ink-soft);margin:0}
+
+@media(max-width:760px){
+  .eval-grid,.triad-grid,.steps-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">RAG <em>与向量数据库</em> · B 检索质量</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="五页导航">
+  <span class="sn-label">RAG 与向量库 · 五部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>直觉</a>
+  <a class="sn-item is-current" href="b.html"><b>B</b>检索质量</a>
+  <a class="sn-item" href="c.html"><b>C</b>向量库内核</a>
+  <a class="sn-item" href="d.html"><b>D</b>选型与实战</a>
+  <a class="sn-item" href="e.html"><b>E</b>更新与排障</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一家公司的客服知识库</span>
+  <span class="cs-act done">序幕 · 十篇文档的原型</span>
+  <span class="cs-act current">第二幕 · 答得不准，调质量</span>
+  <span class="cs-act">第三幕 · 一千万篇，扛规模</span>
+  <span class="cs-act">第四幕 · 上线，选型与实战</span>
+  <span class="cs-act">第五幕 · 活下去，更新与治理</span>
+</div>
+
+<aside class="page-intro" aria-label="前言与导读">
+  <div class="pi-block prev">
+    <span class="pi-tag">前情承接 · A 直觉</span>
+    <p>在 A 页，我们用 10 篇内部手册跑通了 RAG 的<strong>五步最小流水线</strong>，建立起「开卷考试」的直觉；但也见证了单纯依赖向量检索的翻车现场——专有名词查不出、否定句理解反、粗暴切块丢失上下文。那只是个<strong>能跑起来的玩具 Demo</strong>。</p>
+  </div>
+  <div class="pi-arrow" aria-hidden="true">→</div>
+  <div class="pi-block this">
+    <span class="pi-tag">第二幕 · B 检索质量（本页攻坚）</span>
+    <p>原型一上线，客服就被打脸：答案截半、答非所问。<strong>大模型是考生，给它的开卷资料烂了（Garbage In），模型再聪明也是巧妇难为无米之炊（Garbage Out）。</strong></p>
+    <p style="margin-top:6px;">本页我们要系统性修补这条检索管道：从<strong>切块防截断</strong>、<strong>选对嵌入模型</strong>、<strong>BM25+向量双路混合检索（RRF）</strong>，到<strong>精排重选（Rerank）</strong>与<strong>问题改写</strong>，最后用硬核指标回答「到底准不准」。</p>
+  </div>
+  <div class="pi-roadmap">
+    <span class="pi-rm-title">五部曲演进</span>
+    <div class="pi-rm-steps">
+      <span class="step done"><b>A 直觉</b>原理与五步原型</span>
+      <span class="step-sep">➔</span>
+      <span class="step active"><b>B 检索质量（当前）</b>全链路调准调全</span>
+      <span class="step-sep">➔</span>
+      <span class="step next"><b>C 内核机制</b>千万级规模与索引</span>
+      <span class="step-sep">➔</span>
+      <span class="step next"><b>D 选型实战</b>落地架构与避坑</span>
+      <span class="step-sep">➔</span>
+      <span class="step next"><b>E 更新排障</b>增量治理与问题手册</span>
+    </div>
+  </div>
+</aside>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">切块 —— 别把答案切成两半</h2></div>
+  <p class="lede">原型上线一周，客服反馈：企业版退款的问题经常答一半。排查发现不是模型的问题，是手册在切块时被拦腰截断，关键的「但是……不适用」落在了另一块里。</p>
+
+  <p>切块（chunking）是 RAG 里最不起眼、却最影响上限的一步：<strong>检索的最小单位是块</strong>。块太小，答案被切碎，每块都缺上下文；块太大，一块里混了好几件事，向量变成「平均意思」，检索变模糊，还多花 token。没有万能尺寸，要在自己的数据上量。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 1.1 · 切块实验台</b><span>问题：企业版订阅退款有什么条件？</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>切法</label><div class="pills" id="chStrat"></div></div>
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>块大小（字符） <b id="v-chS"></b></label><input type="range" id="chS" min="40" max="400" step="10" value="60"></div>
+        <div class="ctrl"><label>重叠（字符） <b id="v-chO"></b></label><input type="range" id="chO" min="0" max="60" step="5" value="0"></div>
+      </div>
+      <div class="ctrl"><div class="pills"><button class="pill" id="chPre">给每块补上「标题路径」前缀（仅用于检索）</button></div></div>
+      <div class="strip" id="chStrip"></div>
+      <div class="kpi-grid" id="chKpi"></div>
+      <div class="chunks" id="chList"></div>
+    </div>
+    <div class="lab-foot">橙色竖带 = 完整答案所在位置。「检索」用的是真实 BM25（对块集合重新算 IDF），取 top-2 块；覆盖率 = 这两块合起来盖住了多少比例的答案字符。</div>
+  </div>
+
+  <h3>主流切法怎么选 —— 从单层到解耦</h3>
+  <table>
+    <thead><tr><th>切法</th><th>做法</th><th>代表实现（如 LlamaIndex）</th><th>什么时候用</th></tr></thead>
+    <tbody>
+      <tr><td><b>固定长度</b></td><td>每 N 个字符/token 一刀，保留前后重叠</td><td><code>SentenceSplitter</code></td><td>起步基线；结构混乱的纯文本</td></tr>
+      <tr><td><b>递归（结构感知）</b></td><td>优先按标题、段落切，超长再按标点、换行切</td><td><code>MarkdownNodeParser</code></td><td>绝大多数 Markdown、手册的默认选择</td></tr>
+      <tr><td><b>语义 / 按主题</b></td><td>相邻句子 Embedding 差异大处下刀，动态聚类</td><td><code>SemanticSplitterNodeParser</code></td><td>长篇叙述、访谈转录；计算慢，需权衡收益</td></tr>
+      <tr><td><b>句子窗口（解耦）</b></td><td>单句做向量索引，元数据挂载前后 N 句上下文</td><td><code>SentenceWindowNodeParser</code></td><td>事实型问答、精准条款；高命中 + 完整语境</td></tr>
+      <tr><td><b>父子层级（解耦）</b></td><td>多级切块（2048/512/128），小块命中向上合并</td><td><code>HierarchicalNodeParser</code></td><td>复杂合同、长篇规章；彻底根治跨段落逻辑割裂</td></tr>
+    </tbody>
+  </table>
+
+  <details class="adv-chunk">
+    <summary>
+      <span><b class="adv-tag">进阶深潜</b>现代 RAG 进阶切分全景：句子窗口、父子层级与 Late Chunking 架构图解</span>
+      <span class="adv-arrow">▾</span>
+    </summary>
+    <div class="adv-body">
+      <p class="adv-lead">传统切分逼迫我们在「块太大检索不准」与「块太小上下文残缺」之间做两难妥协。以 LlamaIndex、Jina AI 为代表的现代工业界实践，通过<strong>解耦检索与生成单元</strong>以及<strong>颠倒嵌入时序</strong>打破了这一死局：</p>
+
+      <!-- 图 1.1 -->
+      <div class="diagram">
+        <svg viewBox="0 0 780 340" role="img" aria-label="单层一刀切 vs 句子窗口 vs 父子层级架构对比">
+          <defs>
+            <marker id="arr-rag" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#2a7f72"/>
+            </marker>
+            <marker id="arr-ink" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#26221b"/>
+            </marker>
+          </defs>
+          <!-- Naive -->
+          <rect x="12" y="12" width="238" height="316" rx="8" fill="#fffdf8" stroke="#26221b" stroke-width="1.5"/>
+          <rect x="12" y="12" width="238" height="36" rx="8" fill="#efe9dd" stroke="#26221b" stroke-width="1.5"/>
+          <text x="24" y="35" font-family="'SF Mono', Menlo, monospace" font-size="12" font-weight="bold" fill="#26221b">模式 1 · 单层一刀切 (Naive)</text>
+          
+          <rect x="26" y="60" width="210" height="38" rx="6" fill="#f6f2ea" stroke="#d8cfbd" stroke-width="1.5"/>
+          <text x="42" y="83" font-family="'SF Mono', Menlo, monospace" font-size="11" fill="#5d564a">原始文档 (10K tokens)</text>
+          <line x1="131" y1="98" x2="131" y2="116" stroke="#26221b" stroke-width="1.5" marker-end="url(#arr-ink)"/>
+
+          <rect x="26" y="120" width="210" height="82" rx="6" fill="#fffdf8" stroke="#26221b" stroke-width="1.5"/>
+          <text x="36" y="140" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#26221b">物理切块 (Fixed/Recursive)</text>
+          <rect x="36" y="148" width="58" height="22" rx="4" fill="#dcefea" stroke="#2a7f72" stroke-width="1"/>
+          <text x="48" y="163" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#2a7f72">块 1</text>
+          <rect x="102" y="148" width="58" height="22" rx="4" fill="#dcefea" stroke="#2a7f72" stroke-width="1"/>
+          <text x="114" y="163" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#2a7f72">块 2</text>
+          <rect x="168" y="148" width="58" height="22" rx="4" fill="#dcefea" stroke="#2a7f72" stroke-width="1"/>
+          <text x="180" y="163" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#2a7f72">块 3</text>
+          <text x="36" y="190" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#8a8172">向量库与生成共用同一切片</text>
+
+          <line x1="131" y1="202" x2="131" y2="222" stroke="#c2491d" stroke-width="1.5" marker-end="url(#arr-ink)"/>
+          <rect x="26" y="226" width="210" height="52" rx="6" fill="#f7e3d8" stroke="#c2491d" stroke-width="1.5"/>
+          <text x="38" y="246" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#c2491d">送入 LLM 上下文</text>
+          <text x="38" y="266" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">原样传递命中块 (200-500t)</text>
+          <text x="24" y="306" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#a83232">⚠️ 困境：小了缺因果，大了搜不准</text>
+
+          <!-- Sentence Window -->
+          <rect x="268" y="12" width="242" height="316" rx="8" fill="#fffdf8" stroke="#26221b" stroke-width="1.5"/>
+          <rect x="268" y="12" width="242" height="36" rx="8" fill="#efe9dd" stroke="#26221b" stroke-width="1.5"/>
+          <text x="278" y="35" font-family="'SF Mono', Menlo, monospace" font-size="12" font-weight="bold" fill="#26221b">模式 2 · 句子窗口 (Sentence Window)</text>
+          
+          <rect x="282" y="60" width="214" height="52" rx="6" fill="#fffdf8" stroke="#2a7f72" stroke-width="1.5"/>
+          <text x="294" y="80" font-family="'SF Mono', Menlo, monospace" font-size="11.5" font-weight="bold" fill="#2a7f72">单句极精索引 (VectorStore)</text>
+          <text x="294" y="98" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#5d564a">每单句独立向量化 (30-60 字符)</text>
+          
+          <path d="M 389 112 L 389 128" stroke="#2a7f72" stroke-width="1.5" marker-end="url(#arr-rag)"/>
+          
+          <rect x="282" y="132" width="214" height="82" rx="6" fill="#dcefea" stroke="#2a7f72" stroke-width="1.5"/>
+          <text x="294" y="152" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#1b5a50">元数据挂载周围窗口 (Metadata)</text>
+          <text x="294" y="172" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#26221b">前文 [S1, S2] + <tspan fill="#c2491d" font-weight="bold">命中句 [S3]</tspan> + 后文 [S4, S5]</text>
+          <text x="294" y="194" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">命中单句只负责触发高灵敏召回</text>
+
+          <path d="M 389 214 L 389 232" stroke="#26221b" stroke-width="1.5" marker-end="url(#arr-ink)"/>
+
+          <rect x="282" y="236" width="214" height="52" rx="6" fill="#f7e3d8" stroke="#c2491d" stroke-width="1.5"/>
+          <text x="294" y="256" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#c2491d">动态替换后送入 LLM</text>
+          <text x="294" y="274" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">自动扩展为 5-7 句完整段落</text>
+          <text x="280" y="306" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#3d7a44">✓ 收益：检索极敏锐，阅读有语境</text>
+
+          <!-- Hierarchical -->
+          <rect x="528" y="12" width="240" height="316" rx="8" fill="#fffdf8" stroke="#26221b" stroke-width="1.5"/>
+          <rect x="528" y="12" width="240" height="36" rx="8" fill="#efe9dd" stroke="#26221b" stroke-width="1.5"/>
+          <text x="540" y="35" font-family="'SF Mono', Menlo, monospace" font-size="12" font-weight="bold" fill="#26221b">模式 3 · 父子层级 (Hierarchical)</text>
+          
+          <rect x="542" y="60" width="212" height="44" rx="6" fill="#efe9dd" stroke="#26221b" stroke-width="1.5"/>
+          <text x="554" y="78" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#26221b">父节点 Parent (2048 token)</text>
+          <text x="554" y="94" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#8a8172">存储于 DocumentStore (原稿)</text>
+
+          <path d="M 648 104 L 648 122" stroke="#26221b" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+          <rect x="542" y="124" width="212" height="78" rx="6" fill="#fffdf8" stroke="#2a7f72" stroke-width="1.5"/>
+          <text x="554" y="142" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#2a7f72">叶子子节点 Leaf (128 token)</text>
+          <rect x="554" y="150" width="44" height="20" rx="3" fill="#dcefea" stroke="#2a7f72" stroke-width="1"/><text x="560" y="164" font-family="'SF Mono', Menlo, monospace" font-size="9" fill="#2a7f72">c1(中)</text>
+          <rect x="604" y="150" width="44" height="20" rx="3" fill="#dcefea" stroke="#2a7f72" stroke-width="1"/><text x="610" y="164" font-family="'SF Mono', Menlo, monospace" font-size="9" fill="#2a7f72">c2(中)</text>
+          <rect x="654" y="150" width="44" height="20" rx="3" fill="#f6f2ea" stroke="#d8cfbd" stroke-width="1"/><text x="666" y="164" font-family="'SF Mono', Menlo, monospace" font-size="9" fill="#8a8172">c3</text>
+          <rect x="704" y="150" width="44" height="20" rx="3" fill="#f6f2ea" stroke="#d8cfbd" stroke-width="1"/><text x="716" y="164" font-family="'SF Mono', Menlo, monospace" font-size="9" fill="#8a8172">c4</text>
+          <text x="554" y="188" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">同一父节点下多子块命中时...</text>
+
+          <path d="M 648 202 L 648 222" stroke="#2a7f72" stroke-width="1.5" marker-end="url(#arr-rag)"/>
+
+          <rect x="542" y="226" width="212" height="52" rx="6" fill="#f7e3d8" stroke="#c2491d" stroke-width="1.5"/>
+          <text x="554" y="246" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#c2491d">AutoMerging 向上合并</text>
+          <text x="554" y="264" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">直接将完整父节点 Parent 送入 LLM</text>
+          <text x="540" y="306" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#3d7a44">✓ 收益：兼顾段落严谨与宏观脉络</text>
+        </svg>
+        <figcaption>图 1.1 · 检索单元（向量索引）与生成单元（送入 LLM 上下文）的三种组织架构对比</figcaption>
+      </div>
+
+      <div class="adv-cards">
+        <div class="adv-card">
+          <b>1. 句子窗口检索（Sentence Window）</b>
+          <p><strong>解决痛点：</strong>单句做 Embedding 时语义密度最高，不会被段落其他杂质稀释；但大模型答题只看一句往往断章取义。</p>
+          <p><strong>LlamaIndex 实践：</strong>用 <code>SentenceWindowNodeParser(window_size=3)</code> 将单句存入向量库，前后各 3 句存入元数据。检索召回后，后处理器 <code>MetadataReplacementPostProcessor</code> 自动将单句替换成 7 句连续窗口送入提示词。</p>
+        </div>
+        <div class="adv-card">
+          <b>2. 父子层级切分（Hierarchical / Auto-Merging）</b>
+          <p><strong>解决痛点：</strong>本页开篇“企业版退款关键限制落在另一块”，正属于跨段落长程依赖，单纯扩大滑动窗口极易爆 token 且引入噪声。</p>
+          <p><strong>LlamaIndex 实践：</strong>用 <code>HierarchicalNodeParser(chunk_sizes=[2048, 512, 128])</code> 构建多层树。向量库仅存 128 token 的叶子节点。当检索命中同一父节点的多个子块时，<code>AutoMergingRetriever</code> 自动折叠并向上传递完整的 2048 token 大块。</p>
+        </div>
+      </div>
+
+      <!-- 图 1.2 -->
+      <div class="diagram" style="margin-top:20px">
+        <svg viewBox="0 0 780 290" role="img" aria-label="传统切块 vs 延迟切块 Late Chunking 时序对比">
+          <defs>
+            <marker id="arr-r2" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#2a7f72"/>
+            </marker>
+            <marker id="arr-b2" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#a83232"/>
+            </marker>
+          </defs>
+
+          <!-- Top: Traditional -->
+          <rect x="12" y="10" width="756" height="125" rx="8" fill="#fffdf8" stroke="#26221b" stroke-width="1.5"/>
+          <text x="26" y="30" font-family="'SF Mono', Menlo, monospace" font-size="12" font-weight="bold" fill="#26221b">传统先切后嵌 (Early Chunking) · 注意力被物理阻断</text>
+          
+          <rect x="26" y="42" width="220" height="34" rx="5" fill="#f6dede" stroke="#a83232" stroke-width="1.2"/>
+          <text x="36" y="63" font-family="'SF Mono', Menlo, monospace" font-size="11" fill="#26221b">块 1: 「张三是架构师...」</text>
+          
+          <rect x="270" y="42" width="220" height="34" rx="5" fill="#f6dede" stroke="#a83232" stroke-width="1.2"/>
+          <text x="280" y="63" font-family="'SF Mono', Menlo, monospace" font-size="11" fill="#26221b">块 2: 「<tspan fill="#a83232" font-weight="bold">她</tspan>审核退款申请...」</text>
+
+          <line x1="136" y1="76" x2="136" y2="92" stroke="#26221b" stroke-width="1.2" marker-end="url(#arr-b2)"/>
+          <line x1="380" y1="76" x2="380" y2="92" stroke="#26221b" stroke-width="1.2" marker-end="url(#arr-b2)"/>
+
+          <rect x="56" y="94" width="160" height="26" rx="4" fill="#fffdf8" stroke="#26221b" stroke-width="1.2"/>
+          <text x="96" y="111" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#5d564a">独立向量 1</text>
+          
+          <rect x="300" y="94" width="160" height="26" rx="4" fill="#fffdf8" stroke="#a83232" stroke-width="1.2"/>
+          <text x="340" y="111" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#a83232">独立向量 2 (失联)</text>
+
+          <rect x="510" y="42" width="242" height="78" rx="5" fill="#fbf4f4" stroke="#e0b4b4" stroke-width="1"/>
+          <text x="522" y="64" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#a83232">❌ 跨块上下文断裂</text>
+          <text x="522" y="84" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">两块分别通过模型，Transformer 的</text>
+          <text x="522" y="102" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">注意力无法跨越物理块，「她」指代丢失</text>
+
+          <!-- Bottom: Late Chunking -->
+          <rect x="12" y="146" width="756" height="134" rx="8" fill="#fffdf8" stroke="#2a7f72" stroke-width="1.5"/>
+          <text x="26" y="166" font-family="'SF Mono', Menlo, monospace" font-size="12" font-weight="bold" fill="#1b5a50">延迟切块 (Late Chunking · Jina AI) · 先全篇 Attention，再切片 Pooling</text>
+
+          <rect x="26" y="178" width="464" height="44" rx="6" fill="#dcefea" stroke="#2a7f72" stroke-width="1.2"/>
+          <text x="38" y="198" font-family="'SF Mono', Menlo, monospace" font-size="11" fill="#1b5a50">长文本整体输入 (8K Token Transformer，全局自注意力)</text>
+          <text x="38" y="214" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#26221b">Token 1:「张三」⟷ ⟷ ⟷ Token N:「<tspan fill="#2a7f72" font-weight="bold">她</tspan>」(注意力深度交互)</text>
+
+          <line x1="136" y1="222" x2="136" y2="240" stroke="#2a7f72" stroke-width="1.5" marker-end="url(#arr-r2)"/>
+          <line x1="380" y1="222" x2="380" y2="240" stroke="#2a7f72" stroke-width="1.5" marker-end="url(#arr-r2)"/>
+
+          <rect x="36" y="242" width="200" height="26" rx="4" fill="#fffdf8" stroke="#2a7f72" stroke-width="1.2"/>
+          <text x="60" y="259" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#2a7f72">切片 1 Mean-Pooling 向量</text>
+
+          <rect x="280" y="242" width="200" height="26" rx="4" fill="#fffdf8" stroke="#2a7f72" stroke-width="1.2"/>
+          <text x="294" y="259" font-family="'SF Mono', Menlo, monospace" font-size="10.5" fill="#2a7f72">切片 2 向量 (自带前文语境!)</text>
+
+          <rect x="510" y="178" width="242" height="90" rx="5" fill="#f2f8f6" stroke="#b0d9d0" stroke-width="1"/>
+          <text x="522" y="200" font-family="'SF Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#2a7f72">✓ 全局语境无损继承</text>
+          <text x="522" y="220" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">切块发生在模型隐藏层输出之后，</text>
+          <text x="522" y="238" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#5d564a">保持短小向量的高检索精度，</text>
+          <text x="522" y="256" font-family="'SF Mono', Menlo, monospace" font-size="10" fill="#2a7f72">却永久解决了跨块指代与断章取义</text>
+        </svg>
+        <figcaption>图 1.2 · 传统切块（物理阻断注意力）vs 延迟切块（全篇 Attention 后再 Pooling）机制对比</figcaption>
+      </div>
+
+      <div class="adv-card full">
+        <b>3. 延迟切块（Late Chunking · Jina AI 提出）—— 颠覆切分时序</b>
+        <p><strong>机制颠覆：</strong>传统方法是「先切块，再单独计算各块 Embedding」，导致第二块中的“她”、“这项免责声明”与第一块的主语彻底绝缘。Late Chunking 利用现代长上下文 Embedding 模型（如 jina-embeddings-v3），<strong>先把整篇文档（如 8192 token）完整输入 Transformer</strong>；所有 Token 在多层自注意力机制中完成全局信息交互后，<strong>最后才在 Token 输出向量层按切块边界做 Mean Pooling</strong>。</p>
+        <p><strong>核心收益：</strong>输出的依然是短小精准的切块向量，但每一个向量都天生浸润了全篇上下文，彻底治愈跨块代词指代丢失，且完全不需要调用大模型写背景摘要的额外开销。</p>
+      </div>
+    </div>
+  </details>
+
+  <h3>让每一块自己说清「我是谁」</h3>
+  <p>块一旦脱离原文，就失去了「我在哪份文件、哪一节」的信息。「但是已开通超过 5 个席位的账号不适用」单独看，不知道是什么产品的什么政策。解决这个问题的现代方案有两条主流路径：</p>
+  <p><strong>路径 A · 外部补写语境（Contextual Retrieval）</strong>：最便宜的版本是拼上标题路径（上面实验台的开关，不需要模型）；更强的版本是让模型为每块前置写一两句背景说明，这就是 Anthropic 2024 年提出的 Contextual Retrieval，评测显示它把检索失败率降低了约 49%，叠加重排降低约 67%（代价是建库时每块多一次 LLM 调用）。</p>
+  <p><strong>路径 B · 模型原生全局注意力（Late Chunking）</strong>：如上方进阶架构所示，直接使用支持长上下文的嵌入模型整篇编码后再切片 Pooling，零额外 LLM 提示词调用成本，依靠模型内部注意力机制守住上下文。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-c1"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出块太大和太小各自的代价，并让实验台里「完整答案落入同一块」且被检索到</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>块太小像把一页纸剪成碎条，每条都读不懂；块太大像一整章当一张卡片，翻到它也不知道重点在哪。试着选「递归」、块大小 120～200，答案就在同一块里了。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>小块：语义不完整、召回碎片化；大块：向量被稀释、噪声多、占用上下文预算。结构感知切分按文档层级优先保持语义单元完整；重叠用来缓冲边界损失但会膨胀索引。块前缀（标题路径或 LLM 生成的背景）同时改善 BM25 与向量两路。</p></div>
+  </div></details>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">嵌入模型 —— 2026 年怎么选</h2></div>
+  <p class="lede">块切好了，下一步是选「翻译官」：把文字变成向量的嵌入模型。它决定了「意思相近」这件事被量得准不准。</p>
+
+  <p>过去两年最大的变化有两个。一是<strong>开源追上并超过了不少闭源 API</strong>：Qwen3-Embedding-8B 曾在 MTEB 多语言榜上排第一，开源嵌入不再只是「省钱的备选」。二是<strong>大模型底座的嵌入更强但更贵</strong>：参数量上去，质量涨，延迟和存储成本也跟着涨（2026 年有论文专门讨论这个取舍，见参考资料）。选型的核心就是在质量、语言、长度、成本、部署方式之间找平衡点。</p>
+
+  <div class="models">
+    <div class="model"><i>开源 · 多语言</i><b>Qwen3-Embedding 系列</b><p>阿里通义，提供 0.6B / 4B / 8B 多种尺寸。8B 曾登顶 MTEB 多语言榜。小尺寸适合自部署控成本，大尺寸追质量。</p></div>
+    <div class="model"><i>开源 · 三合一</i><b>BGE-M3</b><p>智源出品，支持 100+ 语言、8192 token 输入，一次前向同时输出稠密、稀疏、多向量（ColBERT 式）三种表示，混合检索可以只用一个模型。</p></div>
+    <div class="model"><i>闭源 API</i><b>OpenAI text-embedding-3 等</b><p>开箱即用、按量计费。text-embedding-3 支持用 <code>dimensions</code> 参数截断维度。Cohere、Voyage、Google 等厂商也有各自的嵌入服务，以官方文档为准。</p></div>
+    <div class="model"><i>评测榜单</i><b>MTEB 与你的数据</b><p>榜单只能帮你缩小候选范围。榜上第一的模型在你的业务语料上不一定第一：用 50～100 条真实问题自己标注一遍，比读十篇评测更可靠。</p></div>
+  </div>
+
+  <h3>选型清单（按顺序问）</h3>
+  <ul class="plain"><li><strong>语言</strong>：中文为主的语料，优先看对中文有专门优化或多语言榜靠前的模型。</li><li><strong>最大输入长度</strong>：块比模型上限长，尾部会被悄悄截掉（和重排器的坑同一类）。</li><li><strong>查询与文档是否需要不同前缀</strong>：不少模型要求给查询加指令、给文档加另一种前缀，漏了不报错，只是悄悄变差。</li><li><strong>能否自部署、许可是否允许商用</strong>：数据不能出境或量很大时，自部署才划算。</li><li><strong>维度与存储</strong>：直接决定向量库的内存账（下面的实验和 C 页第 1 章）。</li></ul>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 2.1 · 维度的存储账</b><span>Matryoshka：模型训练成「前 N 维也能用」，可以截断</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>向量条数 <b id="v-mN"></b></label><input type="range" id="mN" min="0" max="100" value="55"></div>
+      <div class="ctrl"><label>维度</label><div class="pills" id="mDim"></div></div>
+      <div class="kpi-grid" id="mKpi"></div>
+      <div class="strip" id="mBar" style="height:44px"></div>
+    </div>
+    <div class="lab-foot">只算向量本身（float32 = 4 字节/维），不含索引和元数据，HNSW 图索引通常再多出可观的内存。截断维度后质量会下降多少取决于模型和数据，必须自己测；并且只有训练时做过 Matryoshka 的模型才能安全截断。</div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-c2"><div class="ckpt-box">✓</div><div class="ckpt-text">能列出选嵌入模型时要问的 4 个问题，并估算 1000 万条 1024 维向量的原始大小</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>先问会不会说中文、能读多长的块、要不要特殊的提问格式、能不能放在自己机房里。再算账：1000 万条 × 1024 个数 × 每个数 4 字节，大约 41 GB，光放着就要这么多内存。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>语言覆盖、最大 token 长度、查询/文档指令前缀、部署与许可、维度与存储。10⁷ × 1024 × 4 B ≈ 40.96 GB（不含索引与元数据）。榜单分数只作候选筛选，最终以自有标注集的 recall@k 为准。</p></div>
+  </div></details>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">混合检索与 RRF —— 两份名单怎么合并</h2></div>
+  <p class="lede">A 页已经看到：BM25 和向量各有盲区，必须双路并进。但 BM25 吐出的分数是 14.8，向量吐出的余弦是 0.89，两份完全不同量纲的名单，怎么合才不失真？</p>
+
+  <p>直接把两路分数相加绝对行不通：这就像让两位打分风格迥异的评委共同评审一场歌手比赛：</p>
+  <ul class="plain">
+    <li><strong>评委 A（BM25 · 严苛粗放）</strong>：按关键词词频算分。命中生僻错误码可以打出 35 分的高分，普通词只给 1.2 分，分数上不封顶、大起大落；</li>
+    <li><strong>评委 B（向量 · 内敛保守）</strong>：按余弦相似度算分，所有候选文档的分数往往全挤在 0.81 到 0.89 之间，差 0.01 都隔着好几个身位。</li>
+  </ul>
+  <p>如果把分数直接相加，BM25 会完全淹没向量；如果做 Min-Max 归一化（缩放到 0～1），只要 BM25 某次只查出一条孤立结果，那一条就会被直接拉到满分 1.0，导致排名极度脆弱。<strong>RRF（Reciprocal Rank Fusion，倒数排名融合）</strong>的大智慧是：<strong>不问评委各自打了多少分，只看在各自眼里排第几名！</strong></p>
+
+  <div class="cards3">
+    <div class="c">
+      <i>疑问 01</i>
+      <b>为什么不按名次直接相加？</b>
+      <p>如果按「第 1 名 + 第 2 名 = 3 分」排，一旦某篇文档在 BM25 没搜出来（未上榜），它该算第几名？排第 10000 名吗？名单长度不一时，名次相加直接瘫痪。</p>
+    </div>
+    <div class="c">
+      <i>疑问 02</i>
+      <b>为什么要取「倒数」（1 / r）？</b>
+      <p>倒数自然地把「名次」转化为「得分」：<strong>第 1 名拿最大分，名次越靠后衰减越快</strong>。未上榜的文档排名无穷大，倒数得分为 0，天然包容两份长短不一的名单！</p>
+    </div>
+    <div class="c">
+      <i>疑问 03</i>
+      <b>为什么要加神秘常数 k=60？</b>
+      <p>防止极端偏执！若不加 k（k=0），第 1 名得 1.0 分，第 2 名得 0.5 分，第 1 名是第 2 名的<strong>整整两倍</strong>（一票否决权）。加上 60 后变为 1/61 与 1/62，头部差距被<strong>温和抚平</strong>，让两路都觉得不错的候选稳健胜出。</p>
+    </div>
+  </div>
+
+  <div class="rrf-vs">
+    <div class="rrf-card bias">
+      <span class="rrf-tag">偏科生 · 单极极值</span>
+      <b>文档 A · 关键词狂喜但离题</b>
+      <p>BM25 极度偏爱排 <strong>第 1 名</strong>，但向量模型觉得语义毫无关联，只排到 <strong>第 30 名</strong>。</p>
+      <span class="rrf-math">RRF 得分 = 1/(60+1) + 1/(60+30) ≈ 0.01639 + 0.01111 = 0.02750</span>
+      <p>结论：虽然在一路夺冠，但在另一路太拉胯，最终综合得分被拉低。</p>
+    </div>
+    <div class="rrf-card win">
+      <span class="rrf-tag">双科优等生 · 稳健登顶</span>
+      <b>文档 B · 两路都高度认可（胜出！）</b>
+      <p>BM25 表现良好排 <strong>第 2 名</strong>，向量语义也十分贴近排 <strong>第 3 名</strong>。</p>
+      <span class="rrf-math">RRF 得分 = 1/(60+2) + 1/(60+3) ≈ 0.01613 + 0.01587 = 0.03200</span>
+      <p>结论：<strong>得分高于文档 A！</strong>“宁选两个人都觉得挺好的，不要选一个狂热、另一个鄙视的”。</p>
+    </div>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 3.1 · RRF 调参台</b><span>和「加权分数」对照着看</span></div>
+    <div class="lab-body">
+      <div class="q-in-row"><input class="txt-in" id="fuQ" aria-label="输入问题"></div>
+      <div class="ctrl"><div class="pills" id="fuPills"></div></div>
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>RRF 的 k <b id="v-fuK"></b></label><input type="range" id="fuK" min="1" max="200" value="60"></div>
+        <div class="ctrl"><label>BM25 权重 <b id="v-fuW"></b></label><input type="range" id="fuW" min="0" max="20" value="10"></div>
+        <div class="ctrl"><label>加权分数里 BM25 的占比 α <b id="v-fuA"></b></label><input type="range" id="fuA" min="0" max="100" value="50"></div>
+      </div>
+      <div id="fuTable"></div>
+    </div>
+    <div class="lab-foot">试试 <code>E2001 磁盘满了</code>：BM25 只有一条结果，min-max 归一化会把它直接拉到满分 1.0，而 RRF 仍只给它「第 1 名」该得的 1/(k+1)。再拖动 k：k 越小，头部名次差距越大，k 越大，各名次越接近。</div>
+  </div>
+
+  <p><strong>工程总结：</strong>公式写为 <code>score(d) = Σ wᵢ / (k + rankᵢ(d))</code>。k=60 来自 RRF 原论文（Cormack 等，2009 SIGIR），十几年来已是各类混合检索与向量库的事实标准；除非你有大量标注数据专门拟合，否则保持默认 60 即可。权重 <code>wᵢ</code> 则根据场景调节：代码、型号等专有名词多的场景，适当调大 BM25 权重；口语化和长意图场景，调大向量权重。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-c3"><div class="ckpt-box">✓</div><div class="ckpt-text">能手算一次 RRF，并说明它为什么比「分数直接相加」稳</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>两个评委打分尺度不同，一个满分 100、一个满分 5，直接加分就不公平。RRF 只问「你在每个评委那儿排第几」，排第 1 的拿 1/(60+1)，排第 3 的拿 1/(60+3)，加起来。两个评委都喜欢的，一定在前面。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>score(d) = Σᵢ wᵢ / (k + rankᵢ(d))。例：某文档在 BM25 第 1、向量第 3，k=60：1/61 + 1/63 ≈ 0.0323。只依赖名次，因此不需要校准不同检索器的分数分布，对离群分数、单条结果都稳健。</p></div>
+  </div></details>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">重排 —— 先广撒网，再精挑细选</h2></div>
+  <p class="lede">混合检索把候选召回到 top-50，但前几名的顺序仍然粗糙：向量只用「一个点」代表整块文字，细节被压没了。重排（rerank）是第二道工序，用更贵但更准的模型，只对这 50 条重新打分。</p>
+
+  <p>为什么不一开始就用这个准的模型？因为它<strong>要把问题和每个候选放在一起读</strong>，没法提前算好、没法建索引，对一千万条逐条读一遍不现实。所以才分两段：第一段便宜、广泛、追求别漏（<strong>召回</strong>），第二段昂贵、小范围、追求排准（<strong>精排</strong>）。</p>
+
+  <p>候选集被粗筛缩小到了 50 条，接下来的工程抉择是：<strong>模型到底以什么方式给这 50 条重新排座次？</strong>是一对一单挑精读？还是轻量比对？还是打包在一起集体比选？工业界在「极致精度（深度交互）」与「计算成本（延迟与算力）」的持续博弈中，演化出了三大主流技术流派：</p>
+
+  <h3>重排的三大技术流派：在「精度」与「速度」间走出的三条路</h3>
+  <div class="fam">
+    <div class="f">
+      <b>流派 1 · 交叉编码器（Cross-Encoder）</b>
+      <i>核心动机：追求极致准度 · 同卷对照精读</i>
+      <p>考官把<strong>「问题 + 候选文档」印在同一张卷子上</strong>，从头到尾一字一句连着读，模型内部注意力全开。<strong>最准</strong>，连微小的“不适用”、“除非”等否定词也能敏锐识别；但计算最耗时，对 50 条候选要跑 50 次完整模型推理。</p>
+    </div>
+    <div class="f">
+      <b>流派 2 · 晚交互（ColBERT 式）</b>
+      <i>核心动机：解决速度太慢 · 各画圈圈，临场连连看</i>
+      <p>文档入库时，提前给文档里的<strong>每个词各算一个向量</strong>离线存好；查询时，只对问题的词做轻量配对求和（MaxSim）。<strong>速度极快且文档可提前预计算</strong>，但词级向量会让存储开销翻倍。</p>
+    </div>
+    <div class="f">
+      <b>流派 3 · 大模型列表式（Listwise）</b>
+      <i>核心动机：大模型时代的全局比选 · 全员上台，同台比选</i>
+      <p>前两派都是盲人摸象式的一对一单挑打分；列表式则是直接把 20 篇候选<strong>打包成一张大清单塞给模型</strong>，一眼通览直接排出 1 到 20 名。<strong>具备全局比较视野</strong>，能识别重复和互补信息；现代专用列表重排器单次前向直接出整批结果，吞吐暴增。</p>
+    </div>
+  </div>
+
+  <h3>2026 现代主流重排模型地图</h3>
+  <p>搞清了这三大流派的思想，在实际工程落地中，我们通常不需要自己从头训练，而是直接选成熟的开源模型或托管 API。当前工业界的主流选择高度分化：</p>
+
+  <table>
+    <thead><tr><th>模型家族</th><th>代表版本</th><th>类型与部署</th><th>特点与核心场景</th></tr></thead>
+    <tbody>
+      <tr><td><b>BGE-Reranker 系列</b></td><td><code>bge-reranker-v2-m3</code> / <code>large</code></td><td>开源（自部署）</td><td><strong>开源中流砥柱</strong>。北京智源出品，多语言极强，配对 BGE-M3 嵌入模型，是企业自建/私有化知识库的首选。</td></tr>
+      <tr><td><b>Cohere Rerank 系列</b></td><td><code>rerank-v3.5</code></td><td>商业 API（全托管）</td><td><strong>企业级精度标杆</strong>。支持 100+ 语言与 4K+ 上下文，免 GPU 运维，对各类复杂语料调校极深，商业 RAG 的开箱首选。</td></tr>
+      <tr><td><b>Jina Reranker 系列</b></td><td><code>jina-reranker-v3</code></td><td>开源 / API</td><td><strong>超长窗口与列表式极速</strong>。支持 8K 甚至 32K token，利用列表式（Listwise）并行打分，大候选集重排吞吐极高。</td></tr>
+      <tr><td><b>Qwen-Reranker 系列</b></td><td><code>qwen3-reranker</code> (4B/8B)</td><td>开源（自部署）</td><td><strong>大模型底座推理</strong>。阿里通义开源，由大语言模型底座深度蒸馏，对深层逻辑推断、中文行话、长因果链的重排能力极强。</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn"><b>避坑指南 · 静默截断</b>不少经典开源重排器的输入上限只有 512 token（如早期 bge-reranker-large），而 Cohere / Jina 已扩展至 4096～8192 token。<strong>如果切块长度超过重排器上限，超出部分会被悄悄丢弃且不报错</strong>！如果关键答案恰好落在后半段，重排器会给出极低的分数。选型时务必检查：<code>块长度 + 问题长度 &le; 重排器最大输入窗口</code>。</div>
+
+  <div class="note"><b>实践顺序</b>先把混合检索的 recall@50 做上去（别漏），再加重排把 precision@5 做上去（排准）。反过来，没召回的东西，重排器再强也救不回来。重排会增加延迟，上线前量一下 p95。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-c4"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释为什么要分「召回 + 重排」两段，并说出交叉编码器与列表式重排的取舍</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>像招聘：先用简历粗筛从一万人里捞出五十人（便宜快速、宁多勿漏），再一个个面试排出前五（昂贵精细，但只面五十人）。交叉编码器是逐个单面，打分最准；列表式是把几十个人拉进一个群里同台比选，速度更快、还能识别重复与互补。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>召回阶段用可预计算的向量/倒排索引，复杂度与语料规模次线性；精排阶段对 top-N 做高算力消耗的重打分。Cross-Encoder 具备全注意力交互精度最高但 O(N) 较慢；Listwise 一次前向评估候选集合吞吐更高且具备全局上下文感知。</p></div>
+  </div></details>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">改写问题 —— 用户的问法往往不是最好的检索词</h2></div>
+  <p class="lede">用户一句话里塞了三件事，或者问得很口语。直接拿原句去检索，向量会被「平均」成一个模糊的方向。第三条路是先让模型把问题改写成更好检索的样子。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 5.1 · 多意图问题：直接检索 vs 拆开检索</b><span>用的是 A 页同一个玩具知识库</span></div>
+    <div class="lab-body">
+      <div class="q-in-row"><input class="txt-in" id="rwQ" value="我的账号登不进去，付款也失败了，服务器还宕机" readonly></div>
+      <div class="ctrl"><div class="pills" id="rwMode"></div></div>
+      <div class="rwcols" id="rwOut"></div>
+    </div>
+    <div class="lab-foot">直接检索时，三个意图在向量空间里被求平均，结果只剩一个主题（账单）；拆成子问题后各自检索，再用 RRF 合并，三个意图的文档都回来了。这是玩具模型的放大版，真实嵌入模型里「多意图被稀释」同样存在，只是程度不同。</div>
+  </div>
+
+  <table>
+    <thead><tr><th>技术</th><th>做法</th><th>适合</th><th>代价</th></tr></thead>
+    <tbody>
+      <tr><td><b>问题分解</b></td><td>把复合问题拆成几个子问题，各自检索再融合</td><td>多意图、多跳问题</td><td>多一次模型调用 + 多次检索</td></tr>
+      <tr><td><b>多查询（multi-query）</b></td><td>让模型把同一问题改写成 3～5 种问法，各自检索再 RRF</td><td>用户措辞和文档措辞差距大</td><td>检索次数 ×N，延迟上升</td></tr>
+      <tr><td><b>HyDE</b></td><td>先让模型写一个「假想答案」，用它去检索（答案和文档更像）</td><td>问题很短、很抽象</td><td>模型可能写错，污染检索方向</td></tr>
+      <tr><td><b>退一步（step-back）</b></td><td>先问一个更宽泛的问题检索背景知识，再回答具体问题</td><td>问题过于具体、需要原理背景</td><td>多一轮检索，上下文变长</td></tr>
+    </tbody>
+  </table>
+  <p>2026 年的做法是把它们折进「自适应」或 Agent 流程：先判断问题复杂度，简单问题直接检索，复杂问题才拆分或多轮检索。改写没有免费午餐：每多一次模型调用就多一份延迟和成本，先从 multi-query + RRF 这个最稳的组合起步。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-c5"><div class="ckpt-box">✓</div><div class="ckpt-text">能说清「多意图问题直接检索会怎样」，并说出至少两种改写技术和各自代价</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>一句话里有三个诉求，检索时只会朝「平均方向」找，通常只找回其中一件事。拆开问、各自找、再合并，三件事都能找到。代价是多问几次，更慢更贵。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>复合查询的嵌入是各意图的混合，近邻只覆盖主导主题。问题分解 / multi-query 增加查询多样性换取召回；HyDE 用假想答案缩小「问句 vs 陈述句」的分布差；step-back 引入背景。均以额外 LLM 调用与检索延迟为代价。</p></div>
+  </div></details>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">评估 —— 用数字回答「到底准不准」</h2></div>
+  <p class="lede">调了切块、换了模型、加了重排，直觉上感觉“好像变灵光了”。但「感觉」不能作为发布上线的依据，也没法在版本迭代中防止退步。RAG 系统的调优，本质上是“以评促改”——必须把质量拆解成客观可衡量的数字。</p>
+
+  <h3>排查铁律：先检索，后生成</h3>
+  <p>当用户抱怨“系统答得不对”时，很多团队的第一反应往往是“换个更大更贵的模型”。这是最常见的误区。RAG 系统有两个完全独立的失败环节：</p>
+  <ul>
+    <li><strong>检索死穴（巧妇难为无米之炊）：</strong>包含正确答案的切块压根没被检索出来，或者被挤在 top-k 之外。大模型连参考资料的影子都没看见，只能凭空猜测。</li>
+    <li><strong>生成死穴（视而不见与信口雌黄）：</strong>关键材料已经送进了 Prompt，但大模型产生了幻觉（无中生有）、漏看了限制条件，或者答非所问。</li>
+  </ul>
+  <p><strong>排查铁律：先查检索层，再查生成层。</strong>若正确的切块根本没进 top-k，生成模型再强也无力回天。因此，工业界将评估明确划分为两大部分：<strong>检索层硬指标</strong>（基于确定性标注，靠数学公式硬算）与<strong>生成层软指标</strong>（基于自然语言理解，由大模型当裁判打分）。</p>
+
+  <h3>检索层的四大硬指标：从及格线到黄金 C 位</h3>
+  <p>检索层评估的是「该找的材料有没有找齐、排得靠不靠前」。在建立好测试题库（标注了每个问题对应的标准参考切块）后，通过以下四个数学指标衡量：</p>
+
+  <div class="eval-grid">
+    <div class="eval-card">
+      <b>1. Recall@K（召回率 · 及格线）</b>
+      <i>核心问询：该找出的关键证据，找齐了吗？漏网之鱼多不多？</i>
+      <span class="math-pill">计算：前 K 条检索结果中的相关块数 / 库中总相关块数</span>
+      <p><strong>通俗理解：</strong>知识库里藏着 4 处关键凭证，前 5 条捞出了 3 处，Recall@5 = 75%。它决定了系统的<strong>能力天花板</strong>。粗排/召回阶段通常盯紧 <code>Recall@50</code>，宁可多带点杂质，绝不能把答案漏掉。</p>
+    </div>
+    <div class="eval-card">
+      <b>2. Precision@K（准确率 · 纯净度）</b>
+      <i>核心问询：端给大模型的材料里，真金占几成？废话多不多？</i>
+      <span class="math-pill">计算：前 K 条检索结果中的相关块数 / K</span>
+      <p><strong>通俗理解：</strong>抓出 5 条材料供模型阅读，其中只有 2 条有用，Precision@5 = 40%。虽然模型上下文越来越大，但杂质过多会引发“迷失在中间”（Lost in the Middle）并严重浪费 token。精排后通常盯紧 <code>Precision@5</code>。</p>
+    </div>
+    <div class="eval-card">
+      <b>3. MRR（平均倒数排名 · 首位惩罚）</b>
+      <i>核心问询：抓回来的第 1 个正确答案，排在第几名？</i>
+      <span class="math-pill">计算：1 / 首次命中相关文档的名次</span>
+      <p><strong>通俗理解：</strong>第 1 个真答案排第 1 名得 1 分，排第 2 名得 0.5 分，排第 10 名只有 0.1 分。大模型极度容易被前几条材料“先入为主”带偏。MRR 对单意图问答系统非常敏感，要求排头兵必须过硬。</p>
+    </div>
+    <div class="eval-card">
+      <b>4. nDCG@K（归一化折损累计增益 · 黄金 C 位度）</b>
+      <i>核心问询：最硬核的顶级参考资料，有没有稳坐最前排？</i>
+      <span class="math-pill">计算：按对数衰减惩罚名次折损，再除以理想最优排序得分</span>
+      <p><strong>通俗理解：</strong>经典搜索引擎与精排推荐的核心标杆。命中相关文档有奖励，但排在第 1 名的奖励远高于第 5 名。它衡量整个 top-K 排序质量是否兼具“命中率”与“高价值前置”。</p>
+    </div>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 6.1 · 检索指标计算器</b><span>点击下方条目，切换是否相关，观察指标实时变化</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>预设一份检索结果</label><div class="pills" id="evPre"></div></div>
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>语料里真正相关的块总数 R <b id="v-evR"></b></label><input type="range" id="evR" min="1" max="10" value="4"></div>
+        <div class="ctrl"><label>只看前 k 条 <b id="v-evK"></b></label><input type="range" id="evK" min="1" max="10" value="5"></div>
+      </div>
+      <div class="evalrows" id="evRows"></div>
+      <div class="kpi-grid" id="evKpi"></div>
+    </div>
+    <div class="lab-foot">Recall@k = 前 k 条里的相关数 / R；Precision@k = 前 k 条里的相关数 / k；MRR = 1 / 第一条相关的名次；nDCG@k 在此用二元相关：名次越靠前的相关项权重越大（1/log₂(名次+1)），除以理想排序的得分。</div>
+  </div>
+
+  <h3>生成层与端到端指标：LLM-as-a-Judge 与 RAG 三元组</h3>
+  <p>检索材料可以靠数学硬算，但最终大模型生成的自然语言回答千变万化，既无法做文本绝对匹配，也无法靠关键词统计。2026 年的主流解法是 <strong>LLM-as-a-Judge（大模型充当裁判）</strong>：使用能力更强、更中立的高阶大模型，输入严格的评分量表（Rubric）与思考链（CoT），对生成质量打分。</p>
+
+  <p>业界最经典的评估基石是 <strong>RAG 三元组（RAG Triad）</strong>，它紧扣用户提问（Query）、检索上下文（Context）、模型回答（Answer）三者之间的闭环关系：</p>
+
+  <div class="triad-grid">
+    <div class="triad-card">
+      <b>1. 真实忠实度（Faithfulness）</b>
+      <i>防范幻觉 · 回答 vs 上下文</i>
+      <p><strong>核心审问：</strong>“回答里的每一句话，能否在检索出来的材料里找到白纸黑字的证据？”</p>
+      <p style="margin-top:6px;font-size:12px;color:var(--ink-faint)">裁判模型把回答拆分成单句陈述，逐句去参考材料里“核对证据”。哪怕回答再通顺，只要资料里没写，就判定为捏造扣分。这是防止法律合规翻车的<strong>红线底线</strong>。</p>
+    </div>
+    <div class="triad-card">
+      <b>2. 答案切题度（Answer Relevance）</b>
+      <i>防范答非所问 · 回答 vs 用户提问</i>
+      <p><strong>核心审问：</strong>“回答有没有正面回应提问者的真实诉求？有没有避重就轻打太极？”</p>
+      <p style="margin-top:6px;font-size:12px;color:var(--ink-faint)">裁判模型根据生成的回答，反推“提问者可能问了什么”，比对反推问题与原问题的语义重合度。如果用户问“如何退款”，回答却滔滔不绝讲公司历史，即便完全忠于材料也是低分。</p>
+    </div>
+    <div class="triad-card">
+      <b>3. 上下文相关度（Context Relevance）</b>
+      <i>防范杂质过载 · 上下文 vs 用户提问</i>
+      <p><strong>核心审问：</strong>“检索器抓回来的这堆材料，对解答用户的问题到底有没有帮助？”</p>
+      <p style="margin-top:6px;font-size:12px;color:var(--ink-faint)">排查检索层是否存在严重的“题文无关”。如果检索器拉回来的切片全是噪音，即使模型硬着头皮答对，也是低分。它连接了检索层与生成层，检验上下文有效利用率。</p>
+    </div>
+  </div>
+
+  <p>除了三元组，2026 年企业落地普遍结合 <strong>G-Eval（基于思维链的业务自定义评分）</strong>：针对具体业务量身定制评分量表，例如：客服回答的<em>专业语气与同理心</em>、<em>免责声明是否齐备</em>、<em>敏感保密信息审查</em>、<em>面对无答案问题是否安全拒答</em>，由裁判模型输出 1～5 分及详细的采分理由。</p>
+
+  <h3>2026 业界评估版图：主流开源框架与商业 SaaS</h3>
+  <p>2026 年的工程界已经彻底告别了“手工在测试页面里随便搜两句”的作坊阶段，形成了从算法实验、本地 CI 门禁到线上生产监控的成熟工具链：</p>
+
+  <table>
+    <thead><tr><th>工具 / 平台</th><th>阵营与形态</th><th>核心杀手锏与特色</th><th>适用阶段与场景</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>DeepEval</b><br><span style="font-size:11px;color:var(--ink-faint)">Confident AI</span></td>
+        <td><span class="badge ui">开源 Python</span><br>单元测试流</td>
+        <td><strong>Pytest 原生集成</strong>。像写普通单元测试一样写 RAG 评测（<code>assert_test</code>）；内置 14+ 种指标（G-Eval、幻觉检测、RAG 三元组），原生支持 GitHub Actions 门禁。</td>
+        <td><strong>研发本地流水线与 CI/CD 门禁首选</strong>。最契合以代码库和 PR 为核心的工程团队。</td>
+      </tr>
+      <tr>
+        <td><b>Ragas</b><br><span style="font-size:11px;color:var(--ink-faint)">Exploding Gradients</span></td>
+        <td><span class="badge ui">开源 Python</span><br>算法与题库合成</td>
+        <td><strong>学术鼻祖与合成测试集</strong>。首创 RAG Triad 指标；核心杀手锏是 <strong>Testset Generator</strong>，可用 Multi-Agent 针对文档库全自动合成简单事实、多跳推理、边界例外测试题。</td>
+        <td><strong>算法调优与冷启动评测</strong>。项目初期缺乏人工标注集时，自动合成黄金题库。</td>
+      </tr>
+      <tr>
+        <td><b>Arize Phoenix / Langfuse</b></td>
+        <td><span class="badge ui">开源可私有化</span><br>OTel 链路追踪</td>
+        <td><strong>全链路 Trace 观测与影子评估</strong>。基于 OpenTelemetry 记录从 Embedding、向量库召回、Prompt 拼装到 LLM 回复的完整链路；支持离线评测与线上采样异步评估。</td>
+        <td><strong>生产环境全链路监控与合规场景</strong>。重视数据隐私、需要私有化自部署的企业首选。</td>
+      </tr>
+      <tr>
+        <td><b>LangSmith / Galileo</b></td>
+        <td><span class="badge mod">商业 SaaS</span><br>企业全生命周期</td>
+        <td><strong>开箱即用的大一统协同平台</strong>。支持产品/运营团队无代码协作标注、Prompt 线上 A/B 测试、在线安全护栏（Guardrails）与多维度监控看板。</td>
+        <td><strong>中大型企业与跨团队协作</strong>。产研运需要协同质检、预算充裕且希望快速交付投产。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>2026 选型法则：黄金组合拳</b>自建工程团队的主流实践是：<strong>研发与 CI/CD 门禁采用 DeepEval / Ragas，线上全链路可观测与排障采用 Langfuse / Phoenix</strong>。这套全开源组合既保障了代码迭代质量，又保留了数据私有化与零额外 SaaS 订阅成本。</div>
+
+  <h3>工业级 RAG 评估工程落地三步法</h3>
+  <p>许多团队之所以 RAG“越改越心虚、改了这个崩了那个”，根本原因是没有将评估固化为研发流水线。2026 年工业级团队的标准落地作业流分为三步：</p>
+
+  <div class="steps-grid">
+    <div class="step-card">
+      <span class="step-badge">阶段一 · 造题</span>
+      <b>构建黄金测试集（Golden Dataset）</b>
+      <p>拒绝凭感觉随机抽问。利用 Ragas / DeepEval 工具，从企业文档库中自动合成 100～200 道测试题，覆盖「直接事实题」、「跨文档多跳推理题」、「边界例外题」以及「库中无答案的诱导题」。由业务专家花费半天时间精审校对，固化为<strong>系统专属的黄金测试基准集</strong>。</p>
+    </div>
+    <div class="step-card">
+      <span class="step-badge">阶段二 · 守门</span>
+      <b>CI/CD 自动化回归门禁（Regression Gate）</b>
+      <p>将评测脚本接入 GitHub Actions / GitLab CI。任何人修改了切块大小、更换了 Embedding 维度、调节了重排阈值，提交 PR 时自动跑黄金集。若 <code>Recall@5</code> 环比下降超过 2%，或 <code>Faithfulness &lt; 90%</code>，<strong>CI 亮红灯直接拦截合并</strong>。杜绝暗中退步与负向优化。</p>
+    </div>
+    <div class="step-card">
+      <span class="step-badge">阶段三 · 盯盘</span>
+      <b>线上链路监控与错题自进化（Shadow Eval）</b>
+      <p>生产环境接入 Langfuse / Phoenix，对线上真实流量进行 5%～10% 的影子异步抽检，后台由轻量裁判模型打分。用户在线上的每一次“点踩、重问、放弃复制”，系统自动将该 Session 打标归档至<strong>“线上错题本”</strong>，作为下一期测试集补充，实现自进化闭环。</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-c6"><div class="ckpt-box">✓</div><div class="ckpt-text">能说清检索硬指标（Recall/MRR/nDCG）与大模型软指标（RAG 三元组）的分工，并说出工业级 RAG 的 CI/CD 评估流</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>检索指标看「材料找得全不全、排得前不前」（数学硬算）；生成指标看「有没有乱编幻觉、答得跑不跑题」（大模型当裁判）。出问题先查检索再查生成。上线前用黄金题库在 CI 跑自动化测试，不达标不准发布。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>检索层依赖黄金标注集硬算 Recall@k（覆盖率）与 nDCG@k（排序增益）；生成层用 LLM-as-a-Judge 评估 RAG Triad（Faithfulness 忠实度防幻觉、Answer Relevance 切题度、Context Precision 纯度）。工程化通过 Ragas/DeepEval 合成测试集并在 CI/CD 中设立回归门禁，结合 Langfuse 进行线上链路追踪与抽检。</p></div>
+  </div></details>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">终极测验 · 5 题验收</h2></div>
+  <p class="lede">答对 4 题以上，才算把「检索质量」这一页带走。</p>
+  <div id="quizMount"></div>
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="b-quiz"><div class="ckpt-box">✓</div><div class="ckpt-text">终极测验 5 题答对 ≥ 4（答完自动勾选）</div></div></div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">博客类来源标为「观点」，具体数字（榜单、上限、成本）会随版本变化，请以官方文档为准。</p>
+  <h3>原理出处</h3>
+  <ul class="plain source-list">
+    <li>Anthropic, <em>Introducing Contextual Retrieval</em>（2024，块前缀 + 混合检索 + 重排的失败率数据）· <a href="https://www.anthropic.com/news/contextual-retrieval" target="_blank" rel="noopener">anthropic.com/news/contextual-retrieval</a></li>
+    <li>Cormack, Clarke &amp; Büttcher, <em>Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods</em>（SIGIR 2009，RRF 与 k=60）</li>
+    <li>Khattab &amp; Zaharia, <em>ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT</em>（2020）· <a href="https://arxiv.org/abs/2004.12832" target="_blank" rel="noopener">arxiv.org/abs/2004.12832</a></li>
+    <li>Es et al., <em>RAGAS: Automated Evaluation of Retrieval Augmented Generation</em>（2023）· <a href="https://arxiv.org/abs/2309.15217" target="_blank" rel="noopener">arxiv.org/abs/2309.15217</a></li>
+  </ul>
+  <h3>2026 年的资料</h3>
+  <ul class="plain source-list">
+    <li>RAG Best Practices 2026: Chunking, Reranking, Hybrid Search（观点，含重排器截断上限）· <a href="https://www.callmissed.com/en/blog/rag-best-practices-2026" target="_blank" rel="noopener">callmissed.com</a></li>
+    <li>8 Embedding Models Compared for Production RAG [2026 Benchmark]（观点）· <a href="https://tensoria.fr/en/blog/embedding-models-2026-guide" target="_blank" rel="noopener">tensoria.fr</a></li>
+    <li>Best Open-Source Embedding and Reranker Models 2026（观点，Qwen3-Embedding / BGE-M3）· <a href="https://builderai.tools/blog/best-open-source-embedding-models-2026" target="_blank" rel="noopener">builderai.tools</a></li>
+    <li>The Embedder's Dilemma: LLMs Are Better, but at What Cost?（2026，论文）· <a href="https://arxiv.org/pdf/2608.12875" target="_blank" rel="noopener">arxiv.org/pdf/2608.12875</a></li>
+    <li>Reranking for RAG Explained: Cross-Encoders &amp; More (2026) · <a href="https://dataaspirant.com/blog/reranking/" target="_blank" rel="noopener">dataaspirant.com</a></li>
+    <li>Hybrid Search with Reranking · Qdrant 文档 · <a href="https://qdrant.tech/documentation/advanced-tutorials/reranking-hybrid-search/" target="_blank" rel="noopener">qdrant.tech</a></li>
+    <li>RAG Evaluation: Metrics, Tools, and the Context Gap (2026)（第五维度：上下文可信度，观点）· <a href="https://atlan.com/know/how-to-evaluate-rag-systems-explained/" target="_blank" rel="noopener">atlan.com</a></li>
+    <li>DeepEval: The Open-Source LLM Evaluation Framework（Pytest 集成与生产 CI/CD 门禁）· <a href="https://github.com/confident-ai/deepeval" target="_blank" rel="noopener">confident-ai/deepeval</a></li>
+  </ul>
+  <p>本页 BM25 为标准公式（k1=1.2，b=0.75）；实验台里的「向量」为教学玩具模型，MaxSim 矩阵为示意值。</p>
+
+  <a class="next-card" href="c.html"><div><b>下一页 · C 向量库内核</b><div class="nc-sub">暴力搜索的账单 · IVF 与 HNSW 怎么找得又快又准 · 量化把 4KB 压到 136B · 过滤与新鲜度</div></div><span class="nc-arrow">→</span></a>
+  <footer class="colophon">资料核对日期：2026-10-05 · 模型、价格与榜单会变化，请以官方页面为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="lib.js"></script>
+<script src="common.js"></script>
+<script>
+KB.initPage({ key: 'b', names: ['切块', '嵌入模型', '混合检索与 RRF', '重排', '改写问题', '评估', '终极测验', '参考资料'] });
+const $ = id => document.getElementById(id), esc = KB.esc;
+const mkPills = (el, items, onPick, start = 0) => { el.innerHTML = ''; items.forEach((t, i) => { const b = document.createElement('button'); b.className = 'pill' + (i === start ? ' active' : ''); b.textContent = t; b.onclick = () => { [...el.children].forEach(c => c.classList.remove('active')); b.classList.add('active'); onPick(i); }; el.appendChild(b); }); };
+
+/* ===== LAB 1.1 切块实验台 ===== */
+(function () {
+  const TITLE = '订阅与退款政策';
+  const DOC = `# 订阅与退款政策
+
+## 1. 订阅类型
+个人版按月计费，可随时取消，取消后当期权益保留至到期。企业版按年计费，包含最多 5 个席位，更多席位需另购。
+
+## 2. 退款条件
+个人版订阅不支持退款，取消后不再续费即可。企业版订阅在购买后 30 天内可申请全额退款。但是已开通超过 5 个席位的企业账号不适用上述规则，需联系客户经理走专项流程，处理周期为 10 个工作日。
+
+## 3. 发票
+发票在账单页下载，企业版支持开具增值税专用发票，申请需提供税号。
+
+## 4. 争议处理
+如对扣费有异议，请在 60 天内提交工单并附上账单截图，我们将在 3 个工作日内回复。`;
+  const ANS = '企业版订阅在购买后 30 天内可申请全额退款。但是已开通超过 5 个席位的企业账号不适用上述规则，需联系客户经理走专项流程，处理周期为 10 个工作日。';
+  const A0 = DOC.indexOf(ANS), A1 = A0 + ANS.length, Q = '企业版订阅退款有什么条件？';
+  const heads = [...DOC.matchAll(/^## .+$/gm)].map(m => ({ at: m.index, t: m[0].slice(3) }));
+  let strat = 0, pre = false;
+  const SEPS = ['\n\n', '\n', '。', '，'];
+  function pieces(s, e, seps, size) {
+    if (e - s <= size) return [[s, e]];
+    const seg = DOC.slice(s, e), sep = seps.find(x => seg.includes(x));
+    if (!sep) { const o = []; for (let i = s; i < e; i += size) o.push([i, Math.min(e, i + size)]); return o; }
+    const out = []; let from = s, p = 0, idx;
+    while ((idx = seg.indexOf(sep, p)) >= 0) { const to = s + idx + sep.length; out.push([from, to]); from = to; p = idx + sep.length; }
+    if (from < e) out.push([from, e]);
+    const rest = seps.slice(seps.indexOf(sep) + 1);
+    return out.flatMap(([a, b]) => b - a > size ? pieces(a, b, rest, size) : [[a, b]]);
+  }
+  function chunkRanges(size) {
+    if (strat === 0) { const o = []; for (let i = 0; i < DOC.length; i += size) o.push([i, Math.min(DOC.length, i + size)]); return o; }
+    const ps = pieces(0, DOC.length, SEPS, size), out = []; let cur = null;
+    ps.forEach(([a, b]) => { if (cur && b - cur[0] <= size) cur[1] = b; else { if (cur) out.push(cur); cur = [a, b]; } });
+    if (cur) out.push(cur); return out;
+  }
+  function bm25(texts, query) {
+    const tk = texts.map(KB.tokenize), N = texts.length, avg = tk.reduce((n, t) => n + t.length, 0) / N, df = {};
+    tk.forEach(t => new Set(t).forEach(w => df[w] = (df[w] || 0) + 1));
+    const qt = [...new Set(KB.tokenize(query))];
+    return tk.map((t, i) => { const tf = {}; t.forEach(w => tf[w] = (tf[w] || 0) + 1); let s = 0; qt.forEach(w => { const f = tf[w]; if (!f) return; s += Math.log(1 + (N - df[w] + .5) / (df[w] + .5)) * f * 2.2 / (f + 1.2 * (.25 + .75 * t.length / avg)); }); return s; });
+  }
+  const headOf = pos => { let h = null; heads.forEach(x => { if (x.at <= pos) h = x; }); return h ? `${TITLE} > ${h.t}` : TITLE; };
+  function draw() {
+    const size = +$('chS').value, ov = +$('chO').value; $('v-chS').textContent = size; $('v-chO').textContent = ov;
+    const base = chunkRanges(size), cks = base.map(([a, b], i) => ({ a: i ? Math.max(0, a - ov) : a, b, a0: a, i }));
+    const texts = cks.map(c => (pre ? headOf(c.a0) + '\n' : '') + DOC.slice(c.a, c.b)), sc = bm25(texts, Q);
+    const order = sc.map((s, i) => [s, i]).sort((x, y) => y[0] - x[0]).filter(x => x[0] > 0).slice(0, 2).map(x => x[1]), got = new Set(order);
+    let cov = 0; for (let p = A0; p < A1; p++) if (order.some(i => p >= cks[i].a && p < cks[i].b)) cov++;
+    const whole = cks.some(c => c.a <= A0 && c.b >= A1), top1Whole = order.length && cks[order[0]].a <= A0 && cks[order[0]].b >= A1, avg = Math.round(cks.reduce((n, c) => n + c.b - c.a, 0) / cks.length);
+    const L = DOC.length, COLS = ['#2a7f72', '#b5893a'];
+    $('chStrip').innerHTML = `<div class="ans" style="left:${A0 / L * 100}%;width:${(A1 - A0) / L * 100}%"></div>` + cks.map((c, i) => `<div class="ck" title="块 ${i + 1}" style="left:${c.a / L * 100}%;width:${(c.b - c.a) / L * 100}%;top:${22 + (i % 3) * 20}px;background:${got.has(i) ? '#26221b' : COLS[i % 2]}">${c.b - c.a > L * .05 ? i + 1 : ''}</div>`).join('');
+    $('chKpi').innerHTML = `<div class="kpi"><span>块数 · 平均长度</span><b>${cks.length} · ${avg}</b></div><div class="kpi ${whole ? 'ok' : 'bad'}"><span>完整答案在同一块</span><b>${whole ? '是' : '否（被切开）'}</b></div><div class="kpi ${top1Whole ? 'ok' : 'warn'}"><span>top-1 含完整答案</span><b>${top1Whole ? '是' : '否'}</b></div><div class="kpi ${cov / (A1 - A0) > .99 ? 'ok' : cov / (A1 - A0) > .5 ? 'warn' : 'bad'}"><span>答案覆盖率（top-2）</span><b>${Math.round(cov / (A1 - A0) * 100)}%</b></div>`;
+    $('chList').innerHTML = cks.map((c, i) => {
+      let html = ''; for (let p = c.a; p < c.b; p++) { const ch = esc(DOC[p]).replace('\n', '↵'), inA = p >= A0 && p < A1, inO = p < c.a0; html += inA ? `<mark>${ch}</mark>` : inO ? `<span class="ov">${ch}</span>` : ch; }
+      return `<div class="cc ${got.has(i) ? 'ret' : ''}"><div class="h"><span>块 ${i + 1}</span><span>${c.b - c.a} 字</span>${got.has(i) ? `<span class="tagr">检索 top-${order.indexOf(i) + 1}</span>` : ''}<span>BM25 ${sc[i].toFixed(2)}</span></div>${pre ? `<div class="pre">${esc(headOf(c.a0))}</div>` : ''}${html}</div>`;
+    }).join('');
+  }
+  mkPills($('chStrat'), ['固定长度', '递归（结构感知）'], i => { strat = i; draw(); });
+  $('chPre').onclick = () => { pre = !pre; $('chPre').classList.toggle('active', pre); draw(); };
+  $('chS').oninput = $('chO').oninput = draw; draw();
+})();
+
+/* ===== LAB 2.1 维度存储账 ===== */
+(function () {
+  const DIMS = [64, 128, 256, 512, 768, 1024, 1536, 3072]; let di = 5;
+  const draw = () => {
+    const n = Math.round(1e5 * Math.pow(1e4, +$('mN').value / 100)), d = DIMS[di], b = n * d * 4;
+    $('v-mN').textContent = KB.fmtN(n) + ' 条';
+    $('mKpi').innerHTML = `<div class="kpi"><span>每条向量</span><b>${KB.fmtBytes(d * 4)}</b></div><div class="kpi rag"><span>全部向量</span><b>${KB.fmtBytes(b)}</b></div><div class="kpi"><span>相对 3072 维</span><b>${(d / 3072 * 100).toFixed(0)}%</b></div>`;
+    $('mBar').innerHTML = DIMS.map(x => `<div class="ck" style="position:relative;display:inline-block;height:100%;width:${x / 3072 * 100}%;background:${x === d ? '#c2491d' : '#d8cfbd'};border-radius:0;font:700 10px/44px var(--mono);color:${x === d ? '#fff' : '#8a8172'}">${x}</div>`).join('');
+    $('mBar').style.whiteSpace = 'nowrap';
+  };
+  mkPills($('mDim'), DIMS.map(x => x + ' 维'), i => { di = i; draw(); }, di); $('mN').oninput = draw; draw();
+})();
+
+/* ===== LAB 3.1 RRF 调参台 ===== */
+(function () {
+  let mode = 0;
+  const draw = () => {
+    const q = $('fuQ').value, k = +$('fuK').value, w = +$('fuW').value / 10, a = +$('fuA').value / 100;
+    $('v-fuK').textContent = k; $('v-fuW').textContent = w.toFixed(1) + '×'; $('v-fuA').textContent = Math.round(a * 100) + '%';
+    const lx = KB.bm25(q).rows.slice(0, 5), vc = KB.vec(q).rows, rr = KB.rrf([lx, vc], k, [w, 1]);
+    const lmax = Math.max(...lx.map(r => r.score), 0), lmin = Math.min(...lx.map(r => r.score), 1e9), vmax = Math.max(...vc.map(r => r.score), 0), vmin = Math.min(...vc.map(r => r.score), 1e9);
+    const nm = (v, lo, hi) => hi === lo ? 1 : (v - lo) / (hi - lo);
+    const ids = [...new Set([...lx, ...vc].map(r => r.id))], txt = id => KB.docs.find(d => d.id === id).text;
+    const rows = ids.map(id => { const li = lx.findIndex(r => r.id === id), vi = vc.findIndex(r => r.id === id); return { id, li, vi, rrf: (rr.find(r => r.id === id) || { score: 0 }).score, ws: a * (li >= 0 ? nm(lx[li].score, lmin, lmax) : 0) + (1 - a) * (vi >= 0 ? nm(vc[vi].score, vmin, vmax) : 0), lc: li >= 0 ? w / (k + li + 1) : 0, vc: vi >= 0 ? 1 / (k + vi + 1) : 0 }; });
+    rows.sort((x, y) => y.rrf - x.rrf); const wsOrder = [...rows].sort((x, y) => y.ws - x.ws).map(r => r.id);
+    if (!rows.length) { $('fuTable').innerHTML = '<div class="none">两路都没有结果。</div>'; return; }
+    $('fuTable').innerHTML = `<table class="fuse"><thead><tr><th>#</th><th>文档</th><th>BM25 名次</th><th>向量名次</th><th>RRF 得分</th><th>加权分数</th><th>加权名次</th></tr></thead><tbody>` + rows.map((r, i) => { const wr = wsOrder.indexOf(r.id); return `<tr class="${wr !== i ? 'move' : ''}"><td class="num">${i + 1}</td><td><span class="d">${r.id}</span> ${esc(txt(r.id).slice(0, 22))}…</td><td class="num">${r.li >= 0 ? r.li + 1 : '—'}</td><td class="num">${r.vi >= 0 ? r.vi + 1 : '—'}</td><td class="num"><b>${r.rrf.toFixed(4)}</b><br><span style="color:var(--ink-faint)">${r.lc.toFixed(4)} + ${r.vc.toFixed(4)}</span></td><td class="num">${r.ws.toFixed(2)}</td><td class="num">${wr + 1} ${wr < i ? '<span class="badge-up">▲</span>' : wr > i ? '<span class="badge-dn">▼</span>' : ''}</td></tr>`; }).join('') + `</tbody></table>`;
+  };
+  $('fuQ').value = KB.PRESETS[4].q;
+  mkPills($('fuPills'), KB.PRESETS.map(p => p.q), i => { $('fuQ').value = KB.PRESETS[i].q; draw(); }, 4);
+  ['fuQ', 'fuK', 'fuW', 'fuA'].forEach(id => $(id).oninput = draw); draw();
+})();
+
+
+/* ===== LAB 5.1 多意图改写 ===== */
+(function () {
+  const Q = $('rwQ').value, SUB = ['账号登不进去', '付款失败', '服务器宕机'];
+  const col = (title, cls, rows, extra) => `<div class="trio-col ${cls}"><h4><span>${title}</span><span>${extra}</span></h4>` + (rows.length ? rows.slice(0, 5).map((r, i) => `<div class="hit ${i === 0 ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="t"><span class="id">${r.id}</span>${esc(r.text.slice(0, 26))}…</span></div>`).join('') : '<div class="none">无命中</div>') + '</div>';
+  const draw = m => {
+    if (m === 0) { const v = KB.vec(Q).rows, l = KB.bm25(Q).rows.slice(0, 5); $('rwOut').innerHTML = col('向量（原句）', 'vec', v, v.length + ' 命中') + col('BM25（原句）', 'lex', l, l.length + ' 命中'); }
+    else { const lists = SUB.map(s => { const v = KB.vec(s).rows, l = KB.bm25(s).rows; return KB.rrf([l.slice(0, 5), v], 60); }), merged = KB.rrf(lists.map(l => l.slice(0, 3)), 60); $('rwOut').innerHTML = col('子问题 × 3 → 各自混合检索', 'lex', lists.flatMap((l, i) => l.slice(0, 1).map(r => ({ ...r, text: '「' + SUB[i] + '」→ ' + r.text }))), '3 路') + col('再 RRF 合并', 'hyb', merged, merged.length + ' 条'); }
+  };
+  mkPills($('rwMode'), ['直接检索原句', '拆成 3 个子问题再融合'], draw); draw(0);
+})();
+
+/* ===== LAB 6.1 评估 ===== */
+(function () {
+  const ROWS = ['退款条件·企业版（第 2 节）', '订阅类型·个人版', '发票下载说明', '企业版席位例外规则', '争议处理时限', '续费失败排查', '企业版专项退款流程', '价格与计费周期', '账号锁定说明', '增值税发票申请'];
+  const PRE = [{ n: '混合检索 + 重排', rel: [0, 3, 6] }, { n: '只有向量检索', rel: [2, 5, 7] }, { n: '只有 BM25', rel: [0, 4] }];
+  let rel = new Set(PRE[0].rel);
+  const draw = () => {
+    const R = +$('evR').value, K = +$('evK').value; $('v-evR').textContent = R; $('v-evK').textContent = K;
+    $('evRows').innerHTML = ROWS.map((t, i) => `<div class="er ${rel.has(i) ? 'rel' : ''} ${i >= K ? 'cut' : ''}" data-i="${i}"><span class="rk">${i + 1}</span><span class="ck">✓</span><span>${t}</span></div>`).join('');
+    document.querySelectorAll('.er').forEach(e => e.onclick = () => { const i = +e.dataset.i; rel.has(i) ? rel.delete(i) : rel.add(i); draw(); });
+    const hits = [...rel].filter(i => i < K).length, first = Math.min(...[...rel], 99), dcg = [...rel].filter(i => i < K).reduce((s, i) => s + 1 / Math.log2(i + 2), 0);
+    let idcg = 0; for (let i = 0; i < Math.min(R, K); i++) idcg += 1 / Math.log2(i + 2);
+    const relTotal = rel.size; const warn = relTotal > R;
+    $('evKpi').innerHTML = `<div class="kpi rag"><span>Recall@${K}</span><b>${(Math.min(1, hits / R) * 100).toFixed(0)}%</b></div><div class="kpi"><span>Precision@${K}</span><b>${(hits / K * 100).toFixed(0)}%</b></div><div class="kpi"><span>MRR</span><b>${first < 99 ? (1 / (first + 1)).toFixed(2) : '0'}</b></div><div class="kpi"><span>nDCG@${K}</span><b>${idcg ? Math.min(1, dcg / idcg).toFixed(2) : '0'}</b></div>` + (warn ? `<div class="kpi bad"><span>提示</span><b style="font-size:12px">标记的相关数 &gt; R，请调大 R</b></div>` : '');
+  };
+  mkPills($('evPre'), PRE.map(p => p.n), i => { rel = new Set(PRE[i].rel); draw(); }); $('evR').oninput = $('evK').oninput = draw; draw();
+})();
+
+/* ===== 测验 ===== */
+KB.initQuiz({ title: '检索质量', pass: 4, doneKey: 'b-quiz', questions: [
+  { q: '块切得太大，最主要的副作用是？', opts: ['向量维度变高', '一个向量要代表好几件事，检索变模糊且占用更多上下文', '数据库无法写入', 'BM25 完全失效'], a: 1, exp: '大块把多个主题的意思「求平均」，查询的相似度被稀释；同时每次送给模型的 token 也变多。' },
+  { q: '给每个块前置「标题路径 / 背景说明」再索引，目的是？', opts: ['让块变短', '让块脱离原文后仍能说清自己是谁，同时改善关键词与向量两路检索', '减少嵌入模型的调用', '替代重排'], a: 1, exp: '块脱离原文后会丢失文档、章节信息。前缀把这些信息补回来，BM25 与向量都受益；Contextual Retrieval 是用模型生成这段背景的版本。' },
+  { q: 'RRF 为什么不需要对 BM25 分数和余弦分数做校准？', opts: ['因为两者量纲恰好相同', '它只使用各路的名次，不使用分数本身', '它会先训练一个模型', '它忽略 BM25'], a: 1, exp: 'RRF 的得分是 1/(k+名次) 求和，只依赖名次，因此对不同检索器的分数分布不敏感。' },
+  { q: '下面哪个排查顺序最合理？答案不对时……', opts: ['先换更大的生成模型', '先看正确的块有没有进入 top-k，再看模型是否忠于资料', '先把 k 调到 100', '先重建向量库'], a: 1, exp: '检索层没把该有的块找回来，生成再强也无力；先判断是检索的锅还是生成的锅，再对症下药。' },
+  { q: '一个重排器的输入上限是 512 token，你的块有 900 token，会发生什么？', opts: ['直接报错', '自动分段打分后取平均', '超出部分被静默截掉，不参与打分', '自动换成更大的模型'], a: 2, exp: '多数交叉编码器会静默截断。后半段里的答案对重排器不可见，却没有任何报错，这是常见的隐蔽坑。' },
+] });
+</script>
+</body>
+</html>

@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>RAG 与向量数据库 · E 更新治理与问题手册</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<!-- seo:start -->
+<meta name="description" content="RAG 与向量数据库 · E 更新治理与问题手册｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<link rel="canonical" href="https://dev.limbo101.win/rag-vector-db/e">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="know-as-ui">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="RAG 与向量数据库 · E 更新治理与问题手册">
+<meta property="og:description" content="RAG 与向量数据库 · E 更新治理与问题手册｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<meta property="og:url" content="https://dev.limbo101.win/rag-vector-db/e">
+<meta property="og:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="RAG 与向量数据库 · E 更新治理与问题手册">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta name="twitter:creator" content="@limbopeng">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"RAG 与向量数据库 · E 更新治理与问题手册","description":"RAG 与向量数据库 · E 更新治理与问题手册｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。","url":"https://dev.limbo101.win/rag-vector-db/e","inLanguage":"zh-CN","datePublished":"2026-10-05","dateModified":"2026-10-05","keywords":"rag 检索增强生成 向量数据库 vector database embedding 嵌入 bm25 hybrid 混合检索 rrf rerank 重排 chunking 切块 hnsw ivf 量化 rabitq pgvector milvus qdrant 选型 graphrag agentic 评估 recall 增量更新 incremental upsert 对账 删除 别名 alias 蓝绿 重建 治理 元数据 faq 常见问题 排障","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc"}</script>
+<!-- seo:end -->
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属 ===== */
+.flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:10px 0 18px;max-width:var(--content-rail)}
+.fl{border:1.5px solid var(--ink);border-radius:8px;background:#fffdf8;padding:7px 11px;font-size:12.5px;line-height:1.5;position:relative;margin-left:12px}
+.fl:first-child{margin-left:0}
+.fl small{display:block;font:10px var(--mono);color:var(--ink-faint)}
+.fl.hot{background:var(--rag-soft);border-color:var(--rag)} .fl.warn{background:var(--hyb-soft);border-color:var(--hyb)}
+.fl+.fl::before{content:"→";position:absolute;left:-12px;top:50%;transform:translateY(-50%);font:700 12px var(--mono);color:var(--ink-faint)}
+
+.four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:8px 0 18px}
+.four .c{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:12px 14px}
+.four b{font:800 15px var(--serif);display:block;margin-bottom:3px} .four p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:0}
+@media(max-width:760px){.four{grid-template-columns:1fr}}
+
+/* 块卡片（存储内容 / diff） */
+.store{display:flex;flex-wrap:wrap;gap:6px;min-height:34px}
+.chip{font:11.5px/1.5 var(--mono);border:1px solid var(--line);border-radius:6px;background:var(--paper);padding:3px 8px}
+.chip b{font-weight:800}
+.chip.v1{border-color:#c9b48a;background:#f6eedb} .chip.v2{border-color:var(--rag);background:var(--rag-soft)}
+.chip.off{opacity:.45;text-decoration:line-through} .chip.ghost{border-style:dashed}
+.ans{margin-top:12px;border-left:4px solid var(--ink);background:var(--paper);border-radius:0 8px 8px 0;padding:10px 14px;font-size:14px;line-height:1.8}
+.ans.ok{border-color:var(--ok)} .ans.bad{border-color:var(--bad)} .ans.warn{border-color:var(--warn)}
+.ans b{display:block;font:800 13px var(--mono);margin-bottom:2px}
+.ans.ok b{color:var(--ok)} .ans.bad b{color:var(--bad)} .ans.warn b{color:var(--warn)}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media(max-width:760px){.row2{grid-template-columns:1fr}}
+.boxlabel{font:700 11px var(--mono);letter-spacing:.06em;color:var(--ink-faint);margin:0 0 6px}
+
+.diff{display:grid;gap:5px}
+.dc{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:start;border:1px solid var(--line);border-radius:7px;background:var(--paper);padding:6px 8px;font-size:12px;line-height:1.55}
+.dc .h{font:700 10.5px var(--mono);color:var(--ink-faint)}
+.dc .t{overflow-wrap:anywhere}
+.dc.reuse{opacity:.6}
+.dc.add{border-color:var(--rag);background:var(--rag-soft)} .dc.add .h{color:var(--rag-deep)}
+.dc.del{border-color:#d8a9a9;background:#f6dede} .dc.del .t{text-decoration:line-through;color:var(--ink-soft)} .dc.del .h{color:var(--bad)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font:11px var(--mono);color:var(--ink-soft);margin:6px 0 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid var(--line)}
+
+/* 时间线 */
+.tl{display:grid;gap:6px}
+.tl-row{display:grid;grid-template-columns:38px 1fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:7px 10px;opacity:.35;transition:.2s}
+.tl-row.past{opacity:.75} .tl-row.now{opacity:1;border-color:var(--ink);box-shadow:2px 2px 0 var(--ink)}
+.tl-row .tt{font:800 12px var(--mono);color:var(--accent)}
+.tl-row .op{font:12px var(--mono);color:var(--ink-soft);margin-bottom:4px}
+
+/* 蓝绿切换 */
+.bg svg{width:100%;height:auto;display:block}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.steps button{border:1px solid var(--line);background:#fffdf8;border-radius:7px;padding:6px 10px;font:600 11.5px var(--mono);cursor:pointer;color:var(--ink-soft)}
+.steps button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.steps button.done{border-color:var(--rag);color:var(--rag-deep)}
+
+/* 体检 */
+.hc{width:100%;border-collapse:collapse;font:11.5px var(--mono)}
+.hc th,.hc td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;white-space:nowrap}
+.hc th{color:var(--ink-faint);font-weight:700}
+.hc tr.flag td{background:#f6dede}
+.hc td.why{white-space:normal;color:var(--bad);font-weight:700;min-width:120px}
+.hc-wrap{overflow-x:auto}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 16px;margin-bottom:12px}
+.rules label{display:flex;gap:7px;align-items:flex-start;font-size:13px;line-height:1.5;cursor:pointer}
+.rules input{margin-top:3px;accent-color:var(--rag)}
+
+/* FAQ */
+.faq-tools{display:grid;gap:10px;margin-bottom:12px}
+.faq-tools input[type=search]{width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 12px;font:14px var(--sans);background:var(--paper)}
+.faq-tools input[type=search]:focus{outline:none;border-color:var(--rag)}
+.faq-list{display:grid;gap:8px}
+details.faq{border:1.5px solid var(--line);border-radius:9px;background:var(--paper);overflow:hidden}
+details.faq[open]{border-color:var(--ink)}
+details.faq summary{cursor:pointer;list-style:none;display:flex;gap:10px;align-items:baseline;padding:10px 14px}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary .lv{flex:none;font:700 10px var(--mono);border-radius:99px;padding:2px 8px;background:var(--ink);color:var(--paper)}
+details.faq summary .q{font:700 14.5px var(--sans)}
+details.faq .fb{padding:0 14px 12px;font-size:13.5px;line-height:1.8}
+details.faq .fb p{margin:4px 0;max-width:none}
+details.faq .fb .k{font:700 11px var(--mono);color:var(--ink-faint);margin-right:6px}
+details.faq .fb a{color:var(--accent-deep)}
+.faq-count{font:11px var(--mono);color:var(--ink-faint)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">RAG <em>与向量数据库</em> · E 更新治理与问题手册</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="五页导航">
+  <span class="sn-label">RAG 与向量库 · 五部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>直觉</a>
+  <a class="sn-item" href="b.html"><b>B</b>检索质量</a>
+  <a class="sn-item" href="c.html"><b>C</b>向量库内核</a>
+  <a class="sn-item" href="d.html"><b>D</b>选型与实战</a>
+  <a class="sn-item is-current" href="e.html"><b>E</b>更新与排障</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一家公司的客服知识库</span>
+  <span class="cs-act done">序幕 · 十篇文档的原型</span>
+  <span class="cs-act done">第二幕 · 答得不准，调质量</span>
+  <span class="cs-act done">第三幕 · 一千万篇，扛规模</span>
+  <span class="cs-act done">第四幕 · 上线，选型与实战</span>
+  <span class="cs-act current">第五幕 · 生产运维：增量更新与数据治理</span>
+</div>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">知识库动态维护 —— 规避新旧版本冲突与版本幻觉</h2></div>
+  <p class="lede">知识库上线只是数据生命周期的起点。以典型的业务规则变更为例：当退款期限从 7 天调整为 14 天，若更新流水线仅做简单的追加写入，问答系统极易出现同一问题在「7 天」与「14 天」之间随机摇摆、答案互相矛盾的现象。</p>
+
+  <p>这并非大模型的推理缺陷，而是底层数据同步机制的缺失。原型阶段通常只关注单向写入（解析、分块、嵌入、入库）；而进入生产环境后，源头数据持续变更，系统必须完整处理四类变更形态：</p>
+
+  <div class="four">
+    <div class="c"><b>① 新增（Insert）</b><p>新文档录入。必须保证写入幂等性，避免重试或定时拉取导致同一文件重复灌库并生成冗余副本。</p></div>
+    <div class="c"><b>② 修改（Update）</b><p>历史切块必须下线，新切块同步写入。若仅追加写入，新旧版本将同时驻留并在检索中互斥冲突。</p></div>
+    <div class="c"><b>③ 删除（Delete）</b><p>源头文档废弃下线后，关联切块需及时清理，防止失效规则继续被大模型引用。</p></div>
+    <div class="c"><b>④ 架构迁移（Reindex）</b><p>更换嵌入模型、调整分块策略或更换数据库。历史向量全部失效，需执行零停机整库重建。</p></div>
+  </div>
+
+  <p>C 页第 6 章剖析了向量数据库内核如何处理物理写入与垃圾回收（增长段、墓碑与 Compaction）；本页则聚焦应用层同步流水线的设计：如何保证「向量库中的索引视图与业务源头实时保持严格一致」。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 1.1 · 版本冲突复现</b><span>同一次文档修改，两种写入策略的表现</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>入库写入策略</label><div class="pills" id="gMode"></div></div>
+      <div class="ctrl"><label>操作流程</label><div class="pills" id="gStep"></div></div>
+      <div class="row2">
+        <div><p class="boxlabel">向量库内关于「退款」的切块集合</p><div class="store" id="gStore"></div></div>
+        <div><p class="boxlabel">用户提问：「企业版退款期限是几天？」检索 top-3</p><div class="store" id="gHits"></div></div>
+      </div>
+      <div id="gAns"></div>
+    </div>
+    <div class="lab-foot">追加写：仅执行 insert，历史块仍保留在库中；覆盖写：根据 doc_id 识别历史块并在写入新块后予以清除。由于新旧切块语义高度相似（仅相差一个数字），向量距离无法区分时效先后，导致检索召回的排序随机抖动。</div>
+  </div>
+
+  <div class="note warn"><b>向量度量的时效性盲区</b>：「退款期限 7 天」与「退款期限 14 天」在嵌入向量空间中几何距离极其接近。余弦相似度仅能度量语义主题的重合度，无法感知业务时效的前后。数据的新鲜度必须由结构化元数据与严谨的同步逻辑保障，不可交由向量相似度自行决断。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-c1"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出知识库变更的四种形态，并解释「追加写」为什么会产生互相矛盾的答案</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>新增、修改、删除、底座迁移。追加写就像在公告栏贴新通知却没撕掉旧通知，两张并排贴着，读者随机看哪张都会以为是真的，导致回答前后矛盾。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>修改操作本质上是由「删除旧切块 + 写入新切块」构成的复合操作。新旧切块语义高度相似，ANN 检索会同时命中并作为上下文送入大模型，产生事实冲突。生产环境必须以 doc_id 为单位执行版本替换，并在切块元数据中维护 version 与 updated_at 戳记。</p></div>
+  </div></details>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">增量更新流水线 —— 块级哈希对比与精确重嵌入</h2></div>
+  <p class="lede">定时清空整库全量重建在千级小规模数据下尚可支撑；但当语料体量增长至数百万乃至千万级切块时，全量重新嵌入带来的算力账单、长达数小时的构建耗时与可用性抖动均无法承受。增量同步流水线的核心目标，是在源文档变更时精准识别差异，<strong>仅针对实际发生内容变动的切块执行向量重算</strong>。</p>
+
+  <h3>增量同步的标准处理流程</h3>
+  <div class="flow">
+    <div class="fl">变更捕获<small>识别变动文档</small></div>
+    <div class="fl">解析与切块<small>仅处理变动文档</small></div>
+    <div class="fl hot">块级 Diff<small>基于内容哈希比对</small></div>
+    <div class="fl hot">局部重嵌入<small>仅计算新增切块</small></div>
+    <div class="fl">先写新、后删旧<small>基于确定性唯一 ID</small></div>
+    <div class="fl warn">定期对账<small>兜底补偿遗漏删除</small></div>
+  </div>
+
+  <h3>第一步：数据源变更捕获机制（CDC / 事件 / 水位线）</h3>
+  <table class="cmp">
+    <thead><tr><th>捕获方式</th><th>技术原理</th><th>核心优势</th><th>工程挑战与局限</th></tr></thead>
+    <tbody>
+      <tr><td><b>全量扫描 + 哈希对比</b></td><td>定时计算全量源文档内容哈希，与上次快照对比</td><td>最稳健，可可靠发现源头删除</td><td>源端规模庞大时，扫描与哈希计算本身成为瓶颈</td></tr>
+      <tr><td><b>时间戳水位线（Watermark）</b></td><td>增量拉取 <code>updated_at &gt; 上次水位</code> 的记录</td><td>实现简单、网络与计算开销极低</td><td>无法感知物理删除；时钟回拨或未单调递增可能漏检</td></tr>
+      <tr><td><b>CDC / Binlog 变更流</b></td><td>监听数据库底层 WAL 日志（如 Debezium）</td><td>毫秒级准实时捕获，删除事件天然可追踪</td><td>引入额外基础设施，维护成本与链路复杂度较高</td></tr>
+      <tr><td><b>Webhook / 事件推送</b></td><td>内容管理系统（Notion / Confluence / CMS）主动推送变更事件</td><td>按需触发、零冗余轮询</td><td>网络抖动可能丢失事件，必须配备兜底对账机制</td></tr>
+    </tbody>
+  </table>
+  <p>工业实践中的主流架构组合：<strong>以事件驱动或 CDC 承接日常近实时增量更新，以每日定时全量哈希对账作为最终一致性兜底保障</strong>。</p>
+
+  <h3>第二步：块级 Diff 与分块边界稳定性</h3>
+  <p>一篇文档仅修改个别语句，绝不意味着全篇必须全量重新计算嵌入向量。通过为每个切块计算独立的内容哈希（Content Hash），比对新旧切块集合即可复用未变更切块。然而，增量效率高度敏感于切块算法：<strong>固定窗口切块极易引发切块边界的雪崩式漂移</strong>。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 2.1 · 增量更新实验台</b><span>真实切块 + 真实哈希（FNV-1a）对比</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>切块策略</label><div class="pills" id="iChunk"></div></div>
+        <div class="ctrl"><label>对文档执行修改</label><div class="pills" id="iEdit"></div></div>
+      </div>
+      <div class="kpi-grid" id="iKpi"></div>
+      <div class="row2">
+        <div><p class="boxlabel">历史切块（库内现有）</p><div class="diff" id="iOld"></div></div>
+        <div><p class="boxlabel">新切块（本次切分产出）</p><div class="diff" id="iNew"></div></div>
+      </div>
+      <div class="legend"><span><i style="background:var(--paper)"></i>哈希一致 · 向量复用（零重算开销）</span><span><i style="background:var(--rag-soft);border-color:var(--rag)"></i>新增哈希 · 需计算嵌入向量</span><span><i style="background:#f6dede"></i>历史哈希失效 · 需执行删除</span></div>
+    </div>
+    <div class="lab-foot">固定长度：按字符数硬性截断（生产常采用 Token 窗口）；按段落：基于语义结构自然切分。切换至「开头插入一段」观察：固定长度策略下所有后续切块的边界整体偏移，导致哈希全量失效；结构化策略下仅增量生成一个新切块。</div>
+  </div>
+
+  <div class="note"><b>架构结论</b>：增量更新的计算开销，直接取决于分块边界的几何稳定性。<strong>结构感知分块（按标题、段落、条款切分）</strong>能将修改的影响范围精确限定在被修改的局部单元内。这是 B 篇强调语义结构化分块的关键工程考量。</div>
+
+  <h3>第三步：确定性唯一 ID 与幂等写入</h3>
+  <p>若切块 ID 依赖数据库自增序列或随机 UUID，重复执行同步流水线将导致同一切块被重复插入。采用<strong>基于文档唯一标识与切块内容哈希衍生的确定性 ID（Deterministic ID）</strong>，可确保相同内容在多次执行中永远产出相同的唯一标识，赋予写入操作天然的幂等性（Idempotence）：</p>
+
+  <div class="codewrap"><span class="filetab">sync.py · 幂等增量同步核心实现</span><pre><span class="kw">import</span> hashlib, uuid
+
+<span class="kw">def</span> <span class="nm">chunk_id</span>(doc_id, text):
+    h = hashlib.sha256(text.encode()).hexdigest()[:16]
+    <span class="cm"># Qdrant / Milvus 等系统支持 UUID 或整型，利用 uuid5 将字符串稳定映射为 UUID</span>
+    <span class="kw">return</span> str(uuid.uuid5(uuid.NAMESPACE_URL, f<span class="st">"{doc_id}:{h}"</span>)), h
+
+<span class="kw">def</span> <span class="nm">sync_doc</span>(doc, store, embed):
+    new = {}
+    <span class="kw">for</span> seq, text <span class="kw">in</span> enumerate(split_by_structure(doc.text)):
+        cid, h = chunk_id(doc.id, text)
+        new[cid] = dict(text=text, doc_id=doc.id, seq=seq, content_hash=h,
+                        version=doc.version, updated_at=doc.updated_at)
+
+    old = set(store.ids_where(doc_id=doc.id))      <span class="cm"># 基于元数据检索该文档的历史切块 ID</span>
+    add = [c <span class="kw">for</span> c <span class="kw">in</span> new <span class="kw">if</span> c <span class="kw">not in</span> old]
+
+    vecs = embed([new[c][<span class="st">"text"</span>] <span class="kw">for</span> c <span class="kw">in</span> add])  <span class="cm"># 仅对新增哈希块调用模型计算</span>
+    store.upsert(ids=add, vectors=vecs, payloads=[new[c] <span class="kw">for</span> c <span class="kw">in</span> add])
+    <span class="cm"># 未变更切块：直接复用已有向量，仅刷新顺序与版本等元数据</span>
+    store.set_payload([c <span class="kw">for</span> c <span class="kw">in</span> new <span class="kw">if</span> c <span class="kw">in</span> old], new)
+    store.delete(ids=list(old - new.keys()))       <span class="cm"># 先写新块、后删失效块，避免查询出现空窗</span></pre></div>
+  <p>上述抽象逻辑与具体数据库解耦（pgvector、Milvus、Qdrant 均原生提供按 ID upsert、元数据过滤及按 ID 批量删除）。业务层应当完全掌控这一同步控制逻辑，而非将其隐式绑定至特定上层框架。</p>
+
+  <h3>框架内置的状态同步与映射表机制</h3>
+  <p>主流开发框架普遍采用在外置存储中维护状态映射表的设计思路：记录切块哈希、数据源与写入时间，用以辅助推导需写入与需删除的切块集合。</p>
+  <table class="cmp">
+    <thead><tr><th>框架方案</th><th>核心机制</th><th>源头删除识别能力</th></tr></thead>
+    <tbody>
+      <tr><td><b>LangChain</b> <code>index()</code> + RecordManager</td><td>支持 <code>cleanup="incremental"</code>（按来源淘汰旧版本）与 <code>cleanup="full"</code>（清除批次外所有文档）模式</td><td>仅在 <code>full</code> 模式下自动清理，前提是单次调用必须传入完整数据集，传入子集将引发误删</td></tr>
+      <tr><td><b>LlamaIndex</b> <code>IngestionPipeline</code> + docstore</td><td>基于持久化 docstore 对比哈希；提供 <code>UPSERTS_AND_DELETE</code> 策略自动清理未出现文档</td><td><code>UPSERTS_AND_DELETE</code> 可识别删除；要求 docstore 跨次调度持久化存储</td></tr>
+      <tr><td><b>Haystack</b> <code>DocumentWriter</code></td><td>提供 <code>OVERWRITE</code>（覆盖）、<code>SKIP</code>（跳过）与 <code>FAIL</code>（冲突报错）等主键写入策略</td><td>不支持自动清理源头删除，变更检测与删除生命周期需由外部应用编排</td></tr>
+    </tbody>
+  </table>
+  <div class="note warn"><b>状态存储与向量库双重状态隐患</b>：框架的持久化记录表与实际向量库属于两个独立存储系统。若有外部任务绕过框架直接写入向量库，状态表将对这部分数据失去追踪，导致其成为永久无法清理的孤儿数据。</div>
+
+  <h3>专有增量同步数据流引擎选型</h3>
+  <p>除轻量框架外，当业务面临多源异构数据、秒级高频变动或严格数据血缘审计需求时，开源生态提供了更高抽象层级的专有同步方案：</p>
+  <table class="cmp">
+    <thead><tr><th>方案架构</th><th>代表开源项目</th><th>增量维护机制</th><th>适用场景与考量</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="3"><b>增量数据流引擎</b></td><td><b>CocoIndex</b>（Rust 内核 + Python）</td><td>采用声明式目标态模型并追踪数据血缘，源文件或分块逻辑变更时仅增量重算受影响节点</td><td>适合多源异构、需要完整数据血缘审计与流水线声明的场景</td></tr>
+      <tr><td><b>Pathway</b>（微分数据流引擎）</td><td>基于 Differential Dataflow 持续监听数据源，感知变更并执行流式解析、向量化与索引更新</td><td>适合秒级高频流式同步；需注意商业部署协议约束</td></tr>
+      <tr><td><b>Pixeltable</b>（多模态声明式表）</td><td>将嵌入索引建模为表的计算列，行级增量更新自动触发下游级联重算</td><td>适合多模态（图像、音频、文本）数据统一管理场景</td></tr>
+      <tr><td><b>库内触发机制</b></td><td><b>pgai Vectorizer</b>（Timescale）</td><td>基于 PostgreSQL 触发器捕获行变更并推入工作队列，外部 worker 异步向量化</td><td>业务主数据已托管于 PostgreSQL，追求极简技术栈与事务联动</td></tr>
+      <tr><td><b>ELT 管道工具</b></td><td><b>Airbyte</b>（向量库目标端）</td><td>提供 Incremental Append + Deduped 模式，借助源端主键在向量库执行去重维护</td><td>数据源分布于各类 SaaS 平台（Salesforce、Notion 等），需利用成熟连接器生态</td></tr>
+      <tr><td><b>端到端引擎</b></td><td><b>RAGFlow</b></td><td>系统内置多源连接器与增量同步机制，开箱即用</td><td>偏向完整开箱即用产品，不希望自研中间层编排代码</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>选型考量</b>：若核心数据已托管于 PostgreSQL，优先采用 pgai Vectorizer；外部 SaaS 数据源优先结合 Airbyte；需要复杂数据流血缘审计时评估 CocoIndex；常规中小规模应用采用确定性 ID 与应用层轻量同步即可高效落地。</div>
+  <div class="note warn"><b>工具边界与治理底线</b>：任何上层工具均无法替代三项底层工程设计：决定局部变更半径的分块结构稳定性、删除事件向下游缓存的级联失效、以及模型升级时全库重建的平滑演进方案。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-c2"><div class="ckpt-box">✓</div><div class="ckpt-text">在实验台里对比两种切块方式下「开头插入一段」的重嵌入块数，并解释差异来自哪里</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>按固定字数切块就像按固定厘米数剪布料，开头多出一小截，后面每一刀的切口位置全都会整体错位，整匹布的所有碎块都必须重做。按自然段落切，每段自成一体，修改哪一段就只需要重新处理哪一段。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>固定窗口切块的截断点依赖全局字符偏移，局部插入会导致后续所有窗口产生边界漂移（Boundary Shift），导致哈希全量失配，增量退化为全量重算。结构感知切块将边界锚定在自然语义节点上，变更影响被完全隔离在局部。结合内容寻址的确定性 ID，可实现稳定的幂等 Upsert 与最小化 Diff 集合。</p></div>
+  </div></details>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">写入一致性与删除治理 —— 消除时序空窗与孤儿数据</h2></div>
+  <p class="lede">文档更新包含「下线旧版本切块」与「写入新版本切块」两个离散步骤。在缺乏跨行原子事务支持的向量存储中，操作时序直接决定了查询端的可见性：执行期间可能遭遇短暂的文档缺失（可用性空窗）或新旧版本并存（事实冲突）。此外，若同步进程在执行中途异常中断，必须保障系统具备可恢复性与最终一致性。</p>
+
+  <p>操作序列的编排顺序决定了系统在更新过程中的中间态与故障恢复表现。工程上有三种典型写入模式：</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 3.1 · 更新时序模拟器</b><span>退款文档 v1（2 块）→ v2（2 块）</span></div>
+    <div class="lab-body">
+      <div class="ctrl"><label>更新写入顺序</label><div class="pills" id="tMode"></div></div>
+      <div class="ctrl"><label>时间步 <b id="v-tT">t0</b></label><input type="range" id="tT" min="0" max="4" value="0" step="1"></div>
+      <div class="ctrl"><label>查询端版本去重（同一 doc_id 仅保留最高 version）</label><div class="pills" id="tDedup"></div></div>
+      <div class="tl" id="tRows"></div>
+      <div id="tAns"></div>
+      <div id="tCrash" style="margin-top:10px"></div>
+    </div>
+    <div class="lab-foot">琥珀色代表 v1 版本切块，青绿色代表 v2 版本切块，虚线代表已写入但尚未激活生效。拖动时间轴观察不同写入时序下查询端的可见状态；底部展示若同步任务在 t2 时刻意外中断，系统最终残留的存储状态。</div>
+  </div>
+
+  <table class="cmp">
+    <thead><tr><th>写入策略</th><th>瞬态可见性（中间态）</th><th>中途异常中断后的状态</th><th>适用架构与选型</th></tr></thead>
+    <tbody>
+      <tr><td><b>先删后写</b></td><td>存在数据空窗：窗口期内完全检索不到该文档</td><td>最危险：文档从索引中彻底丢失，直到下个全量同步周期</td><td>生产环境严禁采用</td></tr>
+      <tr><td><b>先写后删</b></td><td>短暂存在新旧版本共存；可通过查询端按版本号去重消除冲突</td><td>残留历史切块，可通过幂等重试或周期性对账完全修复</td><td>无跨行事务保证的独立分布式向量库（Milvus / Qdrant 等）</td></tr>
+      <tr><td><b>事务机制 / 版本指针</b></td><td>强一致原子可见，无中间态：查询要么全部命中旧版，要么全部命中新版</td><td>历史版本继续稳定生效，未提交的新切块回滚或作为孤儿数据清理</td><td>关系型扩展（PostgreSQL / pgvector 单事务提交）；或业务层版本路由指针</td></tr>
+    </tbody>
+  </table>
+
+  <div class="codewrap"><span class="filetab">pgvector · 单事务原子替换</span><pre><span class="kw">BEGIN</span>;
+<span class="kw">DELETE FROM</span> chunks <span class="kw">WHERE</span> doc_id = <span class="st">'D6'</span>;
+<span class="kw">INSERT INTO</span> chunks (doc_id, version, seq, content, embedding, updated_at)
+<span class="kw">VALUES</span> (<span class="st">'D6'</span>, 2, 0, <span class="st">'...'</span>, <span class="st">'[...]'</span>, now()),
+       (<span class="st">'D6'</span>, 2, 1, <span class="st">'...'</span>, <span class="st">'[...]'</span>, now());
+<span class="kw">COMMIT</span>;   <span class="cm">-- 外部并发会话严格保证原子可见：要么全量 v1，要么全量 v2</span></pre></div>
+  <p>这是关系型增强存储在更新治理上的显著架构优势：向量切块与业务数据完全处于同一 ACID 事务边界内。而在多数专用向量数据库中，通常需依靠「先写新块、后删旧块 + 查询侧版本过滤」或应用层版本路由指针来达成近似一致性。</p>
+
+  <h3>删除治理：多级失效与最终一致性保障</h3>
+  <p>在生产系统中，数据删除往往更容易被忽视。未彻底清理的作废文档不会直接报错，而是以陈旧知识的形式滞留于索引中，持续引发模型错误引用。可靠的删除机制必须建立四重保障：</p>
+  <div class="four">
+    <div class="c"><b>① 变更事件联动</b><p>源端触发删除事件（CDC / Webhook），同步服务基于 doc_id 批量下线关联切块。具备准实时性，但需防御事件丢包。</p></div>
+    <div class="c"><b>② 周期性差集对账</b><p>定期拉取源端有效 doc_id 全集与向量库现有 ID 全集求差集，主动清理滞留孤儿切块。这是保障一致性的最后防线。</p></div>
+    <div class="c"><b>③ 存储物理回收</b><p>多数向量库删除操作仅标记软删除墓碑（Tombstone），需定期触发 Compaction 或 VACUUM 释放底层物理存储与内存（参见 C 篇第 6 章）。</p></div>
+    <div class="c"><b>④ 下游缓存多级失效</b><p>删除操作必须级联同步至语义缓存、答案缓存、BM25 全文索引及应用查询缓存，杜绝历史缓存污染。</p></div>
+  </div>
+
+  <div class="note"><b>分布式写入可见性延迟</b>：即使客户端写入时序完全正确，分布式向量数据库在完成写入至索引可检索之间，仍存在由一致性模型（强一致、有界过时、最终一致）所决定的可见性窗口期。排查「刚完成同步却检索不到新内容」时，应首先确认节点间同步与索引刷新延迟。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-c3"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出「先删后写」和「先写后删」各自的中间态与崩溃后果，并说明为什么对账不能省</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>先删后写就像先拆旧招牌再挂新的，中间有一段时间完全没有招牌，如果挂新招牌时工人中途跑了，门口就彻底空了。先写后删就像先挂新招牌再拆旧招牌，中间虽有两块并存，但不会出现断档。对账就像巡店巡检，把遗漏未拆的旧招牌定期彻底清走。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>先删后写的中间态是可用性缺失，进程中断会导致数据永久丢失；先写后删的中间态是数据重复，可在查询端按 (doc_id, max version) 过滤消除，崩溃残留可由幂等重试或对账机制完全修复。由于事件驱动的删除在网络或队列异常下可能丢失，周期性的源端与库端 ID 差集对账是达成最终一致性的必要保障。</p></div>
+  </div></details>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">模型升级与整库重建 —— 零停机平滑迁移（蓝绿切换）</h2></div>
+  <p class="lede">当新一代嵌入模型在基准评测上带来显著召回提升时，系统无法采取增量过渡方式（即仅对新增文档采用新模型、旧文档保留历史向量）。不同嵌入模型所构建的高维几何流形完全异构，即使向量维度一致，其坐标分量与内积距离亦毫无数学可比性。模型升级必须执行全库重新嵌入。在保障线上服务不中断的前提下，蓝绿架构（Blue-Green Deployment）与集合别名（Collection Alias）是实现平滑切换的标准方案。</p>
+
+  <p>不同模型的向量空间在几何上互不兼容。模型 A 与模型 B 输出的高维向量指向不同的正交语义空间，其相似度度量完全失效。因此：<strong>查询向量与候选文档向量必须严格源自同一模型</strong>。更换嵌入模型或调整分块策略，本质上等同于整库全量重建。</p>
+
+  <p>全量重建通常需要数小时乃至数天时间，期间线上检索服务必须持续可用。工业界的标准落地模式是<strong>蓝绿切换</strong>：保留当前在线集合持续承接查询，在旁路独立创建新集合并执行全量回填，待基准评估通过后执行毫秒级原子切换，且保留快速回滚能力。核心基础设施工具是<em>集合别名（Collection Alias）</em>：应用层始终面向稳定的逻辑别名发起查询，底层路由目标可原子变更。Milvus、Qdrant、Elasticsearch 等均原生支持别名机制。</p>
+
+  <div class="lab bg">
+    <div class="lab-head"><b>LAB 4.1 · 蓝绿切换演练</b><span>kb_prod 为逻辑别名；点击步骤演练切换</span></div>
+    <div class="lab-body">
+      <div class="steps" id="bSteps"></div>
+      <div id="bSvg"></div>
+      <div id="bAns"></div>
+    </div>
+    <div class="lab-foot">第 3 步评估指标为示意基准；生产数据应基于业务专属的黄金评测集（参见 B 篇第 6 章）。需高度重视第 4 步：别名重定向仅切换了存储层路由，应用侧调用 Embedding 模型必须在同一次发布中同步更新。</div>
+  </div>
+
+  <div class="note danger"><b>高风险盲区：仅切换存储别名，未同步切换查询编码模型</b>：集合别名可在底层原子地重定向检索流量，但若应用层查询端仍在使用旧嵌入模型，系统将以旧模型向量检索新模型集合。由于维度相同不触发语法报错，系统将静默返回毫无语义关联的随机排序结果。生产发布必须保证「存储别名重定向」与「查询编码模型版本」原子协同生效。稳妥架构是将模型版本绑定于集合元数据中，应用层根据别名解析动态路由匹配模型。</div>
+
+  <div class="codewrap"><span class="filetab">Milvus · 别名原子切换与回滚</span><pre><span class="kw">from</span> pymilvus <span class="kw">import</span> MilvusClient
+c = MilvusClient(uri=<span class="st">"http://localhost:19530"</span>)
+
+<span class="cm"># 初始化：应用层面向逻辑别名 kb_prod</span>
+c.create_alias(collection_name=<span class="st">"kb_v1"</span>, alias=<span class="st">"kb_prod"</span>)
+
+<span class="cm"># kb_v2 基于新模型完成历史回填、影子评估通过后：原子重定向，无需修改应用代码</span>
+c.alter_alias(collection_name=<span class="st">"kb_v2"</span>, alias=<span class="st">"kb_prod"</span>)
+
+<span class="cm"># 异常处置：毫秒级原子回滚（确保观察期内尚未物理释放 kb_v1）</span>
+c.alter_alias(collection_name=<span class="st">"kb_v1"</span>, alias=<span class="st">"kb_prod"</span>)</pre></div>
+  <p>PostgreSQL / pgvector 原生不提供集合别名概念，工业实践通常采用以下方案：在原表中增加 <code>embedding_v2</code> 向量列，后台异步填充并使用 <code>CREATE INDEX CONCURRENTLY</code> 并发建索引，完成后通过配置中心切换查询列名；或建立独立的新表，利用 SQL View（视图）作为逻辑别名完成秒级定义切换。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-c4"><div class="ckpt-box">✓</div><div class="ckpt-text">能完整说出蓝绿切换的五个步骤，并指出别名切换「没有切」的那一样东西</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>新建目标集合、全量重算新向量（同时将线上增量变更双写到新库）、在标准测试集上比对效果、原子切换路由别名指向新库、旧库观察数日确认平稳后再释放。需要特别注意：别名只改了底层集合指向，应用层的查询编码模型必须同步更新，否则就会拿旧模型的向量去查新模型的数据。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>新建目标集合 → 全量历史数据回填并对在线变更启用双写（Dual-write）→ 在黄金基准集执行影子评估验证 → 调用 alter_alias 原子切换集合流量 → 保留旧集合作为回滚检查点，平稳度过观察期后执行下线。别名仅切换存储层路由，查询编码器（Query Encoder）版本必须与底层索引保持契约对齐。</p></div>
+  </div></details>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">元数据架构与健康体检 —— 全生命周期资产治理</h2></div>
+  <p class="lede">高可靠的增量同步、版本仲裁与安全控制，均建立在规范的块级元数据基础之上。向量本身仅是高维连续坐标，无法自解释其业务属性。来源溯源、版本控制、模型绑定与访问策略必须由结构化元数据承载。在建库初期确立严格的元数据规范，是避免后期索引失控与数据沼泽的关键保障。</p>
+
+  <h3>推荐的块级核心元数据规范</h3>
+  <table class="cmp">
+    <thead><tr><th>元数据字段</th><th>核心治理用途</th><th>缺失造成的工程后果</th></tr></thead>
+    <tbody>
+      <tr><td><code>doc_id</code> · <code>seq</code></td><td>文档级粒度替换与级联删除；相邻上下文窗口拼接</td><td>无法按文档精确更新，任何微小变更只能全量重建</td></tr>
+      <tr><td><code>content_hash</code></td><td>块级 Diff 变更检测与内容去重</td><td>无法识别内容复用，增量同步退化为全量重嵌入</td></tr>
+      <tr><td><code>version</code> · <code>updated_at</code></td><td>查询端版本仲裁、多版本冲突解决、时效性监控</td><td>新旧版本冲突时缺乏事实裁决依据</td></tr>
+      <tr><td><code>source</code> · <code>source_url</code></td><td>生成答案权威溯源引用、周期性差集对账、按业务源批量下线</td><td>无法引用原文出处，无法与上游主数据对账</td></tr>
+      <tr><td><code>acl</code> / <code>tenant_id</code></td><td>检索层强制多租户与权限过滤隔离</td><td>产生数据越权泄露风险（参见 D 篇第 3 章）</td></tr>
+      <tr><td><code>embed_model</code> · <code>chunker_version</code></td><td>标识嵌入模型与分块版本；识别混合异构向量脏数据</td><td>新旧模型向量意外混合驻留，导致整体召回悄然劣化</td></tr>
+      <tr><td><code>expires_at</code></td><td>限时公告、促销政策等到期自动淘汰机制</td><td>已失效的过期内容继续被大模型引用误导用户</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>核心资产原则：原始文本是核心资产，向量仅为可再生的派生缓存</b>：禁止在存储中丢弃原始文本而仅保留向量。当面临模型迭代、切块调整或答案归因排查时，均需要原始文本作为基准输入。明确这一原则后，嵌入模型升级本质上属于派生缓存的重新预热，而非高风险的数据迁移。</div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 5.1 · 知识库体检</b><span>12 个样例切块，勾选检测规则后执行体检</span></div>
+    <div class="lab-body">
+      <div class="rules" id="hRules"></div>
+      <button class="sim-btn" id="hRun">运行体检</button>
+      <div class="kpi-grid" id="hKpi"></div>
+      <div class="hc-wrap"><table class="hc" id="hTable"></table></div>
+    </div>
+    <div class="lab-foot">基准日期 = 2026-10-12；当前生效模型 = emb-v2；源系统存活文档 = D1–D7（D9 已在源端删除）。每项体检规则均可直接映射为巡检定时任务或校验脚本。</div>
+  </div>
+
+  <h3>知识库健康度核心监控指标</h3>
+  <table class="cmp">
+    <thead><tr><th>监控指标</th><th>计算口径与统计维度</th><th>系统含义与预警意义</th></tr></thead>
+    <tbody>
+      <tr><td><b>新鲜度延迟（P95）</b></td><td>源端内容更新时间戳至向量库可被检索的时间差</td><td>评估知识同步时效，衡量用户感知延迟</td></tr>
+      <tr><td><b>孤儿切块率</b></td><td>向量库中不存在于源端有效集合的 doc_id 占比</td><td>衡量物理删除链路与垃圾清理是否健康</td></tr>
+      <tr><td><b>切块内容重复率</b></td><td>全库中具备相同 content_hash 的重复切块比例</td><td>评估 Top-k 检索是否被重复语料挤占</td></tr>
+      <tr><td><b>模型版本覆盖一致性</b></td><td>采用当前生产 embed_model 的切块占全库比例</td><td>识别整库升级迁移进度，防范异构向量混用</td></tr>
+      <tr><td><b>检索兜底率（无答案率）</b></td><td>在线查询最高相似度/重排得分低于阈值的请求占比</td><td>监控领域知识缺口，辅助定位知识库盲区</td></tr>
+    </tbody>
+  </table>
+
+  <h3>合规要求与数据被遗忘权落地</h3>
+  <p>当依据 GDPR 第 17 条等法规要求落实个人信息被遗忘权时，仅在向量库执行删除并不完备。数据副本通常分散存在于：原始语料存储、BM25 全文索引、语义缓存、问答访问日志、基准评估集、微调训练集以及快照备份中。企业需建立明确的「数据流向与血缘拓扑表」，明确各副本的保留周期与级联销毁责任，确保删除具备可审计性。</p>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-c5"><div class="ckpt-box">✓</div><div class="ckpt-text">在体检里找出全部问题块，并说出每类问题对应的修复动作</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>孤儿块执行清理；旧版本切块下线；旧模型生成的切块重新计算嵌入；过期切块剔除；缺少权限标记的切块先隔离并补标；重复切块去重只保留单份。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>孤儿块与历史版本：执行对账物理删除并调度 Compaction；embed_model 不一致：归入全量重建队列，切换完成前检索侧按模型元数据过滤隔离；已过期：基于 expires_at 过滤或定时淘汰；缺失 ACL：遵循默认拒绝（Fail-closed）安全原则，隔离补标后再开放检索；内容重复：入库阶段按 content_hash 严格去重，检索侧可辅以 MMR 策略提升候选多样性。</p></div>
+  </div></details>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">生产排障手册 —— 现象速查与分层定位矩阵</h2></div>
+  <p class="lede">在前文技术架构的基础上，本章系统梳理 RAG 生产运行中最为高频的异常现象。通过建立「表象症状 → 底层根因 → 验证手段 → 处置方案」的分层诊断矩阵，帮助工程师快速定位问题发生的协议层（数据层、分块层、检索层、排序层、生成层或基础设施层），实现标准化排障闭环。</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 6.1 · 排障手册</b><span>支持按层筛选或直接搜索症状关键词</span></div>
+    <div class="lab-body">
+      <div class="faq-tools">
+        <input type="search" id="fQ" placeholder="搜索异常症状，例如：旧答案、删除失效、精确匹配、权限越权、延迟抖动、模型切换…">
+        <div class="pills" id="fLv"></div>
+        <span class="faq-count" id="fCount"></span>
+      </div>
+      <div class="faq-list" id="fList"></div>
+    </div>
+    <div class="lab-foot">分层架构：数据接入（解析与去重）· 更新运维（新鲜度、删除、模型升级）· 分块策略 · 检索召回 · 排序打分 · 文本生成 · 访问安全 · 底层运维 · 评测验证。同一异常现象可能存在多重诱因，优先排查链路靠前且验证成本最低的环节。</div>
+  </div>
+
+  <div class="note ok"><b>排障第一性原理：确定性样本与基准切块</b>：定位 RAG 检索异常时，首要条件是获取可稳定复现的查询输入与预期命中的真实切块。具备这两项输入即可在各层逐级验证相似度得分与排序衰减，在数分钟内排查出根因节点；缺乏标准样本时，盲目调整模型与提示词往往适得其反。这也是前文强调黄金测试集为核心工程资产的根本原因。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-c6"><div class="ckpt-box">✓</div><div class="ckpt-text">从手册里挑出你的系统最可能遇到的 3 个问题，写下各自的验证方法</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>以新上线系统为例，最常见的三类问题为：文档更新后仍命中陈旧答案、专业编码/型号精确词无法召回、未命中相关资料模型依然强行作答。验证手段分别为：核对库内该 doc_id 的多版本存活切块；单独触发 BM25 稀疏检索验证词法分词；检查最高检索重排得分是否触发兜底拒答阈值。</p></div>
+  </div></details>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">终极测验 · 5 题验收</h2></div>
+  <p class="lede">完成以下 5 道核心测验，检验对动态增量更新、一致性保障、蓝绿切换与元数据治理的掌握程度。</p>
+  <div id="quizMount"></div>
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="e-quiz"><div class="ckpt-box">✓</div><div class="ckpt-text">终极测验 5 题答对 ≥ 4（答完自动勾选）</div></div></div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">接口行为核对于 2026-10-12。框架的导入路径和默认值会随版本变化，使用前请对照官方文档。博客类来源标为「观点」。</p>
+  <h3>官方文档</h3>
+  <ul class="plain source-list">
+    <li>LangChain · Indexing API（RecordManager、cleanup 四种模式）· <a href="https://python.langchain.com/docs/how_to/indexing" target="_blank" rel="noopener">python.langchain.com/docs/how_to/indexing</a></li>
+    <li>LangChain Reference · <code>langchain_core.indexing.api.index</code> · <a href="https://reference.langchain.com/python/langchain-core/indexing/api/index" target="_blank" rel="noopener">reference.langchain.com</a></li>
+    <li>LlamaIndex · Ingestion API Reference（DocstoreStrategy）· <a href="https://developers.llamaindex.ai/python/framework-api-reference/ingestion/" target="_blank" rel="noopener">developers.llamaindex.ai</a></li>
+    <li>Milvus / Zilliz · Manage Aliases（create_alias、alter_alias）· <a href="https://docs.zilliz.com/docs/manage-aliases" target="_blank" rel="noopener">docs.zilliz.com/docs/manage-aliases</a></li>
+    <li>Qdrant · Collections（Collection aliases）· <a href="https://qdrant.tech/documentation/concepts/collections/" target="_blank" rel="noopener">qdrant.tech/documentation/concepts/collections</a></li>
+    <li>Weaviate · Collection aliases 教程 · <a href="https://docs.weaviate.io/weaviate/tutorials/collection-aliases" target="_blank" rel="noopener">docs.weaviate.io</a></li>
+    <li>pgvector README（索引、事务、过滤）· <a href="https://github.com/pgvector/pgvector" target="_blank" rel="noopener">github.com/pgvector/pgvector</a></li>
+    <li>Haystack · DocumentWriter（DuplicatePolicy）· <a href="https://docs.haystack.deepset.ai/docs/documentwriter" target="_blank" rel="noopener">docs.haystack.deepset.ai</a></li>
+    <li>CocoIndex · Incremental Processing（增量与血缘）· <a href="https://cocoindex.io/blogs/incremental-processing/" target="_blank" rel="noopener">cocoindex.io</a></li>
+    <li>Pathway · LLM xpack 文档 · <a href="https://pathway.com/developers/api-docs/pathway-xpacks-llm" target="_blank" rel="noopener">pathway.com</a>；许可条款 · <a href="https://pathway.com/license" target="_blank" rel="noopener">pathway.com/license</a></li>
+    <li>Pixeltable · Embedding Index（自动增量维护）· <a href="https://docs.pixeltable.com/datastore/embedding-index" target="_blank" rel="noopener">docs.pixeltable.com</a></li>
+    <li>pgai Vectorizer（触发器 + 工作队列自动同步嵌入）· <a href="https://github.com/timescale/pgai" target="_blank" rel="noopener">github.com/timescale/pgai</a></li>
+    <li>Airbyte · Qdrant Destination（Incremental Append + Deduped）· <a href="https://docs.airbyte.com/integrations/destinations/qdrant" target="_blank" rel="noopener">docs.airbyte.com</a></li>
+    <li>RAGFlow · <a href="https://github.com/infiniflow/ragflow" target="_blank" rel="noopener">github.com/infiniflow/ragflow</a></li>
+    <li>Debezium（CDC 变更数据捕获）· <a href="https://debezium.io/documentation/" target="_blank" rel="noopener">debezium.io/documentation</a></li>
+  </ul>
+  <h3>实践文章</h3>
+  <ul class="plain source-list">
+    <li>Change Qdrant embedding dimension with a collection alias swap（2026-08，蓝绿切换与「别名不切模型」的提醒，观点）· <a href="https://oneuptime.com/blog/post/2026-08-28-change-qdrant-embedding-dimension-collection-alias-swap/view" target="_blank" rel="noopener">oneuptime.com</a></li>
+    <li>Alibaba Cloud Milvus · Manage Alias（零停机更新与 A/B 测试场景）· <a href="https://help.aliyun.com/en/milvus/user-guide/manage-alias" target="_blank" rel="noopener">help.aliyun.com</a></li>
+  </ul>
+  <p>实验台里的切块、hash（FNV-1a）、时序与体检规则全部在本页脚本中实现，可读可改；成本估算的所有单价都是假设。</p>
+  <p>回到起点：<a href="a.html" style="color:var(--accent-deep)">A 页 · 直觉</a>　·　<a href="../index.html" style="color:var(--accent-deep)">首页</a></p>
+  <footer class="colophon">资料核对日期：2026-10-12 · 框架接口与产品能力会变化，请以官方页面为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="lib.js"></script>
+<script src="common.js"></script>
+<script>
+KB.initPage({ key: 'e', names: ['知识库动态维护', '增量更新架构', '写入一致性与删除', '模型升级与重建', '元数据与健康体检', '生产排障手册', '终极测验', '参考资料'] });
+const $ = id => document.getElementById(id), esc = KB.esc;
+const mkPills = (el, items, onPick, start = 0) => { el.innerHTML = ''; items.forEach((t, i) => { const b = document.createElement('button'); b.className = 'pill' + (i === start ? ' active' : ''); b.textContent = t; b.onclick = () => { [...el.children].forEach(c => c.classList.remove('active')); b.classList.add('active'); onPick(i); }; el.appendChild(b); }); };
+const chip = (cls, id, txt) => `<span class="chip ${cls}"><b>${id}</b> ${esc(txt)}</span>`;
+
+/* ===== LAB 1.1 幽灵答案 ===== */
+(function () {
+  const V1 = [['D6#0', '订单完成 7 天内可申请退款', 1], ['D6#1', '发票在账单页下载', 1]];
+  const V2 = [['D6#0', '订单完成 14 天内可申请退款', 2], ['D6#1', '发票在账单页下载', 2]];
+  let mode = 0, step = 1;
+  const draw = () => {
+    let store;
+    if (step === 0) store = [];
+    else if (step === 1) store = V1;
+    else store = mode === 0 ? [...V1, ...V2] : V2;
+    $('gStore').innerHTML = store.length ? store.map(c => chip('v' + c[2], c[0] + ' v' + c[2], c[1])).join('') : '<span class="none">空库</span>';
+    // 「检索」：退款相关块按相似度排序；新旧 #0 几乎一样高，次序在两次查询间随机抖动
+    const hits = store.filter(c => c[1].includes('退款'));
+    if (hits.length > 1 && Math.random() < .5) hits.reverse();
+    const top = [...hits, ...store.filter(c => !c[1].includes('退款'))].slice(0, 3);
+    $('gHits').innerHTML = top.map(c => chip('v' + c[2], c[0] + ' v' + c[2], c[1])).join('') || '<span class="none">无结果</span>';
+    const days = [...new Set(hits.map(c => c[1].match(/\d+/)[0]))];
+    $('gAns').innerHTML = !hits.length ? '' : days.length > 1
+      ? `<div class="ans bad"><b>✗ 存在新旧事实冲突</b>top-3 检索结果同时包含「7 天」与「14 天」，二者相似度处于同一区间，排序受微小数值波动影响。模型可能输出 7 天、14 天或折中表述。再次点击「发布 v2」可观察排名的不稳定性。</div>`
+      : `<div class="ans ok"><b>✓ 单一确定性版本</b>库内关于退款期限仅保留唯一的 ${days[0]} 天切块，回答输出保持严格确定性。</div>`;
+  };
+  mkPills($('gMode'), ['追加写（只 insert）', '覆盖写（按 doc_id 替换）'], i => { mode = i; draw(); }, 0);
+  mkPills($('gStep'), ['清空', '入库 v1（7 天）', '发布 v2（改成 14 天）'], i => { step = i; draw(); }, 1);
+  draw();
+})();
+
+/* ===== LAB 2.1 增量更新实验台 ===== */
+(function () {
+  const BASE = [
+    '退款政策：企业版订单完成后 7 天内可申请退款，超过期限不予受理。',
+    '退款方式：原路退回到付款账户，银行卡通常 3 到 5 个工作日到账。',
+    '发票：在账单页可下载电子发票，抬头信息在提交订单前填写。',
+    '发票抬头填错：开票后 30 天内可申请作废重开，每张订单限一次。',
+    '订阅续费：到期前 3 天自动扣费，扣费失败会发送邮件提醒。',
+    '取消订阅：在设置页关闭自动续费，当前周期结束后不再扣费。',
+    '价格调整：新价格只对调整后的新订单生效，已付费周期不受影响。',
+  ];
+  const EDITS = [
+    ['不修改', p => p],
+    ['改一个数字（7→14 天）', p => p.map((x, i) => i === 0 ? x.replace('7 天', '14 天') : x)],
+    ['开头插入一段', p => ['重要通知：自 2026 年 10 月起，退款与发票业务统一由账单中心处理。', ...p]],
+    ['删除中间一段', p => p.filter((_, i) => i !== 3)],
+    ['文末追加一段', p => [...p, '跨境订单：退款以原币种退回，汇率差额由银行结算。']],
+  ];
+  const fnv = s => { let h = 0x811c9dc5; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0').slice(0, 6); };
+  const CH = 40;
+  const chunkers = [
+    p => { const all = p.join(''), out = []; for (let i = 0; i < all.length; i += CH) out.push(all.slice(i, i + CH)); return out; },
+    p => p.slice(),
+  ];
+  let ck = 0, ed = 2;
+  const draw = () => {
+    const oldC = chunkers[ck](BASE).map(t => ({ t, h: fnv(t) })), newC = chunkers[ck](EDITS[ed][1](BASE)).map(t => ({ t, h: fnv(t) }));
+    const oldSet = new Set(oldC.map(c => c.h)), newSet = new Set(newC.map(c => c.h));
+    const add = newC.filter(c => !oldSet.has(c.h)).length, del = oldC.filter(c => !newSet.has(c.h)).length, reuse = newC.length - add;
+    const row = (c, cls) => `<div class="dc ${cls}"><span class="h">#${c.h}</span><span class="t">${esc(c.t)}</span></div>`;
+    $('iOld').innerHTML = oldC.map(c => row(c, newSet.has(c.h) ? 'reuse' : 'del')).join('');
+    $('iNew').innerHTML = newC.map(c => row(c, oldSet.has(c.h) ? 'reuse' : 'add')).join('');
+    const pct = newC.length ? Math.round(add / newC.length * 100) : 0;
+    $('iKpi').innerHTML = `<div class="kpi"><span>新块总数</span><b>${newC.length}</b></div><div class="kpi ${pct > 50 ? 'bad' : 'rag'}"><span>需重新嵌入</span><b>${add} 块 · ${pct}%</b></div><div class="kpi warn"><span>需删除</span><b>${del} 块</b></div><div class="kpi ok"><span>复用（零重算）</span><b>${reuse} 块</b></div>`;
+  };
+  mkPills($('iChunk'), ['固定长度（40 字）', '按段落（结构感知）'], i => { ck = i; draw(); }, 0);
+  mkPills($('iEdit'), EDITS.map(e => e[0]), i => { ed = i; draw(); }, 2);
+  draw();
+})();
+
+/* ===== LAB 3.1 更新时序 ===== */
+(function () {
+  const A = ['A1', 'A2'], B = ['B1', 'B2'];
+  // 每种写法 t0..t4：[操作说明, 已生效块, 已写未生效块]
+  const PLANS = [
+    [['初始：v1 在线', A, []], ['删除 A1', ['A2'], []], ['删除 A2', [], []], ['写入 B1', ['B1'], []], ['写入 B2', B, []]],
+    [['初始：v1 在线', A, []], ['写入 B1', [...A, 'B1'], []], ['写入 B2', [...A, ...B], []], ['删除 A1', ['A2', ...B], []], ['删除 A2', B, []]],
+    [['初始：v1 在线，active_version=1', A, []], ['写入 B1（v2，未生效）', A, ['B1']], ['写入 B2（v2，未生效）', A, B], ['原子切换 active_version=2', B, A], ['异步清理 v1 块', B, []]],
+  ];
+  const CRASH = [
+    ['bad', '✗ 异常中断在 t2 之后', 'v1 已被全部清理、v2 尚未写入：该文档在库内出现严重空窗。直到下一次全量同步之前，针对该文档的检索将全部返回无结果。'],
+    ['warn', '△ 异常中断在 t2 之后', 'v1 与 v2 同时驻留于索引中。若启用查询端版本去重仍可返回最新版本；否则将引发新旧事实冲突。后续通过幂等重试或周期性对账可清除残留历史版本。'],
+    ['ok', '✓ 异常中断在 t2 之后', '路由指针仍稳定指向 v1，线上查询完全不受影响；未生效的 v2 切块作为孤儿数据暂存，由后续重试或对账任务自动清理。'],
+  ];
+  let mode = 1, dedup = 0;
+  const cls = id => id[0] === 'A' ? 'v1' : 'v2';
+  const draw = () => {
+    const t = +$('tT').value, plan = PLANS[mode]; $('v-tT').textContent = 't' + t;
+    $('tRows').innerHTML = plan.map((s, i) => `<div class="tl-row ${i < t ? 'past' : i === t ? 'now' : ''}"><span class="tt">t${i}</span><div><div class="op">${s[0]}</div><div class="store">${s[1].map(x => chip(cls(x), x, cls(x) === 'v1' ? '7 天' : '14 天')).join('')}${s[2].map(x => chip(cls(x) + ' ghost off', x, '未生效')).join('')}${!s[1].length && !s[2].length ? '<span class="none">（空）</span>' : ''}</div></div></div>`).join('');
+    let vis = plan[t][1];
+    if (dedup && mode !== 2) { const hasB = vis.some(x => x[0] === 'B'); vis = vis.filter(x => (x[0] === 'B') === hasB); }
+    const vs = [...new Set(vis.map(cls))];
+    let a;
+    if (!vis.length) a = ['bad', '✗ 空窗', '这一刻用户问退款，库里一块都查不到。'];
+    else if (vs.length > 1) a = ['bad', '✗ 新旧并存', '7 天和 14 天同时被检索到，答案不稳定。打开「查询端去重」试试。'];
+    else if (vis.length < 2) a = ['warn', '△ 半篇文档', `只看到 ${vis.join('、')}，另一半内容暂时缺失。问到那一半时会答不上来。`];
+    else a = ['ok', '✓ 一致', `用户看到完整的 ${vs[0]}。`];
+    $('tAns').innerHTML = `<div class="ans ${a[0]}"><b>t${t} 时用户看到：${a[1]}</b>${a[2]}</div>`;
+    const c = CRASH[mode]; $('tCrash').innerHTML = `<div class="ans ${c[0]}"><b>${c[1]}</b>${c[2]}</div>`;
+  };
+  mkPills($('tMode'), ['先删后写', '先写后删', '事务 / 版本指针'], i => { mode = i; draw(); }, 1);
+  mkPills($('tDedup'), ['关闭', '开启'], i => { dedup = i; draw(); }, 0);
+  $('tT').oninput = draw; draw();
+})();
+
+/* ===== LAB 4.1 蓝绿切换 ===== */
+(function () {
+  const S = [
+    { n: '0 · 现状', v2: 0, alias: 1, dual: 0, qm: 'A', t: ['ok', '旧库在线', 'kb_prod → kb_v1（模型 A）。应用只认 kb_prod 这个名字。'] },
+    { n: '1 · 建新集合', v2: 1, alias: 1, dual: 0, qm: 'A', t: ['ok', '新建 kb_v2', '按模型 B 的维度建 schema 和索引参数。线上流量完全不受影响。'] },
+    { n: '2 · 回填 + 双写', v2: 2, alias: 1, dual: 1, qm: 'A', t: ['warn', '回填期间的新改动怎么办', '从原文（不是旧向量！）全量重新切块、嵌入写入 kb_v2。期间源头的新改动要同时写两个集合，否则切过去后会丢掉回填期间的更新。'] },
+    { n: '3 · 影子评估', v2: 2, alias: 1, dual: 1, qm: 'A', t: ['ok', '同一份黄金集跑两遍（示意数字）', 'kb_v1 + 模型 A：Recall@5 = 0.78　·　kb_v2 + 模型 B：Recall@5 = 0.84。再抽一部分线上真实问题做人工对比，确认没有某类问题明显变差。'] },
+    { n: '4 · 切换', v2: 2, alias: 2, dual: 1, qm: 'B', t: ['ok', 'alter_alias + 切查询模型', 'kb_prod → kb_v2，同一次发布里把查询嵌入换成模型 B。这一步是原子的，用户无感。'] },
+    { n: '5 · 观察与下线', v2: 2, alias: 2, dual: 0, qm: 'B', t: ['ok', '保留 kb_v1 作为回滚点', '观察几天线上指标（无答案率、点踩率）。没问题再停双写、删除 kb_v1，释放内存。'] },
+    { n: '✗ 只切别名', v2: 2, alias: 2, dual: 1, qm: 'A', t: ['bad', '查询模型未同步切换', '模型 A 的查询向量检索模型 B 的文档集合。若向量维度不同将直接抛出异常；若维度恰好相同，系统将静默返回乱序无意义结果，召回断崖下跌却不触发任何系统告警。'] },
+  ];
+  let cur = 0;
+  const svg = s => {
+    const v1c = s.alias === 1 ? 'var(--ink)' : 'var(--line)', v2c = s.alias === 2 ? 'var(--ink)' : 'var(--line)';
+    const ax = s.alias === 1 ? 170 : 470, bad = s.qm === 'A' && s.alias === 2;
+    return `<svg viewBox="0 0 640 230" role="img" aria-label="蓝绿切换示意">
+      <rect x="250" y="12" width="140" height="44" rx="8" fill="#fffdf8" stroke="var(--ink)" stroke-width="1.5"/><text x="320" y="32" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">应用</text><text x="320" y="48" text-anchor="middle" font-size="10.5" fill="${bad ? 'var(--bad)' : 'var(--ink-soft)'}" font-family="monospace">查询模型 ${s.qm}</text>
+      <line x1="320" y1="56" x2="320" y2="84" stroke="var(--ink)" stroke-width="1.5"/>
+      <rect x="255" y="84" width="130" height="32" rx="16" fill="var(--hyb-soft)" stroke="var(--hyb)" stroke-width="1.5"/><text x="320" y="105" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)" font-family="monospace">alias kb_prod</text>
+      <path d="M320 116 C320 140 ${ax} 130 ${ax} 152" fill="none" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ar)"/>
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+      <rect x="90" y="156" width="160" height="56" rx="8" fill="#f6eedb" stroke="${v1c}" stroke-width="${s.alias === 1 ? 2.2 : 1.2}"/><text x="170" y="180" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)" font-family="monospace">kb_v1</text><text x="170" y="198" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">模型 A · 1024 维</text>
+      ${s.v2 ? `<rect x="390" y="156" width="160" height="56" rx="8" fill="${s.v2 === 2 ? 'var(--rag-soft)' : '#fffdf8'}" stroke="${v2c}" stroke-width="${s.alias === 2 ? 2.2 : 1.2}" stroke-dasharray="${s.v2 === 1 ? '5 4' : '0'}"/><text x="470" y="180" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)" font-family="monospace">kb_v2</text><text x="470" y="198" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">模型 B · ${s.v2 === 1 ? '空集合' : '已回填'}</text>` : ''}
+      ${s.dual ? `<text x="320" y="200" text-anchor="middle" font-size="10.5" fill="var(--warn)" font-family="monospace">⇆ 增量双写</text>` : ''}
+    </svg>`;
+  };
+  const draw = () => {
+    const s = S[cur];
+    $('bSteps').innerHTML = S.map((x, i) => `<button class="${i === cur ? 'on' : i < cur && i < 6 ? 'done' : ''}" data-i="${i}">${x.n}</button>`).join('');
+    $('bSteps').querySelectorAll('button').forEach(b => b.onclick = () => { cur = +b.dataset.i; draw(); });
+    $('bSvg').innerHTML = svg(s);
+    $('bAns').innerHTML = `<div class="ans ${s.t[0]}"><b>${s.t[1]}</b>${s.t[2]}</div>`;
+  };
+  draw();
+})();
+
+/* ===== LAB 5.1 知识库体检 ===== */
+(function () {
+  const TODAY = '2026-10-12', MODEL = 'emb-v2', SRC = new Set(['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']), ACTIVE = { D1: 1, D2: 1, D3: 2, D4: 1, D5: 1, D6: 2, D7: 1, D9: 1 };
+  const ROWS = [
+    ['c01', 'D1', 1, 'emb-v2', 'all', '', 'a1f3'],
+    ['c02', 'D2', 1, 'emb-v2', 'eng', '', 'b7e0'],
+    ['c03', 'D3', 1, 'emb-v2', 'all', '', '3c9d'],
+    ['c04', 'D3', 2, 'emb-v2', 'all', '', '41aa'],
+    ['c05', 'D4', 1, 'emb-v1', 'all', '', '9e12'],
+    ['c06', 'D5', 1, 'emb-v2', '', '', 'c0de'],
+    ['c07', 'D6', 2, 'emb-v2', 'all', '', '77b2'],
+    ['c08', 'D6', 2, 'emb-v2', 'all', '2026-09-30', '5f5f'],
+    ['c09', 'D7', 1, 'emb-v2', 'all', '', '77b2'],
+    ['c10', 'D9', 1, 'emb-v2', 'all', '', 'e9e9'],
+    ['c11', 'D7', 1, 'emb-v1', 'ops', '', 'd4c1'],
+    ['c12', 'D1', 1, 'emb-v2', 'all', '2026-12-31', '0a0b'],
+  ];
+  const hashCount = {}; ROWS.forEach(r => { hashCount[r[6]] = (hashCount[r[6]] || 0) + 1; });
+  const RULES = [
+    ['orphan', '孤儿块：源头已删除', r => !SRC.has(r[1]), '按 doc_id 删除 + Compaction'],
+    ['stale', '旧版本：version ≠ 当前生效版本', r => SRC.has(r[1]) && r[2] !== ACTIVE[r[1]], '删除旧版本块'],
+    ['model', '模型不一致：embed_model ≠ ' + MODEL, r => r[3] !== MODEL, '加入重建队列'],
+    ['expired', '已过期：expires_at < 今天', r => r[5] && r[5] < TODAY, '下线（或查询时过滤）'],
+    ['acl', '缺权限标记：acl 为空', r => !r[4], '默认拒绝，补标后放出'],
+    ['dup', '重复内容：content_hash 重复', r => hashCount[r[6]] > 1, '保留一份，其余删除'],
+  ];
+  const on = new Set(RULES.map(r => r[0]));
+  $('hRules').innerHTML = RULES.map(r => `<label><input type="checkbox" data-k="${r[0]}" checked><span>${r[1]}<br><small style="color:var(--ink-faint)">→ ${r[3]}</small></span></label>`).join('');
+  $('hRules').querySelectorAll('input').forEach(i => i.onchange = () => { i.checked ? on.add(i.dataset.k) : on.delete(i.dataset.k); });
+  const head = '<tr><th>chunk</th><th>doc_id</th><th>version</th><th>embed_model</th><th>acl</th><th>expires_at</th><th>hash</th><th>问题</th></tr>';
+  const table = flags => ROWS.map((r, i) => `<tr class="${flags && flags[i].length ? 'flag' : ''}"><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4] || '∅'}</td><td>${r[5] || '—'}</td><td>${r[6]}</td><td class="why">${flags ? flags[i].join('、') : ''}</td></tr>`).join('');
+  $('hTable').innerHTML = head + table(null);
+  $('hRun').onclick = () => {
+    const act = RULES.filter(r => on.has(r[0]));
+    const flags = ROWS.map(r => act.filter(x => x[2](r)).map(x => x[1].split('：')[0]));
+    const bad = flags.filter(f => f.length).length;
+    $('hTable').innerHTML = head + table(flags);
+    $('hKpi').innerHTML = `<div class="kpi ${bad ? 'bad' : 'ok'}"><span>问题块</span><b>${bad} / ${ROWS.length}</b></div>` + act.map(x => `<div class="kpi"><span>${x[1].split('：')[0]}</span><b>${ROWS.filter(x[2]).length}</b></div>`).join('');
+  };
+})();
+
+/* ===== LAB 6.1 问题手册 ===== */
+(function () {
+  const L = ['全部', '更新', '数据', '切块', '检索', '排序', '生成', '安全', '运维', '评估'];
+  // [层, 症状, 根因, 解法, 回看链接, 链接文字]
+  const F = [
+    ['更新', '改了文档，回答还是旧的', '① 追加写，旧块没删；② 语义缓存 / 答案缓存没失效；③ 向量库一致性级别下写入尚未可见。', '按 doc_id 替换（本页第 1、3 章）；文档更新时按 doc_id 失效相关缓存；确认一致性级别与可见延迟。', 'e.html#c1', 'E 页 · 知识库动态维护'],
+    ['更新', '同一个问题，答案时新时旧', '新旧版本的块同时在库，相似度几乎相同，排名随机抖动。', '先写后删 + 查询端按 (doc_id, 最高 version) 去重；或事务 / 版本指针；跑一次对账清理残留。', 'e.html#c3', 'E 页 · 写入一致性与删除'],
+    ['更新', '文档已经下线，还在被引用', '删除没有传播到向量库（只做了新增和修改的同步），或删除事件丢失。', '接入删除事件 + 每日全量 doc_id 对账；LangChain 用 cleanup="full"，LlamaIndex 用 UPSERTS_AND_DELETE。', 'e.html#c3', 'E 页 · 写入一致性与删除'],
+    ['更新', '每次增量更新几乎都在全量重嵌入', '固定长度切块的边界漂移：插入或删除一段后，下游所有块的 hash 都变了。', '改用结构感知切块；块 ID 用内容 hash 生成；只为新 hash 调用嵌入。', 'e.html#c2', 'E 页 · 增量更新流水线'],
+    ['更新', '换了嵌入模型后召回大幅下降', '新旧模型的向量混在同一个索引里，或别名切了但查询仍用旧模型。', '整库重嵌入到新集合；查询模型与集合的 embed_model 绑定；切换前在黄金集上做影子评估。', 'e.html#c4', 'E 页 · 模型升级与重建'],
+    ['更新', '不想自己写同步脚本，有没有现成的', '增量同步 = 变更检测 + 记账 + 调度 + 对账，自己写容易漏掉删除。', '按场景选：Postgres 用 pgai Vectorizer；多源加血缘用 CocoIndex；SaaS 源用 Airbyte Deduped 模式；轻量场景用 LangChain / LlamaIndex 记账。', 'e.html#c2', 'E 页 · 增量同步数据流引擎'],
+    ['更新', '同一份文件被导入了两次', '块 ID 是自增或随机生成的，重复执行不幂等。', '用 (doc_id, 内容 hash) 生成确定性 ID，upsert 代替 insert。', 'e.html#c2', 'E 页 · 确定性唯一 ID'],
+    ['运维', '删了大量数据，磁盘和内存都没降，查询还变慢', '删除只打墓碑，图节点和段仍在。', '批量删除后触发 Compaction（Milvus / Qdrant）或 VACUUM（Postgres）。', 'c.html#c6', 'C 页 · 写入与新鲜度'],
+    ['运维', '查询延迟突然变高', 'ef_search / nprobe 设得过大；重排候选太多；未封存的小段太多导致扇出；过滤条件选择性太低。', '逐项测量：先关重排看延迟，再调 ef_search，再看段数和 Compaction 状态。', 'c.html#c3', 'C 页 · HNSW'],
+    ['运维', '内存不够，向量放不下', 'float32 全量向量 + HNSW 图常驻内存。', '量化（SQ / PQ / RaBitQ）、磁盘索引（DiskANN）、降维（支持 Matryoshka 的模型）。', 'c.html#c4', 'C 页 · 量化'],
+    ['检索', '错误码、型号、人名搜不到', '纯向量检索对精确标识符不可靠。', '加 BM25 / 稀疏检索做混合，用 RRF 融合。', 'b.html#c3', 'B 页 · 混合检索与 RRF'],
+    ['检索', '用户口语化提问，召回很差', '查询和文档的用词差距太大；一句话包含多个意图。', '查询改写、多查询、HyDE、意图分解。', 'b.html#c5', 'B 页 · 改写问题'],
+    ['检索', '加了过滤条件后结果变少，甚至为空', 'HNSW 先搜后过滤，过滤选择性高时 top-k 被过滤光。', '迭代扫描（pgvector iterative scan）、预过滤、按租户分区。', 'c.html#c5', 'C 页 · 过滤与多租户'],
+    ['检索', '中文关键词检索效果差', 'BM25 依赖分词，默认分析器按字或按空格切。', '换中文分词器（如 jieba 类分析器）或 n-gram；混合检索里提高向量路权重。', 'b.html#c3', 'B 页 · 混合检索'],
+    ['检索', '多跳问题、全局归纳问题答不好', '一次检索只能拿到局部片段。', 'Agentic 多轮检索、问题分解；全局归纳类考虑 GraphRAG / 分层摘要。', 'd.html#c2', 'D 页 · 进阶架构'],
+    ['切块', '答案被切成两半，各自都不完整', '块太小或切在了句子 / 条款中间。', '结构感知切块、适当重叠、检索后拼接相邻块（需要 seq 元数据）。', 'b.html#c1', 'B 页 · 切块'],
+    ['切块', '块单独看不知道在讲什么', '块脱离了标题和上下文。', '给块加标题路径前缀，或上下文化检索（为每块生成一句背景说明再嵌入）。', 'b.html#c1', 'B 页 · 切块'],
+    ['排序', '正确的块在候选里，但没进 top-k', '一阶段相似度排序不够精细。', '加交叉编码器重排：先召回 50，重排后取 5。', 'b.html#c4', 'B 页 · 重排'],
+    ['排序', '加了重排反而变差', '块长度超过重排器的最大输入，被静默截断，答案在被截掉的部分。', '检查重排器的 max length；控制块大小；对长块分段打分取最大值。', 'b.html#c4', 'B 页 · 重排截断'],
+    ['数据', 'top-k 被几乎一样的内容占满', '同一内容在多个文档里复制粘贴（模板、FAQ 转载）。', '入库按 content_hash 去重，近似重复用 MinHash；检索侧用 MMR 增加多样性。', 'e.html#c5', 'E 页 · 元数据与健康体检'],
+    ['数据', 'PDF、表格解析出来是乱码或错行', '版面解析能力不足，表格被拍平成一行文字。', '换版面感知的解析工具；表格单独转成 Markdown 或结构化记录再入库；入库前抽样人工检查。', 'b.html#c1', 'B 页 · 切块'],
+    ['生成', '库里明明没有，模型却硬答', '不管相关度多低，top-k 总会返回 k 条，模型被迫基于无关内容作答。', '设相似度 / 重排分数阈值，低于阈值走「不知道」兜底；提示词允许拒答。', 'a.html#c4', 'A 页 · 向量会翻车'],
+    ['生成', '检索到的内容互相矛盾', '多个版本或多个来源说法不一。', '先治理（删旧版本）；提示词里附上 updated_at 和来源，要求以最新、最权威来源为准并标注分歧。', 'e.html#c5', 'E 页 · 元数据与健康体检'],
+    ['生成', '回答没有出处，没法核对', '提示词里没有给块编号，也没要求引用。', '给每块编号，要求模型引用编号，回答时映射回文档链接与段落。', 'd.html#c3', 'D 页 · 上线四件事'],
+    ['安全', '用户看到了无权查看的文档内容', '权限在生成层做（让模型别说），或文档 ACL 变更没有同步到块元数据。', '检索层按身份过滤；ACL 变更当成一次文档更新处理；缺 ACL 的块默认拒绝。', 'd.html#c3', 'D 页 · 权限'],
+    ['安全', '文档里藏了指令，模型照做了', '间接提示注入：检索到的内容被模型当成指令。', '提示词里明确「资料只是数据」；入库时扫描可疑指令；高风险动作不允许由检索内容触发。', 'd.html#c3', 'D 页 · 上线四件事'],
+    ['安全', '用户要求删除个人数据', '数据有多个副本：原文、向量、全文索引、缓存、日志、评估集、备份。', '维护数据流向清单，删除按清单逐项执行并留审计记录。', 'e.html#c5', 'E 页 · 数据被遗忘权落地'],
+    ['评估', '改了参数，不知道是变好还是变坏', '没有带标注的黄金集，只能凭几个例子感觉。', '建 50–200 条黄金集，每次改动跑 Recall@k、MRR 与回答忠实度做回归。', 'b.html#c6', 'B 页 · 评估'],
+    ['评估', '离线指标很好，线上用户还是不满意', '黄金集不代表真实问题分布。', '定期从线上日志抽样补充黄金集；监控无答案率、点踩率、追问率。', 'e.html#c5', 'E 页 · 核心监控指标'],
+  ];
+  let lv = 0;
+  const draw = () => {
+    const q = $('fQ').value.trim().toLowerCase();
+    const rows = F.filter(f => (lv === 0 || f[0] === L[lv]) && (!q || f.slice(0, 4).join(' ').toLowerCase().includes(q)));
+    $('fCount').textContent = `${rows.length} / ${F.length} 条`;
+    $('fList').innerHTML = rows.length ? rows.map(f => `<details class="faq"><summary><span class="lv">${f[0]}</span><span class="q">${esc(f[1])}</span></summary><div class="fb"><p><span class="k">根因</span>${esc(f[2])}</p><p><span class="k">解法</span>${esc(f[3])}</p><p><span class="k">回看</span><a href="${f[4]}">${f[5]}</a></p></div></details>`).join('') : '<div class="none">没有匹配的条目，换个关键词试试。</div>';
+  };
+  mkPills($('fLv'), L, i => { lv = i; draw(); }, 0);
+  $('fQ').oninput = draw; draw();
+})();
+
+/* ===== 测验 ===== */
+KB.initQuiz({ title: '更新治理与问题手册', pass: 4, doneKey: 'e-quiz', questions: [
+  { q: '退款期限从 7 天改成 14 天，入库脚本只做 insert 不删旧块，会发生什么？', opts: ['新块向量更新，自动排在前面', '新旧块相似度几乎相同，同时被召回，答案时新时旧', '向量库会自动去重', '只影响 BM25，不影响向量检索'], a: 1, exp: '相似度只衡量「讲的是不是同一件事」，不衡量新旧。新旧两块几乎重合，排名随机抖动。修改必须是「删旧 + 写新」。' },
+  { q: '在文档开头插入一段后，固定长度切块下几乎所有块都要重新嵌入，原因是？', opts: ['嵌入模型有缓存失效', '所有切块边界整体后移，每块内容和 hash 都变了', 'HNSW 必须整图重建', '文档 version 加 1 会使所有块失效'], a: 1, exp: '固定窗口的边界由全局偏移决定，插入导致边界漂移。按结构切块能把影响局限在被改的那一块。' },
+  { q: '专用向量库没有多行事务，更新一篇文档推荐的顺序是？', opts: ['先删旧块再写新块', '先写新块再删旧块，查询端按 version 去重', '直接清空整个集合再重建', '只写新块，旧块等 Compaction 自动清理'], a: 1, exp: '先删后写有空窗，崩溃会让文档消失；先写后删最坏是短暂重复，可被查询端去重和对账修复。Compaction 只回收已删除数据，不会帮你删旧版本。' },
+  { q: '要换一个新的嵌入模型，以下哪个做法正确？', opts: ['新文档用新模型，老文档保持不变', '新建集合用新模型从原文全量重嵌入，评估后切别名，并同时切换查询模型', '只要维度相同就可以直接混用', '在旧向量上做线性变换即可'], a: 1, exp: '不同模型的向量空间不相通，必须整库重嵌入。别名切换只切数据侧，查询编码器必须一起换。' },
+  { q: '源头删除了一批文档，删除事件偶尔会丢。最可靠的兜底是？', opts: ['调高 top-k', '定期把源头 doc_id 集合和库里 doc_id 集合做差集对账，删除多出的部分', '让模型自己判断文档是否过期', '每次查询前重建索引'], a: 1, exp: '事件负责快，对账负责准。差集对账是保证「库 = 源头」的最终手段，删完再按需 Compaction 回收空间。' },
+] });
+</script>
+</body>
+</html>

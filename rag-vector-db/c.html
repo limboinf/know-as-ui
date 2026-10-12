@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZX3SDXK5B3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZX3SDXK5B3');
+</script>
+<title>RAG 与向量数据库 · C 向量库内核</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<!-- seo:start -->
+<meta name="description" content="RAG 与向量数据库 · C 向量库内核｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<link rel="canonical" href="https://dev.limbo101.win/rag-vector-db/c">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="know-as-ui">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="RAG 与向量数据库 · C 向量库内核">
+<meta property="og:description" content="RAG 与向量数据库 · C 向量库内核｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
+<meta property="og:url" content="https://dev.limbo101.win/rag-vector-db/c">
+<meta property="og:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="RAG 与向量数据库 · C 向量库内核">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
+<meta name="twitter:creator" content="@limbopeng">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"RAG 与向量数据库 · C 向量库内核","description":"RAG 与向量数据库 · C 向量库内核｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。","url":"https://dev.limbo101.win/rag-vector-db/c","inLanguage":"zh-CN","datePublished":"2026-10-05","dateModified":"2026-10-05","keywords":"rag 检索增强生成 向量数据库 vector database embedding 嵌入 bm25 hybrid 混合检索 rrf rerank 重排 chunking 切块 hnsw ivf 量化 rabitq pgvector milvus qdrant 选型 graphrag agentic 评估 recall 增量更新 incremental upsert 对账 删除 别名 alias 蓝绿 重建 治理 元数据 faq 常见问题 排障","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc"}</script>
+<!-- seo:end -->
+<link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="topic.css">
+<style>
+/* ===== 本页专属 ===== */
+canvas.cv{width:100%;height:auto;display:block;border:1.5px solid var(--line);border-radius:10px;background:#fffdf8;cursor:crosshair;touch-action:none}
+.rbars{display:grid;gap:5px;margin-top:10px}
+.rb{display:grid;grid-template-columns:78px 1fr 118px;gap:10px;align-items:center;font:11.5px var(--mono)}
+.rb .tr{height:14px;border:1px solid var(--line);border-radius:99px;background:var(--paper);overflow:hidden;position:relative}
+.rb .tr i{display:block;height:100%;border-radius:99px;background:var(--rag)}
+.rb .tr s{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);text-decoration:none}
+.rb.on{font-weight:800;color:var(--rag-deep)} .rb.on .tr{border-color:var(--ink)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font:11px var(--mono);color:var(--ink-soft);margin:8px 0 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.mtab{width:100%;border-collapse:collapse;font-size:12.5px;display:table!important;margin:10px 0 0}
+.mtab th{font-size:10.5px;padding:6px 8px} .mtab td{padding:6px 8px;vertical-align:middle} .mtab .num{font:12px var(--mono);white-space:nowrap}
+.mtab .tr{height:12px;border:1px solid var(--line);border-radius:99px;background:var(--paper);overflow:hidden;min-width:90px} .mtab .tr i{display:block;height:100%;background:var(--rag);border-radius:99px}
+.segs{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;min-height:96px;margin:10px 0}
+.seg{border:1.5px solid var(--ink);border-radius:8px;padding:7px 10px;font:11px/1.6 var(--mono);background:var(--paper);min-width:96px}
+.seg b{display:block;font:800 12px var(--mono)}
+.seg.grow{border-style:dashed;background:#f4e8d2;border-color:var(--hyb)} .seg.sealed{background:var(--rag-soft);border-color:var(--rag)}
+.seg .del{display:block;height:5px;border-radius:99px;background:var(--bad);margin-top:5px;opacity:.75}
+.lc-btns{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+select.txt-in{width:auto}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ===== 页首引言（承上启下） ===== */
+.page-intro{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1.25fr);
+  gap:12px;
+  align-items:stretch;
+  margin:0 0 34px;
+}
+.pi-block{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px}
+.pi-block.prev{background:var(--paper-deep);border-left:4px solid var(--ink-soft)}
+.pi-block.this{border-left:4px solid var(--rag);background:#fffdf8}
+.pi-tag{display:inline-block;font:700 10px var(--mono);letter-spacing:.12em;padding:2px 9px;border-radius:99px;margin-bottom:8px;text-transform:uppercase}
+.pi-block.prev .pi-tag{background:var(--ink);color:var(--paper)}
+.pi-block.this .pi-tag{background:var(--rag);color:#fff}
+.pi-block p{max-width:none;margin:0;font-size:14px;line-height:1.85;color:var(--ink-soft)}
+.pi-block p strong{color:var(--ink)}
+.pi-arrow{display:grid;place-items:center;font:800 22px var(--serif);color:var(--rag);user-select:none}
+
+.pi-roadmap{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 14px;
+  border:1.5px solid var(--line);
+  border-radius:8px;
+  background:var(--paper-deep);
+  font:11.5px var(--mono);
+}
+.pi-rm-title{
+  color:var(--ink-faint);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  flex:none;
+  font-weight:700;
+}
+.pi-rm-steps{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.pi-rm-steps .step{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:2px 8px;
+  border-radius:6px;
+  border:1px solid var(--line);
+  color:var(--ink-faint);
+  background:var(--paper);
+}
+.pi-rm-steps .step b{font-weight:800}
+.pi-rm-steps .step.done{
+  border-color:var(--ok);
+  color:var(--ok);
+  background:#e2ecdd;
+}
+.pi-rm-steps .step.active{
+  border:1.5px solid var(--rag);
+  color:#fff;
+  background:var(--rag);
+  font-weight:700;
+}
+.pi-rm-steps .step.next{
+  border-style:dashed;
+}
+.pi-rm-steps .step-sep{color:var(--ink-faint);font-size:10.5px;user-select:none}
+
+.cards3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:12px 0 20px}
+.cards3 .c{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px}
+.cards3 .c b{display:block;font:800 15px var(--serif);margin-bottom:4px}
+.cards3 .c i{font:700 10.5px var(--mono);letter-spacing:.08em;color:var(--rag);display:block;margin-bottom:6px;font-style:normal}
+.cards3 .c p{font-size:13px;line-height:1.75;margin:0;color:var(--ink-soft)}
+
+.four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:var(--content-rail);margin:12px 0 20px}
+.four .c{border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:13px 15px}
+.four .c b{font:800 15px var(--serif);display:block;margin-bottom:3px}
+.four .c i{font:700 10.5px var(--mono);color:var(--rag);display:block;margin-bottom:5px;font-style:normal}
+.four .c p{font-size:13px;line-height:1.75;color:var(--ink-soft);margin:0}
+
+.ch-bridge{margin:22px 0 8px;padding:13px 16px;background:var(--paper-deep);border:1.5px solid var(--line);border-left:4px solid var(--hyb);border-radius:8px;font-size:13.5px;line-height:1.8;color:var(--ink-soft)}
+.ch-bridge b{color:var(--ink)}
+.ch-bridge .tag{display:inline-block;font:700 10px var(--mono);letter-spacing:.08em;background:var(--hyb);color:#fff;padding:2px 7px;border-radius:4px;margin-right:8px}
+
+.tag-dim{font:700 11px var(--mono);padding:2px 7px;border-radius:4px;background:var(--paper-deep);border:1px solid var(--line);color:var(--ink);white-space:nowrap}
+
+@media(max-width:760px){
+  .two{grid-template-columns:1fr}.rb{grid-template-columns:62px 1fr 96px}
+  .cards3,.four{grid-template-columns:1fr}
+  .page-intro{grid-template-columns:1fr;gap:10px}
+  .pi-arrow{transform:rotate(90deg);padding:2px 0}
+  .pi-roadmap{flex-direction:column;align-items:flex-start;gap:6px}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">RAG <em>与向量数据库</em> · C 向量库内核</span>
+  <div class="progress-rail"><div class="progress-fill" id="progFill"></div></div>
+  <span class="progress-label" id="progLabel">0 / 8 章</span>
+  <a class="home-btn" href="../index.html">← 首页</a>
+</header>
+
+<div class="wrap">
+<nav class="toc" id="toc"><div class="toc-title">目录 · Contents</div></nav>
+<main>
+
+<nav class="series-nav" aria-label="五页导航">
+  <span class="sn-label">RAG 与向量库 · 五部曲</span>
+  <a class="sn-item" href="a.html"><b>A</b>直觉</a>
+  <a class="sn-item" href="b.html"><b>B</b>检索质量</a>
+  <a class="sn-item is-current" href="c.html"><b>C</b>向量库内核</a>
+  <a class="sn-item" href="d.html"><b>D</b>选型与实战</a>
+  <a class="sn-item" href="e.html"><b>E</b>更新与排障</a>
+</nav>
+<div class="case-strip" aria-label="贯穿案例进度">
+  <span class="cs-label">贯穿案例 · 一家公司的客服知识库</span>
+  <span class="cs-act done">序幕 · 十篇文档的原型</span>
+  <span class="cs-act done">第二幕 · 答得不准，调质量</span>
+  <span class="cs-act current">第三幕 · 一千万篇，扛规模</span>
+  <span class="cs-act">第四幕 · 上线，选型与实战</span>
+  <span class="cs-act">第五幕 · 活下去，更新与治理</span>
+</div>
+
+<aside class="page-intro" aria-label="前言与导读">
+  <div class="pi-block prev">
+    <span class="pi-tag">前情承接 · B 检索质量</span>
+    <p>在 B 页，我们系统性攻克了「答不准」的难题：通过<strong>切块防截断</strong>保留上下文，用 <strong>BM25 + 向量双路混合（RRF）</strong>与<strong>重排（Rerank）</strong>治好了答非所问与专有名词失灵。此时的检索管道已经<strong>答得准、找得全</strong>，在中小规模下表现堪称完美。</p>
+  </div>
+  <div class="pi-arrow" aria-hidden="true">→</div>
+  <div class="pi-block this">
+    <span class="pi-tag">第三幕 · C 向量库内核（本页攻坚）</span>
+    <p>可一旦进入生产环境，知识库暴涨到<strong>一千万个块（数千万向量）</strong>，原型里那句轻巧的 <code>vectors @ q</code> 瞬间撞墙：<strong>暴力扫一次内存要读几十上百 GB，单次查询卡死数秒，内存带宽直接打满。</strong></p>
+    <p style="margin-top:6px;">本页我们要拆开向量数据库的底层黑盒，看工业界如何用「近似（ANN）」换取数个数量级的飞跃：从<strong>空间分桶剪枝（IVF）</strong>、<strong>多层跳表图（HNSW）</strong>，到<strong>极致压缩（量化与粗筛精排）</strong>，并吃透生产必踩的<strong>标量过滤/多租户</strong>与<strong>LSM 分段动态写入</strong>。</p>
+  </div>
+  <div class="pi-roadmap">
+    <span class="pi-rm-title">五部曲演进</span>
+    <div class="pi-rm-steps">
+      <span class="step done"><b>A 直觉</b>原理与五步原型</span>
+      <span class="step-sep">➔</span>
+      <span class="step done"><b>B 检索质量</b>全链路调准调全</span>
+      <span class="step-sep">➔</span>
+      <span class="step active"><b>C 向量库内核（当前）</b>千万级规模与索引</span>
+      <span class="step-sep">➔</span>
+      <span class="step next"><b>D 选型实战</b>落地架构与避坑</span>
+      <span class="step-sep">➔</span>
+      <span class="step next"><b>E 更新排障</b>增量治理与问题手册</span>
+    </div>
+  </div>
+</aside>
+
+<!-- 01 -->
+<section class="chapter" id="c1">
+  <div class="chapter-head"><span class="chapter-no">01</span><h2 class="ch">向量形态与物理账单 —— 为什么需要专门的数据库</h2></div>
+  <p class="lede">在深入讨论千万级向量如何检索之前，必须先揭开向量的物理本质：向量不是玄学概念，而是一组定长的高维浮点数坐标。它的<strong>维度</strong>、<strong>存储精度</strong>以及<strong>底层索引结构</strong>，直接决定了整个知识库的成本与速度边界。</p>
+
+  <h3>维度（Dimension）是什么？能决定什么？</h3>
+  <p>通俗地说：如果给一个人建档，只记录【身高、体重】就是 2 个维度；如果再加上【年龄、学历、收入、发量、性格偏好……】就变成了高维。<strong>向量里的每一个维度，就是一条抽象的语义特征坐标轴。</strong></p>
+
+  <div class="cards3">
+    <div class="c"><i>决定 ①</i><b>语义表达细腻度</b><p>维度越高，向量在几何空间中的“表达空间”越大，越能区分微妙的语义差异（例如区分“轻微剐蹭”与“严重追尾”）。但维度过高也会带来“高维诅咒”，导致距离区分度被稀释。</p></div>
+    <div class="c"><i>决定 ②</i><b>计算与传输倍率</b><p>维度与计算量成正比。维度翻倍，向量占用的内存、外存体积翻倍，每次计算点积/余弦相似度的 CPU 乘加操作次数也直接翻倍。</p></div>
+    <div class="c"><i>原则 ③</i><b>维度由模型决定</b><p><strong>重点：维度不是向量数据库随手配置的，而是由生成它的嵌入模型（Embedding Model）决定的！</strong>换模型必须整库重算向量，无法直接混用。</p></div>
+  </div>
+
+  <h4>2026 年常见维度该怎么选？</h4>
+  <table>
+    <thead><tr><th>维度区间</th><th>代表模型（2026 年主流）</th><th>单向量大小 (fp32)</th><th>最佳适用场景</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag-dim">256 ～ 384 维</span></td><td>all-MiniLM-L6-v2、BGE-small</td><td>≈ 1 ～ 1.5 KB</td><td>移动端、边缘设备、轻量 Agent、百万级以内极致低延迟场景</td></tr>
+      <tr><td><span class="tag-dim">512 ～ 768 维</span></td><td>BERT、BGE-base、OpenAI text-embedding-3 截断档</td><td>≈ 2 ～ 3 KB</td><td>中小企业客服与知识库性价比甜点区，内存压力小</td></tr>
+      <tr><td><span class="tag-dim">1024 维</span></td><td>BGE-large、Qwen3-Embedding-8B、Voyage-3</td><td>≈ 4 KB</td><td><strong>2026 工业生产落地的黄金标准</strong>，多语言及复杂语义召回强</td></tr>
+      <tr><td><span class="tag-dim">1536 ～ 3072 维</span></td><td>OpenAI text-embedding-3-large、大型闭源 API</td><td>≈ 6 ～ 12 KB</td><td>法律、学术、医疗等超高精度长文档；自建库内存开销极重</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>套娃截断（Matryoshka）</b>2026 年的主流嵌入模型普遍支持套娃表示学习（Matryoshka Representation Learning）。模型在训练时就保证前 N 维（如 512 或 256）保留了大部分语义。你可以安全地丢弃后半段，存储直接减半，召回率通常仅微降 1%～2%（B 页第 2 章）。</div>
+
+  <h3>精度（Precision）是什么？常见场景怎么选？</h3>
+  <p>维度决定了“有几个数字”，而<strong>精度决定了“每个数字占几个字节”</strong>。计算机用不同格式的二进制存储浮点数，格式越精细，数字越准，但体积也越大。</p>
+
+  <table>
+    <thead><tr><th>存储精度</th><th>单维字节</th><th>压缩比</th><th>召回影响</th><th>2026 常见场景选型建议</th></tr></thead>
+    <tbody>
+      <tr><td><b>float32 (单精度)</b></td><td>4 字节</td><td>1× (基准)</td><td>无损 (0%)</td><td>开发测试、< 100 万条小规模库，无需任何优化直接保真</td></tr>
+      <tr><td><b>float16 / bfloat16</b></td><td>2 字节</td><td>2×</td><td>极微 (&lt; 0.2%)</td><td>生产通用第一步：内存直接减半，现代 CPU/GPU 硬件原生加速</td></tr>
+      <tr><td><b>int8 (标量量化)</b></td><td>1 字节</td><td>4×</td><td>很小 (≈ 1%～2%)</td><td><strong>千万级生产落地的首选标配</strong>，单机即可抗住千万向量</td></tr>
+      <tr><td><b>1-bit (二值量化/RaBitQ)</b></td><td>0.125 字节</td><td>32×</td><td>较明显 (需精排)</td><td>数千万至亿级超大规模：配合“粗筛 + 磁盘全精度精排”架构</td></tr>
+    </tbody>
+  </table>
+
+  <h3>常见的向量数据库（2026 年四大流派）</h3>
+  <p>面对这批向量，市面上的向量数据库究竟该怎么理解？不要被上百种工具眼花缭乱，它们在底层内核上主要分为四个流派：</p>
+
+  <div class="four">
+    <div class="c"><i>关系型扩展派 · 省心同库</i><b>pgvector / pgvectorscale</b><p>在现有 PostgreSQL 里安装扩展，向量与业务数据同表、同事务、支持 ACID。<strong>适合已有 Postgres、数据量千万以内、强依赖元数据关联的团队。</strong></p></div>
+    <div class="c"><i>原生专用分布式派 · 吞吐之王</i><b>Milvus / Qdrant</b><p>底层从网络到存储全为向量定制。Milvus 支持万亿级分布式扩展与 GPU 加速；Qdrant 基于 Rust 开发，单机过滤速度与极低延迟表现出色。<strong>适合中大型高并发生产环境。</strong></p></div>
+    <div class="c"><i>轻量与嵌入式派 · 极简无服务</i><b>LanceDB / Chroma</b><p>类似 SQLite，无独立服务端进程，内嵌于应用代码中。LanceDB 基于原生列存，能直接高效读写本地磁盘甚至 S3 对象存储。<strong>适合本地开发、桌面应用、轻量 Agent。</strong></p></div>
+    <div class="c"><i>全托管 / Serverless 派 · 零运维</i><b>Pinecone / turbopuffer</b><p>云端开箱即用，按实际检索量计费。底层自动处理冷热分层与弹性伸缩。<strong>适合没有专职 DBA/运维、追求快速上线验证业务的团队。</strong></p></div>
+  </div>
+
+  <h3>遭遇规模危机：暴力搜索的真实账单</h3>
+  <p>回到客服知识库案例：当手册切块从十篇膨胀到<strong>一千万个块</strong>时，原型里那句轻巧的 <code>vectors @ q</code>（拿查询向量和库里每一个向量算一次点积）彻底暴毙了：</p>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 1.1 · 规模计算器</b><span>真实计算：内存占用与暴力扫描耗时下限</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>向量条数 <b id="v-sN"></b></label><input type="range" id="sN" min="0" max="100" value="60"></div>
+        <div class="ctrl"><label>内存带宽（GB/s，单机有效值） <b id="v-sB"></b></label><input type="range" id="sB" min="10" max="400" step="10" value="50"></div>
+      </div>
+      <div class="ctrl"><label>维度（由嵌入模型决定）</label><div class="pills" id="sDim"></div></div>
+      <div class="ctrl"><label>存储精度</label><div class="pills" id="sType"></div></div>
+      <div class="ctrl"><label>HNSW 的 M 参数（每点连接数，见下方说明） <b id="v-sM"></b></label><input type="range" id="sM" min="8" max="64" step="4" value="16"></div>
+      <div class="kpi-grid" id="sKpi"></div>
+      <div id="sVerdict"></div>
+    </div>
+    <div class="lab-foot">
+      <b>参数说明与公式：</b><br>
+      • 原始向量大小 = 条数 × 维度 × 每维字节。<br>
+      • HNSW 额外索引大小 ≈ 条数 × 2M × 4 字节（图结构指针出边开销）。滑块中的 <strong>M</strong> 代表节点在图中的出度上限，M 越大图越密、检索越准，但内存开销也按 M 线性暴增（第 3 章专门详解）。<br>
+      • 暴力扫描耗时 = 向量总字节数 ÷ 内存带宽。这是纯读数据的物理下限，未计 CPU 浮点运算与调度损耗。
+    </div>
+  </div>
+
+  <div class="note"><b>为什么算力不是瓶颈，内存带宽才是？</b>以 1000 万条 1024 维 float32 向量为例，数据量是 <strong>40.96 GB</strong>。单次查询需要约 100 亿次浮点乘加（FLOPs），现代多核 CPU 每秒能算几千亿次，只需几毫秒；然而把这 41 GB 数据从内存条原原本本搬进 CPU 缓存，在 50 GB/s 的实际内存带宽下需要整整 <strong>0.82 秒</strong>！这属于典型的<strong>内存带宽受限（Memory-Bound）</strong>场景。单次查询卡顿近 1 秒，系统并发直接崩溃。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-c1"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释「维度」与「精度」的区别，心算出 N 条 d 维向量的大小，并说明暴力搜索的瓶颈为什么是内存带宽</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>维度是「身上贴了几个特征标签」（由模型定），精度是「每个标签写得多精细/占几个字节」。大小 = 条数 × 维度 × 字节数。一千万条 1024 维 float32 约 41 GB。暴力搜索像每次问路都把整座城市的电话簿从第一页翻到最后一页，慢在「把书从书架搬到桌上」（搬运带宽），而不是「眼睛看一眼」（计算）。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>维度决定特征空间容量，由嵌入模型架构确定；精度是数值表示类型（FP32/FP16/INT8/1-bit）。数据大小公式为 N·d·bytes。点积计算每读取 4 字节仅产生 2 次浮点操作，算术强度极低（≈ 0.5 FLOP/byte），受冯·诺依曼架构内存总线吞吐封顶，属于典型 Memory-Bound 任务。</p></div>
+  </div></details>
+
+  <div class="ch-bridge">
+    <span class="tag">承上启下</span>
+    <b>既然全量暴力扫描不可承受，我们该如何破局？</b><br>
+    向量数据库的全部智慧，就在于<strong>放弃 100% 精确，用「近似最近邻（ANN）」换取几个数量级的吞吐飞跃</strong>。如果不想每次把几百万本书逐本翻一遍，最符合直觉的偷懒办法是什么？——<b>“在空间里设立分类展台（聚类分桶），查询时先找最近的几个展台，然后只翻这几个展台的书架，其余 99% 统统跳过”</b>。这就是下一章要拆解的 <strong>IVF（倒排文件索引）</strong>。
+  </div>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="c2">
+  <div class="chapter-head"><span class="chapter-no">02</span><h2 class="ch">IVF 倒排索引 —— 空间聚类分桶：先查大类展台，再搜具体货架</h2></div>
+  <p class="lede">面对千万级向量，逐个比对的暴力穷举会迅速击穿内存与算力带宽。<strong>IVF（Inverted File Index，倒排文件索引）</strong>的核心思想就像大型物流仓储或国家图书馆的管理智慧：绝不让你盲目翻找 1000 万件货物，而是先在空间中设立若干个「分类大展台」，找东西时先花极小代价锁定最近的 2～3 个展台，然后<strong>只深入这几个展台所属的货架搜寻</strong>，其余 99% 的货架统统跳过！</p>
+
+  <h3>破除专业名词迷雾：为什么连续向量也要叫「倒排索引」？</h3>
+  <p>在传统搜索引擎（如 Elasticsearch）中，“倒排”指的是 <code>单词 Token → [包含该词的文档 ID 列表]</code>。向量明明是一串连续的高维浮点数组，为什么也被称为“倒排文件（IVF）”？</p>
+
+  <div class="two" style="margin:14px 0 20px">
+    <div class="c" style="border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px">
+      <i style="font:700 10.5px var(--mono);color:var(--ink-faint);display:block;margin-bottom:4px">传统正排视角（查谁算谁）</i>
+      <b style="font:800 14.5px var(--serif);display:block;margin-bottom:6px">向量 ID → 坐标数据</b>
+      <p style="font-size:13px;line-height:1.7;color:var(--ink-soft);margin:0"><code>vec_1: [0.21, -0.44, ...]</code><br><code>vec_2: [-0.08, 0.72, ...]</code><br>要找谁和查询向量最相似？必须把全库所有向量 ID 从头到尾挨个调进内存算点积，无法做任何粗筛剪枝。</p>
+    </div>
+    <div class="c" style="border:1.5px solid var(--ink);border-radius:10px;background:#fffdf8;padding:14px 16px">
+      <i style="font:700 10.5px var(--mono);color:var(--rag);display:block;margin-bottom:4px">IVF 倒排视角（分桶反查）</i>
+      <b style="font:800 14.5px var(--serif);display:block;margin-bottom:6px">质心桶 ID → [所属向量 ID 链表]</b>
+      <p style="font-size:13px;line-height:1.7;color:var(--ink-soft);margin:0"><code>Centroid_#1 (科技展台) → [vec_12, vec_89, ...]</code><br><code>Centroid_#2 (体育展台) → [vec_03, vec_44, ...]</code><br>把高维连续空间聚类离散化成一个个“桶”，查询时先定位最近的桶，然后<strong>倒查桶里的向量</strong>！</p>
+    </div>
+  </div>
+
+  <h3>两阶段工作流：离线归槽与在线剪枝</h3>
+  <div class="cards3">
+    <div class="c">
+      <i>阶段 1 · 空间画桶（离线建索引）</i>
+      <b>K-Means 选出 nlist 个质心</b>
+      <p>算法在向量空间中聚类选出 <code>nlist</code> 个最具代表性的中心点（称为<strong>质心 Centroid</strong>）。全库所有向量计算自己离哪个质心最近，自动投递进该质心的「专属收纳桶（倒排链表）」。</p>
+    </div>
+    <div class="c">
+      <i>阶段 2 · 极速粗排（在线查质心）</i>
+      <b>只算 nlist 次点积，锁定目标桶</b>
+      <p>用户携带 Query 向量进来时，<strong>绝不碰全库上千万原始向量</strong>，先只与这 <code>nlist</code> 个质心算距离（仅几百次运算，耗时 &lt;0.05ms），选出距离最近的 <code>nprobe</code> 个质心桶。</p>
+    </div>
+    <div class="c">
+      <i>阶段 3 · 局部细排（跳过 99% 算力）</i>
+      <b>只在选中的几个桶内比对</b>
+      <p>系统直接将剩下 95%～99% 的桶完全忽略剪枝，只把这 <code>nprobe</code> 个桶里的向量拉出来计算精确相似度并排序。以极其轻微的精度损失，换取百倍级的吞吐提速！</p>
+    </div>
+  </div>
+
+  <h3>两大核心调优旋钮：nlist 与 nprobe 怎么选？</h3>
+  <table>
+    <thead><tr><th>参数名称</th><th>设定阶段</th><th>通俗解释与物理意义</th><th>极端取值与后果</th><th>2026 工业选型经验法则</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>nlist</code></td>
+        <td>建索引时（不可变）</td>
+        <td>空间一共切分成多少个「分类展台 / 质心桶」。</td>
+        <td>设太小（如 4）每个桶过大退化为全库暴搜；设太大（如 100 万）光比对质心就耗尽时间。</td>
+        <td>经验公式推荐 <b>4√N 到 16√N</b>。<br>例：100 万向量通常设 <b>4096</b>。</td>
+      </tr>
+      <tr>
+        <td><code>nprobe</code></td>
+        <td>每次查询时（动态可调）</td>
+        <td>查询时深入翻查多少个最近的「展台货架」。</td>
+        <td><code>nprobe = 1</code> 速度极快但极易漏检；<code>nprobe = nlist</code> 退化为 100% 穷举全搜。</td>
+        <td>推荐设为 <code>nlist</code> 的 <b>1% ～ 5%</b>（如 4096 个桶中探查 16～64 个）。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>致命死穴：为什么片区边界会翻车？（高维表面积灾难）</h3>
+  <p>在下方的二维实验中，你可能会觉得“片区分割很直观，大部分点都在质心附近”。但在真实工业生产的高维空间（768 或 1536 维）中，IVF 面临一个无法违抗的几何宿命——<strong>维度灾难与测度集中（Measure Concentration）</strong>：</p>
+  <ul class="plain">
+    <li><strong>球心是空的，高维数据点 99.9% 挤在边界外皮上：</strong>在高维超球体中，根据几何测度定理，超球体的体积几乎全部集中在紧贴最外层表面的一层微薄外壳上。这意味着<strong>在 768 维空间中，几乎所有向量都挤在不同片区的「分界墙」附近，而不是在质心中央！</strong></li>
+    <li><strong>一墙之隔的真近邻被彻底漏检：</strong>如果你的查询向量 Query 恰好落在片区 A 的边缘（离边界仅 0.01），而全库离它最近的 Top-1 真近邻恰好落在隔壁片区 B 的边缘（两者相距仅 0.02）。如果 <code>nprobe</code> 比较保守没有把片区 B 选入探测范围，这个近在咫尺的真近邻就会被<strong>100% 永久漏检</strong>！</li>
+    <li><strong>探查雪崩（The Probe Explosion）：</strong>为了捞回这些边界附近的漏检，你只能被迫增大 <code>nprobe</code>。但在高维空间中，相邻片区的数量呈指数级激增！为了达到 98% 以上的召回率，往往必须探查全库 20%～30% 以上的桶——此时原本期望的百倍提速急剧缩水至仅剩 3~4 倍，算力优势荡然无存！</li>
+  </ul>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 2.1 · IVF 片区探测</b><span>真实 k-means（3000 点，10 轮迭代），召回对 80 个查询取平均</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>nlist（片区数） <b id="v-ivK"></b></label><input type="range" id="ivK" min="8" max="160" step="4" value="96"></div>
+        <div class="ctrl"><label>nprobe（探测片区数） <b id="v-ivP"></b></label><input type="range" id="ivP" min="1" max="16" value="2"></div>
+      </div>
+      <canvas class="cv" id="ivCv" width="760" height="400"></canvas>
+      <div class="legend"><span><i style="background:#26221b"></i>查询点</span><span><i style="background:#fff;border:2px solid #3d7a44"></i>找到的真近邻</span><span><i style="background:#fff;border:2px solid #a83232"></i>漏掉的真近邻</span><span>亮色区域 = 被探测的片区</span></div>
+      <div class="kpi-grid" id="ivKpi"></div>
+      <div class="rbars" id="ivBars"></div>
+    </div>
+    <div class="lab-foot">点击画布可更换查询点。下方柱状图展示在当前 nlist 下，nprobe 取 1～10 时的平均召回率（绿柱）与扫描数据比例（红线）。把 nprobe 调大，召回上升但扫描比例急剧增加——为了追求 98% 以上的高召回，往往要扫描 20% 甚至更多数据，提速倍数大打折扣。</div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-c2"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释 nlist 与 nprobe 各自控制什么，并说出高维空间下 IVF 召回丢失发生在何处</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>nlist 是把仓库总共划成几个分类展台（建库定死），nprobe 是找东西时愿意深入翻查最近的几个展台书架（查询时可随心调）。为什么会漏检？因为你要找的最相似货物正好摆在隔壁展台的最外侧，而你的 nprobe 没选隔壁展台，就彻底错过了。在高维空间里，大部分数据都挤在展台边界墙附近，想找全就必须多翻很多展台，速度大幅下降。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>nlist 为 K-Means 聚类簇数（构建期质心数），nprobe 为查询期动态探测的 Voronoi 胞腔数。高维空间中几何测度集中导致数据点绝大部分分布在胞腔超曲面边界附近。当 Query 与真近邻分属不同胞腔且后者未被 nprobe 命中时即发生边界漏召。工程上常以 nlist ≈ 4√N 构建，在线通过增大 nprobe 或辅以重排提升召回。</p></div>
+  </div></details>
+
+  <div class="ch-bridge">
+    <span class="tag">承上启下</span>
+    <b>打破片区死板边界：从“行政区划”到“人际关系网”</b><br>
+    既然划死板的片区容易在交界处翻车，能不能换一种思路——<b>不划死片区，而是让每个点直接结识距离它最近的几个好友，形成一张人际关系网络？</b>查询时从某个熟人出发，顺着朋友圈逐级引荐、一路向目标靠拢！这就是在当代向量数据库中占据统治地位的图索引——<strong>HNSW</strong>。
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="c3">
+  <div class="chapter-head"><span class="chapter-no">03</span><h2 class="ch">HNSW —— 在多层「朋友圈」里顺藤摸瓜</h2></div>
+  <p class="lede">HNSW 全称 Hierarchical Navigable Small World（分层可导航小世界图）。它是过去五年工业界最主流的向量索引，也是 pgvector、Milvus、Qdrant 等系统默认的首选武器。</p>
+
+  <h3>小世界网络与六度分隔：怎么“顺藤摸瓜”？</h3>
+  <p>现实生活中有一条著名的“六度分隔理论”：你和世界上任何一个陌生人之间，平均只需要通过 6 个人就能建立联系。因为每个人的人脉圈里，既有身边的“密友（短距离连线）”，也有远在异地的“远亲或老同学（长距离长程连线）”。</p>
+  <p><strong>图上的贪心搜索：</strong>从图的某一个固定入口点出发，问它的所有好友：“你们谁离目标查询最近？”挑出最近的那一个走过去，再问它的好友……如此反复迭代，步步逼近目标。这叫<strong>贪心路由（Greedy Routing）</strong>。</p>
+
+  <h3>为什么必须分层（Hierarchical）？—— 跳表地图思想</h3>
+  <p>如果只有单层网络，当数据量达到千万级时，贪心搜索很容易在密密麻麻的局部胡同里“原地打转”，步子迈得太慢，甚至掉进局部死胡同。HNSW 借鉴了计算机科学中的经典数据结构<strong>跳表（Skip-List）</strong>，将网络构造成多层：</p>
+  <ul class="plain">
+    <li><strong>顶层（高速公路 / 世界地图）</strong>：只有极少量的“枢纽节点”，连线跨度极大，一步就能跨越半个向量空间，迅速缩短与目标的距离。</li>
+    <li><strong>中层（省道 / 城市地图）</strong>：节点逐渐增多，快速收敛到目标所属的局部区域。</li>
+    <li><strong>底层 Layer 0（街道胡同 / 全量地图）</strong>：包含 <strong>100% 的全部数据点</strong>，连线最为密集，在目标附近做最后的精细搜索。</li>
+  </ul>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 3.1 · HNSW 搜索回放</b><span>1000 个二维点，3 层结构；点击画布切换查询，拖动滑块回放路径</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>M 参数（每点连接数，底层为 2M） <b id="v-hM"></b></label><input type="range" id="hM" min="2" max="12" value="6"></div>
+        <div class="ctrl"><label>ef 参数（底层动态候选队列大小） <b id="v-hE"></b></label><input type="range" id="hE" min="10" max="100" value="20"></div>
+      </div>
+      <canvas class="cv" id="hCv" width="760" height="400"></canvas>
+      <div class="legend"><span><i style="background:#c2491d"></i>顶层路径（长程跨越大步走）</span><span><i style="background:#b5893a"></i>中层路径（收敛区域）</span><span><i style="background:#2a7f72"></i>底层访问的点（局部精搜）</span><span><i style="background:#fff;border:2px solid #26221b"></i>返回的 top-10</span></div>
+      <div class="ctrl" style="margin-top:10px"><label>单步搜索回放进度 <b id="v-hT"></b></label><div style="display:flex;gap:8px;align-items:center"><input type="range" id="hT" min="0" max="1" value="1" style="flex:1"><button class="sim-btn ghost" id="hPlay">▶ 播放</button></div></div>
+      <div class="kpi-grid" id="hKpi"></div>
+    </div>
+    <div class="lab-foot">尝试把 M 调小到 2：图的连通性急剧恶化，顶层容易断链，贪心搜索经常撞入死胡同，召回率明显崩塌。而把 ef 调大，底层候选池加深，召回率上升，但距离计算次数也会增加。</div>
+  </div>
+
+  <h3>重点攻坚：核心参数 M 到底是什么意思？</h3>
+  <p>在所有向量数据库的文档和配置中，<strong>M</strong> 都是出镜率最高的核心参数。它绝不是一个神秘的数字，用大白话解释：</p>
+
+  <div class="cards3">
+    <div class="c"><i>定义</i><b>M 是每个节点的好友上限</b><p>在构建索引时，M 规定了每个节点在各层图上<strong>最多能连几条出边（最多结交几个好友）</strong>。它直接定义了整张图的稠密程度。</p></div>
+    <div class="c"><i>为什么底层是 2M？</i><b>防止孤岛与死胡同</b><p>在高层（粗筛层），每个点连 M 条边；但在最底层（Layer 0），因为要容纳 100% 全量数据，为了<strong>防止边缘点变成孤岛、确保局部高连通性</strong>，算法统一允许底层最多连 <strong>2M</strong> 条边！</p></div>
+    <div class="c"><i>致命代价</i><b>内存开销与 M 严格成正比</b><p>图上的每条连边，在内存里都是一个 4 字节的节点指针。<strong>全库额外的图结构内存开销 ≈ N × (2M) × 4 字节</strong>。M 开得越大，服务器内存账单暴涨越凶！</p></div>
+  </div>
+
+  <h4>参数三剑客协同指南：M、ef_construction 与 ef_search</h4>
+  <table>
+    <thead><tr><th>参数名称</th><th>作用阶段</th><th>通俗解释与作用</th><th>调大后的效果与代价</th><th>2026 工业推荐值</th></tr></thead>
+    <tbody>
+      <tr><td><code>M</code></td><td>建索引时（不可变）</td><td>每个节点的好友连线数（底层 2M）。决定图的骨架密度。</td><td>召回上限更高，但<strong>内存按 M 线性暴增</strong>，建索引变慢。</td><td>默认推荐 <b>16</b>（pgvector、Milvus 默认值）；超高精取 32～64。</td></tr>
+      <tr><td><code>ef_construction</code></td><td>建索引时（不可变）</td><td>建图插入新节点时，在周围探索多少个候选者来挑选最优好友。</td><td>建出的图质量更高、死胡同更少；<strong>不增加内存</strong>，只拖慢建索引时间。</td><td>推荐 <b>64 ～ 128</b>（Milvus 常用 128，pgvector 默认 64）。</td></tr>
+      <tr><td><code>ef_search</code></td><td>每次查询时（动态可调）</td><td>在线搜索时，同时维护的优先级候选队列长度。</td><td>召回率更高，但查询延迟上升；<strong>完全不增加内存</strong>。</td><td>推荐 <b>16 ～ 64</b>；高峰期调小换 QPS，低峰期调大换召回。</td></tr>
+    </tbody>
+  </table>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-c3"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释 HNSW 为什么分层，说出 M 的真实含义与底层 2M 的由来，并能心算 M 对内存的影响</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>分层是为了「先坐飞机（顶层长程跳跃）、后打出租（中层定位）、最后步行（底层挨家挨户敲门）」。M 是每个人最多交几个朋友。底层放了全城所有人，为了不漏掉住在偏僻角落的人，底层好友名额翻倍成 2M。代价：朋友越多通信录越厚，每多一条边就多占 4 字节内存，所以 M 不能无限大，通常设 16。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>分层借鉴跳表思想，获得 O(log N) 的对数级路由复杂度。M 控制图度数（Degree），底层为 2M 是为了保证密集基图的局部连通度（Delaunay 图逼近）并容纳更多反向边。额外图内存公式为 N·2M·4B。M 与 ef_construction 为构建期参数，ef_search 为查询期参数，可在运行时动态调节延迟与召回平衡。</p></div>
+  </div></details>
+
+  <div class="ch-bridge">
+    <span class="tag">承上启下</span>
+    <b>HNSW 极速背后的致命死穴：内存爆炸！</b><br>
+    HNSW 查得飞快、召回率傲视群雄，是 2026 年毫无争议的黄金索引。但天下没有免费的午餐：<strong>HNSW 要求把所有原始向量和整张图结构全部常驻在 RAM 内存中！</strong><br>
+    算一笔现实账：1000 万条 1024 维 float32 向量（41 GB），加上 M=16 的图索引（1.3 GB）与运行时元数据，单机至少需要 64 GB 乃至 128 GB 高昂的物理内存。面对上亿级规模，内存成本会瞬间突破天际。<br>
+    既然图索引已经帮我们做到了“少看几条数据”，面对内存大山，我们能不能从另一个物理维度下手——<b>“把每一个向量本身，压得更小、少存几个字节”</b>？这就引出了下一章的杀手锏：<strong>向量量化（Quantization）</strong>。
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="c4">
+  <div class="chapter-head"><span class="chapter-no">04</span><h2 class="ch">量化 —— 每个向量少存几个字节</h2></div>
+  <p class="lede">前面两章的索引算法（IVF、HNSW）是在想办法<strong>「少看几条数据」（空间剪枝）</strong>，而量化（Quantization）是在从另一个物理维度破局——<strong>「把每一条向量存小一点」（存储压缩）</strong>。一个 1024 维的 float32 向量原始大小为 4 KB；如果每一维只用 1 个比特来存，体积将骤降至 128 字节，直接缩小 32 倍！</p>
+
+  <h3>常见的三大量化流派</h3>
+  <div class="cards3">
+    <div class="c"><i>主流标配 · 4×</i><b>标量量化（SQ int8）</b><p>把浮点数区间等距离划分成 256 个桶，映射到单字节整数（0～255）。从 4 字节压到 1 字节，召回率损失极微（通常 &lt; 1.5%），<strong>2026 年千万级中大规模生产落地的默认标配</strong>。</p></div>
+    <div class="c"><i>经典灵活 · 16～64×</i><b>乘积量化（PQ）</b><p>把向量切成若干小子段（如 1024 维切成 128 段），每段训练一套聚类码本。每段只存 1 字节的码本索引编号。查询时通过查预计算距离表（ADC）极速计算，但需训练码本，召回损失稍大。</p></div>
+    <div class="c"><i>极限极致 · 32×</i><b>二值量化（1-bit / RaBitQ）</b><p>每个维度仅记录正负（>0 记为 1，&le;0 记为 0）。4 字节直接压缩为 1 比特！计算转化为单周期 CPU 汉明距离指令（POPCNT），每秒能比对上千万次。RaBitQ 进一步引入误差纠偏因子。</p></div>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 4.1 · 量化召回实测</b><span>真实运行：3000 条 128 维合成向量，40 个查询，对比精确 top-10</span></div>
+    <div class="lab-body">
+      <p style="margin:0 0 10px">点击运行，浏览器会现场进行量化编码并计算召回。「二值 + 精排」展示过采样（先圈出更多粗候选）再用全精度向量重排的效果：</p>
+      <button class="sim-btn" id="qRun">运行实验</button>
+      <div id="qOut"></div>
+    </div>
+    <div class="lab-foot">数据为聚簇高斯向量，演示相对趋势。单个 128 维向量的 fp32 大小为 512 字节。观察重点：纯 1 比特由于信息损失大，召回率较低；但一旦配合 5× 或 10× 的过采样精排，召回率瞬间被拉回 95% 以上！</div>
+  </div>
+
+  <h3>2026 生产黄金配方：“内存粗筛 + 磁盘全精度精排”</h3>
+  <p>纯量化后由于距离被离散化，距离排序难免出现微小位移，原来排第 1 的可能被挤到第 8。工业界是如何在省下几十倍内存的同时保住 98%+ 召回率的？</p>
+
+  <table>
+    <thead><tr><th>阶段</th><th>存放位置</th><th>数据格式</th><th>具体动作与耗时</th></tr></thead>
+    <tbody>
+      <tr><td><b>第一阶段 · 粗筛</b></td><td>物理 RAM 内存</td><td>1-bit 压缩码 / PQ 码</td><td>在内存中用极速汉明距离或查表扫出 <b>5× top-k 的候选池</b>（如取前 50 条）。耗时几毫秒，内存仅占原来的 1/32。</td></tr>
+      <tr><td><b>第二阶段 · 精排</b></td><td>廉价 SSD 磁盘 / NVMe</td><td>原始 float32 / float16 向量</td><td>仅针对这 50 个候选 ID 进行几十次磁盘随机读（微秒级），计算精确余弦相似度并重新排序，输出最终 top-10。</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>核心收益</b>这套两阶段架构让 1 亿条 1024 维向量的内存开销从 400 GB 暴跌至 15 GB 左右，单机轻量部署成为现实。当前主流的 DiskANN、Milvus 2.4+、LanceDB 的核心基石均基于此原理。</div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-c4"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出二值量化的压缩倍率，并解释「粗筛 + 磁盘精排」为什么能兼顾极低内存与高召回</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>二值量化把每个数压成正负 1 比特，缩小 32 倍。但尺子变粗了，名次容易乱。办法是先用粗尺子圈出前 50 名候选人（内存粗筛），再从硬盘里把这 50 个人的原始成绩单翻出来精排（磁盘精排），既省下了 90% 内存，又不会找错前 10 名。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>float32 → 1 bit/维实现 32× 压缩。汉明距离受量化误差影响存在排序扰动。通过设置过采样倍数（如 5× 至 10× top-k）建立粗候选集，再基于磁盘常驻的全精度向量完成向量内积精确重排，可将召回率恢复至 95%～99%，将内存瓶颈转化为低成本的局部 I/O 随机读。</p></div>
+  </div></details>
+
+  <div class="ch-bridge">
+    <span class="tag">承上启下</span>
+    <b>纯向量搜索已被征服，但现实业务从来没有“裸搜索”！</b><br>
+    经过空间剪枝（HNSW）与存储压缩（量化），我们不仅查得飞快，单机还能放下千万级数据。纯几何空间的相似度检索已被彻底拿下。<br>
+    然而一旦推向真实企业环境，产品经理会当头棒喝：<b>“等等！A 客户绝对不能搜到 B 客户的手册，普通员工绝对不能搜到管理层薪酬表！”</b><br>
+    每一个真实的业务请求，都死死绑定着权限与元数据条件（例如 <code>WHERE tenant_id = 'xxx' AND role = 'user'</code>）。这种看似简单的“加个 WHERE 过滤”，在向量数据库里却会引发灾难性的“结果缺口”风暴——引出下一章：<strong>标量过滤与多租户隔离</strong>。
+  </div>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="c5">
+  <div class="chapter-head"><span class="chapter-no">05</span><h2 class="ch">过滤与多租户 —— 先过滤还是后过滤</h2></div>
+  <p class="lede">上线前最硬核的业务需求：每个客户只能搜自己的手册，每个部门只能看授权的文档。这在技术上叫「带过滤条件的近邻搜索（Filtered ANN）」。它比传统 SQL 里的 <code>WHERE</code> 条件难得多，是大量团队在生产环境首次翻车的重灾区。</p>
+
+  <h3>为什么向量过滤比关系数据库难得多？</h3>
+  <p>在传统关系型数据库里，<code>SELECT * FROM docs WHERE tenant_id = 5 ORDER BY id LIMIT 10;</code> 走个 B+ 树索引轻而易举。但向量检索要解决的是：<strong>在高维几何空间中，找出既在空间上离我最近、又恰好属于租户 5 的点。</strong> 两种看似简单的方式都会踩雷：</p>
+
+  <div class="cards3">
+    <div class="c"><i>致命陷阱 ①</i><b>后过滤（Post-filtering）的结果缺口</b><p>先跑 HNSW 检索出全局 top-10，再剔除不属于租户 5 的数据。<strong>致命点：</strong>如果租户 5 的数据只占全库的 1%（高选择性），全局 top-10 里平均只有 0.1 条属于他，用户有 99% 的概率会拿到<strong>完全空白的结果</strong>！</p></div>
+    <div class="c"><i>致命陷阱 ②</i><b>先过滤（Pre-filtering）的图断裂</b><p>先用元数据选出租户 5 的全部数据，只在它们内部搜。<strong>致命点：</strong>对于 HNSW 图索引，如果剔除了 99% 的节点，原本紧密连通的小世界网络会被<strong>彻底撕碎成孤岛</strong>，贪心搜索根本连不起来，召回率直接归零！</p></div>
+    <div class="c"><i>破局解法 ③</i><b>单阶段迭代遍历（In-search）</b><p>在图遍历过程中，遇到非目标租户的节点<strong>虽然不加入返回答案，但依然作为寻路跳板（Bridge）</strong>；如果候选不足，算法自动沿着图继续向下探测，直到凑齐所需条数。</p></div>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 5.1 · 后过滤的结果缺口模拟器</b><span>真实计算：1200 个点，k=10，对 150 个查询取平均</span></div>
+    <div class="lab-body">
+      <div class="ctrl-grid">
+        <div class="ctrl"><label>租户数（过滤后剩余比例 ≈ 1/租户数） <b id="v-fT"></b></label><input type="range" id="fT" min="0" max="5" value="2"></div>
+        <div class="ctrl"><label>过取倍数（先取 10×倍数 再过滤） <b id="v-fF"></b></label><input type="range" id="fF" min="1" max="30" value="1"></div>
+      </div>
+      <div class="ctrl"><label>租户数据的分布形态</label><div class="pills" id="fMode"></div></div>
+      <div class="kpi-grid" id="fKpi"></div>
+    </div>
+    <div class="lab-foot">观察“凑够 10 条的查询”指标：当租户数很多（剩余比例仅 1%～2% 时），如果过取倍数只有 1～2 倍，几乎所有查询都拿不到 10 条结果！粗略所需过取倍数接近“1 / 剩余比例”。</div>
+  </div>
+
+  <h3>2026 多租户生产落地的三大架构形态</h3>
+  <table>
+    <thead><tr><th>多租户方案</th><th>实现方式</th><th>最佳适用场景</th><th>注意事项与代价</th></tr></thead>
+    <tbody>
+      <tr><td><b>单集合 + 字段过滤（如迭代扫描）</b></td><td>所有租户共用同一个大索引，查询时带 <code>tenant_id = ?</code>。pgvector 0.8+ 提供了 <code>hnsw.iterative_scan</code>，自动迭代探测直到凑满条数。</td><td>海量中小租户（成千上万家企业），单租户数据量较小。</td><td>需要数据库支持原生过滤式 ANN，否则选择性过高时查询开销加大。</td></tr>
+      <tr><td><b>按租户分区（Partition Key）</b></td><td>物理上存储在一个集合内，但底层按租户 ID 划分成独立子分区/子图（如 Milvus 的 Partition Key 机制）。查询直接打向对应分区。</td><td>租户数量中等（成百上千家），对性能隔离和吞吐要求高。</td><td>单个集群支持的分区数通常有上限（如几千个），需根据规模规划。</td></tr>
+      <tr><td><b>独立集合 / 独立数据库（物理隔离）</b></td><td>每个大租户单独建一个 Collection 或独立库实例。</td><td>超大型大客户、金融/政企客户、合规要求数据物理隔离。</td><td>租户越多，索引句柄与资源碎片化越严重，集群管理运维成本极高。</td></tr>
+    </tbody>
+  </table>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-c5"><div class="ckpt-box">✓</div><div class="ckpt-text">能解释为什么简单的后过滤会导致严重的结果缺口，并说出工业界两种缓解方案</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>像在全城总成绩榜上抓前 10 名，再看里面有没有你们小区的。你们小区只占全城 1%，这前 10 名里大概率一个都没有。办法：① 每次多抓 100 个人再筛选（过取/迭代扫描）；② 或者直接在你们小区内部单独排一个成绩榜（按租户分区）。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>后过滤期望留存条数等于 k·selectivity，高选择性（低 selectivity）场景极易导致有效候选枯竭返回空集。主流解法：① 迭代扫描（Iterative Scan）：在图搜索遍历中持续展开候选，直到凑齐 k 条或达到探测上限；② 按租户分区（Partitioning）：物理跳过无关数据段，避免跨租户拓扑稀释。</p></div>
+  </div></details>
+
+  <div class="ch-bridge">
+    <span class="tag">承上启下</span>
+    <b>系统能查、能存、能按租户隔离，但知识库是“活”的！</b><br>
+    到目前为止，检索速度、内存压缩、多租户权限都已妥善解决，整条流水线看似天衣无缝。<br>
+    然而客服业务是动态的：<b>“昨天业务线更新了退款协议，删除了旧版文档，新增了 500 篇新功能说明，为什么用户还能搜到已被废弃的旧条款？新写进去的手册怎么立刻搜不到？”</b><br>
+    向量索引（尤其是 HNSW）建图极其沉重，如果每写入或删除一条数据就原地重构整张图，系统吞吐会直接归零。现代向量数据库是如何借鉴 LSM 思想，一边应对高频写入，一边保证毫秒级查询的？——引出下一章：<strong>动态写入、新鲜度与 LSM 分段架构</strong>。
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="c6">
+  <div class="chapter-head"><span class="chapter-no">06</span><h2 class="ch">写入与新鲜度 —— 知识库是活的</h2></div>
+  <p class="lede">知识库每天都在变：工单实时流入、手册频繁修订、过期条款下线作废。向量索引不像平铺数组可以随便塞一条，高维图或聚类结构一旦建好，原地插入或删除代价极其高昂。现代向量数据库借用了 LSM-Tree 的智慧，构建了<strong>分段（Segment）生命周期架构</strong>。</p>
+
+  <h3>为什么向量图不能随便“原地插删”？</h3>
+  <p>在已构建完成的密集 HNSW 图上，每当有新向量插入，都需要为其寻找 $M$ 个双向近邻并动态重新连线；若直接删除一个节点，周围邻居的连线可能断裂，形成死胡同。在高并发写入场景下，频繁的原地修改会导致严重的写锁冲突和图拓扑老化，写入性能被死死卡死在每秒几十条。</p>
+
+  <h3>LSM 风格分段架构的四幕剧</h3>
+  <div class="cards3">
+    <div class="c"><i>第一幕 · 迎客区</i><b>增长段（Growing Segment）</b><p>新数据写入先进入内存小段。<strong>此时完全不建复杂索引</strong>，追加写入极快（数万 TPS）。查询时对增长段进行微量内存暴力扫描，与历史段合并，实现<strong>写入即刻可查</strong>。</p></div>
+    <div class="c"><i>第二幕 · 归档区</i><b>已封存段（Sealed Segment）</b><p>当增长段攒够一定规模（如 10 万 ~ 50 万条），系统将其“封存”刷盘，并在后台异步构建高质量的 HNSW 或 IVF 索引。封存后变为只读段，查询享受全速 ANN 检索。</p></div>
+    <div class="c"><i>第三幕 · 假死与清理</i><b>墓碑标记与合并（Compaction）</b><p>删除不立刻拆图，只在位图里打上<strong>「墓碑（Tombstone）」</strong>。搜索时将其过滤。在业务低峰期触发<strong>后台合并（Compaction）</strong>，将多个小段重建为一个大段，此时才真正物理清空死数据、释放空间。</p></div>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><b>LAB 6.1 · 分段架构模拟器</b><span>体验完整生命周期：写入、打墓碑、封存建索引、后台 Compaction 合并</span></div>
+    <div class="lab-body">
+      <div class="lc-btns"><button class="sim-btn" id="lcW">写入 5 万条</button><button class="sim-btn" id="lcD">删除 2 万条（打墓碑）</button><button class="sim-btn" id="lcS">封存增长段并建索引</button><button class="sim-btn" id="lcC">合并 + 清理墓碑</button><button class="sim-btn ghost" id="lcR">重置</button></div>
+      <div class="segs" id="lcSegs"></div>
+      <div class="kpi-grid" id="lcKpi"></div>
+      <div id="lcMsg" class="note" style="margin:8px 0 0"></div>
+    </div>
+    <div class="lab-foot">观察“查询扇出（段数）”与“相对延迟”：段数越多，查询需要并行的扇出分支越多；增长段没建索引，积压过大也会拖慢整体查询。及时触发封存与合并，是向量数据库维持低延迟的核心运维机制。</div>
+  </div>
+
+  <h3>生产运维两大避坑指南（必知必会）</h3>
+  <div class="four">
+    <div class="c"><i>常识 ①</i><b>写入一致性级别（Consistency Levels）</b><p>分布式向量库为了高吞吐，通常提供多种一致性级别：<strong>Strong</strong>（强一致，读写严格等待，最慢）；<strong>Bounded Staleness</strong>（有界时延，如保证 5 秒内可见）；<strong>Eventually</strong>（最终一致，吞吐最高）。客服系统推荐选有界时延，兼顾吞吐与新鲜度。</p></div>
+    <div class="c"><i>常识 ②</i><b>删除后的“存储假占用”陷阱</b><p>在生产库中删除了 100 万条废弃向量，发现物理磁盘和内存占用毫无下降，甚至查询还变慢了！——因为墓碑只是标记，仍在占用图节点。<strong>批量清理后，必须主动执行一次 Compaction（Milvus/Qdrant）或 VACUUM FULL（Postgres）真正释放空间。</strong></p></div>
+  </div>
+
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-c6"><div class="ckpt-box">✓</div><div class="ckpt-text">能说出「增长段 / 已封存段 / 墓碑 / Compaction 合并」各自的作用，并解释为什么刚删除的向量不立刻释放空间</div></div></div>
+  <details class="ckpt-ans"><summary>查看参考答案</summary><div class="ans-body">
+    <div class="ans-block plain"><span class="ans-tag">大白话</span><p>新货先堆在门口临时货架（增长段，没建索引，只能挨个看），攒够一车运进仓库并编好索引大目录（已封存段）。要扔的东西先贴上「作废」便签（墓碑），搜索时装作看不见它，等周末大扫除（Compaction）时才真正拉走扔掉并重新整理货架。</p></div>
+    <div class="ans-block pro"><span class="ans-tag">专业版</span><p>增长段支持无索引追加写以换取高并发吞吐；封存段为带 ANN 索引的只读数据块。删除通过软删除位图（Tombstone）实现，保证图路由拓扑不被实时破坏。后台 Compaction 异步执行段合并、多版本垃圾回收与索引重构，真正回收内存与 I/O 资源。</p></div>
+  </div></details>
+
+  <div class="ch-bridge">
+    <span class="tag">终章通关</span>
+    <b>六幕推演圆满收官：从底层内核迈向商业落地！</b><br>
+    从第 01 章的【维度与精度物理形态】&rarr; 第 02、03 章的【IVF 与 HNSW 剪枝原理】&rarr; 第 04 章的【量化与粗筛精排存储压缩】&rarr; 第 05 章的【标量过滤与租户隔离】&rarr; 第 06 章的【LSM 动态分段生命周期】——<br>
+    <strong>你已经完整穿透了现代向量数据库的全部底层黑盒，看清了所有架构取舍背后的第一性原理！</strong><br>
+    带着这份扎实的内核底气，接下来完成终极测验验收，我们便可踏入生产落地的终局战场——<strong>D 篇 · 选型与实战</strong>：面对市面上琳琅满目的数据库，你的团队该如何抉择？如何搭出一套兼顾准确率、高并发与性价比的企业级检索系统？
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="c7">
+  <div class="chapter-head"><span class="chapter-no">07</span><h2 class="ch">终极测验 · 5 题验收</h2></div>
+  <p class="lede">答对 4 题以上，才算把向量库的内核带走。</p>
+  <div id="quizMount"></div>
+  <div class="checkpoint"><div class="toc-title" style="margin:26px 0 4px">✦ 本章通关条件</div><div class="ckpt-item" data-key="c-quiz"><div class="ckpt-box">✓</div><div class="ckpt-text">终极测验 5 题答对 ≥ 4（答完自动勾选）</div></div></div>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="c8">
+  <div class="chapter-head"><span class="chapter-no">08</span><h2 class="ch">参考资料 · References</h2></div>
+  <p class="lede">厂商与博客数据标为「厂商数据 / 观点」。性能数字强烈依赖数据集、硬件与参数，务必在自己的数据上复测。</p>
+  <h3>原理出处</h3>
+  <ul class="plain source-list">
+    <li>Malkov &amp; Yashunin, <em>Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs</em>（HNSW，2016）· <a href="https://arxiv.org/abs/1603.09320" target="_blank" rel="noopener">arxiv.org/abs/1603.09320</a></li>
+    <li>Jégou et al., <em>Product Quantization for Nearest Neighbor Search</em>（PQ，2011）</li>
+    <li>Gao &amp; Long, <em>RaBitQ: Quantizing High-Dimensional Vectors with a Theoretical Error Bound</em>（2024）· <a href="https://arxiv.org/abs/2405.12497" target="_blank" rel="noopener">arxiv.org/abs/2405.12497</a></li>
+    <li>pgvector 官方 README（HNSW 参数、迭代扫描）· <a href="https://github.com/pgvector/pgvector" target="_blank" rel="noopener">github.com/pgvector/pgvector</a></li>
+  </ul>
+  <h3>2026 年的资料</h3>
+  <ul class="plain source-list">
+    <li>LanceDB’s RaBitQ Quantization for Blazing Fast Vector Search（厂商数据：1024 维约 136 B）· <a href="https://www.lancedb.com/blog/feature-rabitq-quantization" target="_blank" rel="noopener">lancedb.com</a></li>
+    <li>I/O Optimizations for Graph-Based Disk-Resident ANN Search: A Design Space Exploration（2026，论文）· <a href="https://arxiv.org/pdf/2602.21514" target="_blank" rel="noopener">arxiv.org/pdf/2602.21514</a></li>
+    <li>Vector Databases in 2026: A Systematic Performance Analysis of Indexing Architectures, Quantization Methods, and Production-Scale Retrieval（博客，规模分层对比）· <a href="https://effoma.com/blog/vector-database-performance-benchmark-comparison-2026/" target="_blank" rel="noopener">effoma.com</a></li>
+    <li>Best Vector Databases in 2026: Pricing, Scale Limits, and Architecture Tradeoffs（MarkTechPost，2026-05）· <a href="https://www.marktechpost.com/2026/05/10/best-vector-databases-in-2026-pricing-scale-limits-and-architecture-tradeoffs-across-nine-leading-systems/" target="_blank" rel="noopener">marktechpost.com</a></li>
+  </ul>
+  <p>本页 IVF 的 k-means、HNSW 构图与搜索、量化实验都是在浏览器里用本页脚本真实运行的简化实现（二维点、合成向量），目的是展示机制与趋势，不代表任何具体产品的性能。</p>
+
+  <a class="next-card" href="d.html"><div><b>下一页 · D 选型与实战</b><div class="nc-sub">选型向导 · Adaptive / Agentic / GraphRAG · 成本账 · pgvector 与 Milvus 各搭一套混合检索 · 故障排查决策树</div></div><span class="nc-arrow">→</span></a>
+  <footer class="colophon">资料核对日期：2026-10-05 · 产品参数与性能会变化，请以官方文档为准 · know-as-ui collection</footer>
+</section>
+
+</main>
+</div>
+
+<script src="lib.js"></script>
+<script src="common.js"></script>
+<script>
+KB.initPage({ key: 'c', names: ['向量形态与物理账单', 'IVF', 'HNSW', '量化', '过滤与多租户', '写入与新鲜度', '终极测验', '参考资料'] });
+const $ = id => document.getElementById(id), esc = KB.esc, clamp = (v, a = .01, b = .99) => Math.min(b, Math.max(a, v));
+const mkPills = (el, items, onPick, start = 0) => { el.innerHTML = ''; items.forEach((t, i) => { const b = document.createElement('button'); b.className = 'pill' + (i === start ? ' active' : ''); b.textContent = t; b.onclick = () => { [...el.children].forEach(c => c.classList.remove('active')); b.classList.add('active'); onPick(i); }; el.appendChild(b); }); };
+const gauss = r => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r());
+const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+function makeData(n, seed, nc) {
+  const r = KB.rng(seed), cs = [...Array(nc)].map(() => [.08 + r() * .84, .08 + r() * .84, .025 + r() * .045]);
+  return [...Array(n)].map((_, i) => { const c = i % nc; return { x: clamp(cs[c][0] + gauss(r) * cs[c][2]), y: clamp(cs[c][1] + gauss(r) * cs[c][2]), c }; });
+}
+function exactTopK(P, q, k) { return P.map((p, i) => [d2(p, q), i]).sort((a, b) => a[0] - b[0]).slice(0, k).map(x => x[1]); }
+function fitCanvas(cv) { const dpr = Math.min(2, devicePixelRatio || 1), w = cv.width, h = cv.height; cv.width = w * dpr; cv.height = h * dpr; const c = cv.getContext('2d'); c.scale(dpr, dpr); cv._w = w; cv._h = h; return c; }
+function canvasXY(cv, e) { const r = cv.getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width), y: clamp((e.clientY - r.top) / r.height) }; }
+
+/* ===== LAB 1.1 规模计算器 ===== */
+(function () {
+  const DIMS = [384, 768, 1024, 1536, 3072], TYPES = [['float32', 4], ['float16', 2], ['int8', 1], ['二值 1 bit', .125]]; let di = 2, ti = 0;
+  const draw = () => {
+    const n = Math.round(1e5 * Math.pow(1e4, +$('sN').value / 100)), bw = +$('sB').value, M = +$('sM').value, d = DIMS[di], bpd = TYPES[ti][1];
+    $('v-sN').textContent = KB.fmtN(n) + ' 条'; $('v-sB').textContent = bw + ' GB/s'; $('v-sM').textContent = M;
+    const vecB = n * d * bpd, idxB = n * 2 * M * 4, scanS = vecB / (bw * 1e9), total = vecB + idxB;
+    const t = scanS >= 1 ? scanS.toFixed(1) + ' 秒' : scanS >= 1e-3 ? (scanS * 1e3).toFixed(0) + ' ms' : (scanS * 1e6).toFixed(0) + ' µs';
+    $('sKpi').innerHTML = `<div class="kpi"><span>原始向量</span><b>${KB.fmtBytes(vecB)}</b></div><div class="kpi"><span>HNSW 额外（≈）</span><b>${KB.fmtBytes(idxB)}</b></div><div class="kpi rag"><span>合计（≈）</span><b>${KB.fmtBytes(total)}</b></div><div class="kpi ${scanS > 1 ? 'bad' : scanS > .05 ? 'warn' : 'ok'}"><span>暴力扫描 / 次查询</span><b>${t}</b></div>`;
+    const fits = total <= 64e9 ? ['ok', '一台 64 GB 内存的机器放得下'] : total <= 512e9 ? ['tight', '需要大内存机器（512 GB 内）或压缩'] : ['over', '单机放不下：需要分片、量化或磁盘索引'];
+    $('sVerdict').innerHTML = `<span class="verdict ${fits[0]}">${fits[1]}</span>`;
+  };
+  mkPills($('sDim'), DIMS.map(x => x + ' 维'), i => { di = i; draw(); }, di); mkPills($('sType'), TYPES.map(x => x[0]), i => { ti = i; draw(); }, ti);
+  ['sN', 'sB', 'sM'].forEach(id => $(id).oninput = draw); draw();
+})();
+
+/* ===== LAB 2.1 IVF ===== */
+(function () {
+  const N = 3000, P = makeData(N, 11, 14), cv = $('ivCv'), ctx = fitCanvas(cv), W = cv._w, H = cv._h, r = KB.rng(5);
+  const Qs = [...Array(80)].map((_, i) => { const p = P[(i * 37) % N]; return { x: clamp(p.x + (r() - .5) * .04), y: clamp(p.y + (r() - .5) * .04) }; });
+  const exact = Qs.map(q => exactTopK(P, q, 10)); let qd = { x: .5, y: .5 }; const cache = {};
+  function kmeans(k) {
+    if (cache[k]) return cache[k]; let C = [...Array(k)].map((_, i) => ({ x: P[Math.floor(i * N / k) * 1 % N].x, y: P[Math.floor(i * N / k) % N].y })), cell = new Int16Array(N);
+    for (let it = 0; it < 10; it++) { const S = C.map(() => [0, 0, 0]); P.forEach((p, i) => { let b = 0, bd = 9; C.forEach((c, j) => { const d = d2(p, c); if (d < bd) { bd = d; b = j; } }); cell[i] = b; S[b][0] += p.x; S[b][1] += p.y; S[b][2]++; }); C = C.map((c, j) => S[j][2] ? { x: S[j][0] / S[j][2], y: S[j][1] / S[j][2] } : c); }
+    const mem = C.map(() => []); P.forEach((p, i) => { let b = 0, bd = 9; C.forEach((c, j) => { const d = d2(p, c); if (d < bd) { bd = d; b = j; } }); cell[i] = b; mem[b].push(i); });
+    return cache[k] = { C, cell, mem };
+  }
+  function probe(K, q, np) { const order = K.C.map((c, j) => [d2(c, q), j]).sort((a, b) => a[0] - b[0]).slice(0, np).map(x => x[1]); const set = new Set(order); return { set, cand: order.flatMap(j => K.mem[j]) }; }
+  function recallAt(K, np) { let rc = 0, sc = 0; Qs.forEach((q, qi) => { const { cand } = probe(K, q, np), got = new Set(cand.map(i => [d2(P[i], q), i]).sort((a, b) => a[0] - b[0]).slice(0, 10).map(x => x[1])); rc += exact[qi].filter(i => got.has(i)).length / 10; sc += cand.length / N; }); return [rc / Qs.length, sc / Qs.length]; }
+  function draw() {
+    const k = +$('ivK').value, np = Math.min(+$('ivP').value, k); $('v-ivK').textContent = k; $('v-ivP').textContent = np;
+    const K = kmeans(k), pr = probe(K, qd, np), ex = exactTopK(P, qd, 10), got = new Set(pr.cand.map(i => [d2(P[i], qd), i]).sort((a, b) => a[0] - b[0]).slice(0, 10).map(x => x[1]));
+    ctx.clearRect(0, 0, W, H);
+    P.forEach((p, i) => { const on = pr.set.has(K.cell[i]); ctx.fillStyle = `hsla(${K.cell[i] * 137 % 360},55%,${on ? 42 : 70}%,${on ? .95 : .35})`; ctx.beginPath(); ctx.arc(p.x * W, p.y * H, on ? 2.4 : 1.8, 0, 7); ctx.fill(); });
+    K.C.forEach((c, j) => { ctx.strokeStyle = pr.set.has(j) ? '#26221b' : '#8a8172'; ctx.lineWidth = pr.set.has(j) ? 2 : 1; const x = c.x * W, y = c.y * H; ctx.beginPath(); ctx.moveTo(x - 4, y - 4); ctx.lineTo(x + 4, y + 4); ctx.moveTo(x + 4, y - 4); ctx.lineTo(x - 4, y + 4); ctx.stroke(); });
+    ex.forEach(i => { ctx.lineWidth = 2.5; ctx.strokeStyle = got.has(i) ? '#3d7a44' : '#a83232'; ctx.beginPath(); ctx.arc(P[i].x * W, P[i].y * H, 6, 0, 7); ctx.stroke(); });
+    ctx.fillStyle = '#26221b'; ctx.beginPath(); ctx.arc(qd.x * W, qd.y * H, 5, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    const found = ex.filter(i => got.has(i)).length, [rc, sc] = recallAt(K, np);
+    $('ivKpi').innerHTML = `<div class="kpi ${found === 10 ? 'ok' : found >= 7 ? 'warn' : 'bad'}"><span>这个查询：找到</span><b>${found} / 10</b></div><div class="kpi rag"><span>平均召回@10</span><b>${(rc * 100).toFixed(0)}%</b></div><div class="kpi"><span>平均扫描比例</span><b>${(sc * 100).toFixed(1)}%</b></div><div class="kpi"><span>相对暴力搜索</span><b>${sc > 0 ? (1 / sc).toFixed(1) + '× 更少' : '—'}</b></div>`;
+    let bars = ''; for (let n = 1; n <= Math.min(10, k); n++) { const [a, s] = recallAt(K, n); bars += `<div class="rb ${n === np ? 'on' : ''}"><span>nprobe=${n}</span><span class="tr"><i style="width:${a * 100}%"></i><s style="left:${s * 100}%"></s></span><span>召回 ${(a * 100).toFixed(0)}% · 扫描 ${(s * 100).toFixed(0)}%</span></div>`; }
+    $('ivBars').innerHTML = bars;
+  }
+  const pick = e => { qd = canvasXY(cv, e); draw(); }; cv.addEventListener('pointerdown', pick); cv.addEventListener('pointermove', e => { if (e.buttons) pick(e); });
+  $('ivK').oninput = $('ivP').oninput = draw; draw();
+})();
+
+/* ===== LAB 3.1 HNSW ===== */
+(function () {
+  const N = 1000, P = makeData(N, 21, 12), cv = $('hCv'), ctx = fitCanvas(cv), W = cv._w, H = cv._h, r = KB.rng(9);
+  const Qs = [...Array(100)].map(() => ({ x: .03 + r() * .94, y: .03 + r() * .94 })), exact = Qs.map(q => exactTopK(P, q, 10));
+  let H_ = null, Mcur = -1, qd = { x: .5, y: .5 }, trace = [], step = 0, timer = null;
+  const lvl = (() => { const rr = KB.rng(3); return P.map(() => { let l = 0; while (rr() < .25 && l < 2) l++; return l; }); })();
+  function build(M) {
+    const layers = [0, 1, 2].map(L => ({ nodes: P.map((_, i) => i).filter(i => lvl[i] >= L), adj: new Map() }));
+    layers.forEach((Ly, L) => { const m = L === 0 ? 2 * M : M; Ly.nodes.forEach(i => Ly.adj.set(i, new Set())); Ly.nodes.forEach(i => { Ly.nodes.filter(j => j !== i).map(j => [d2(P[i], P[j]), j]).sort((a, b) => a[0] - b[0]).slice(0, m).forEach(([, j]) => { Ly.adj.get(i).add(j); Ly.adj.get(j).add(i); }); }); });
+    return { layers, entry: layers[2].nodes[0] };
+  }
+  function search(q, ef, tr) {
+    let comps = 0; const dist = i => { comps++; return d2(P[i], q); };
+    let cur = H_.entry, dc = dist(cur); tr && tr.push({ t: 'hop', L: 2, node: cur });
+    for (let L = 2; L >= 1; L--) { for (;;) { let best = cur, bd = dc; H_.layers[L].adj.get(cur).forEach(nb => { const d = dist(nb); if (d < bd) { bd = d; best = nb; } }); if (best === cur) break; cur = best; dc = bd; tr && tr.push({ t: 'hop', L, node: cur }); } if (tr && L > 1) tr.push({ t: 'hop', L: L - 1, node: cur }); }
+    const vis = new Set([cur]), cand = [[dc, cur]], res = [[dc, cur]]; tr && tr.push({ t: 'vis', node: cur });
+    while (cand.length) { cand.sort((a, b) => a[0] - b[0]); const [d, c] = cand.shift(); const worst = res.length >= ef ? Math.max(...res.map(x => x[0])) : Infinity; if (d > worst) break;
+      H_.layers[0].adj.get(c).forEach(nb => { if (vis.has(nb)) return; vis.add(nb); const dd = dist(nb); tr && tr.push({ t: 'vis', node: nb }); const w2 = res.length >= ef ? Math.max(...res.map(x => x[0])) : Infinity; if (res.length < ef || dd < w2) { cand.push([dd, nb]); res.push([dd, nb]); if (res.length > ef) { res.sort((a, b) => a[0] - b[0]); res.pop(); } } }); }
+    res.sort((a, b) => a[0] - b[0]); return { top: res.slice(0, 10).map(x => x[1]), comps };
+  }
+  function draw() {
+    const M = +$('hM').value, ef = +$('hE').value; $('v-hM').textContent = M; $('v-hE').textContent = ef;
+    return { M, ef };
+  }
+  function render() {
+    const ev = trace.slice(0, step); ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(138,129,114,.22)'; ctx.lineWidth = 1; H_.layers[0].adj.forEach((s, i) => s.forEach(j => { if (j > i) { ctx.beginPath(); ctx.moveTo(P[i].x * W, P[i].y * H); ctx.lineTo(P[j].x * W, P[j].y * H); ctx.stroke(); } }));
+    P.forEach((p, i) => { ctx.fillStyle = lvl[i] === 2 ? '#c2491d' : lvl[i] === 1 ? '#b5893a' : '#8a8172'; ctx.globalAlpha = lvl[i] ? .85 : .5; ctx.beginPath(); ctx.arc(p.x * W, p.y * H, lvl[i] === 2 ? 3.6 : lvl[i] === 1 ? 3 : 2, 0, 7); ctx.fill(); }); ctx.globalAlpha = 1;
+    let prev = null; ev.forEach(e => { const p = P[e.node]; if (e.t === 'hop') { if (prev) { ctx.strokeStyle = e.L === 2 ? '#c2491d' : e.L === 1 ? '#b5893a' : '#2a7f72'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(P[prev].x * W, P[prev].y * H); ctx.lineTo(p.x * W, p.y * H); ctx.stroke(); } prev = e.node; } else { ctx.fillStyle = '#2a7f72'; ctx.beginPath(); ctx.arc(p.x * W, p.y * H, 4.2, 0, 7); ctx.fill(); } });
+    if (step >= trace.length) { const res = search(qd, +$('hE').value, null).top; res.forEach(i => { ctx.strokeStyle = '#26221b'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(P[i].x * W, P[i].y * H, 7, 0, 7); ctx.stroke(); }); }
+    ctx.fillStyle = '#26221b'; ctx.beginPath(); ctx.arc(qd.x * W, qd.y * H, 5.5, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    $('v-hT').textContent = step + ' / ' + trace.length + ' 步';
+  }
+  function recompute(keepStep) {
+    const { M, ef } = draw(); if (M !== Mcur) { H_ = build(M); Mcur = M; }
+    trace = []; search(qd, ef, trace); $('hT').max = trace.length; step = keepStep ? Math.min(step, trace.length) : trace.length; $('hT').value = step;
+    let rc = 0, cm = 0; Qs.forEach((q, i) => { const s = search(q, ef, null); rc += exact[i].filter(x => s.top.includes(x)).length / 10; cm += s.comps; }); rc /= Qs.length; cm /= Qs.length;
+    $('hKpi').innerHTML = `<div class="kpi ${rc > .95 ? 'ok' : rc > .8 ? 'warn' : 'bad'}"><span>召回@10（100 查询）</span><b>${(rc * 100).toFixed(0)}%</b></div><div class="kpi"><span>平均距离计算</span><b>${Math.round(cm)} 次</b></div><div class="kpi rag"><span>相对暴力（1000 次）</span><b>${(N / cm).toFixed(1)}× 更少</b></div><div class="kpi"><span>本次查询</span><b>${trace.length} 步</b></div>`;
+    render();
+  }
+  const pick = e => { qd = canvasXY(cv, e); clearInterval(timer); $('hPlay').textContent = '▶ 播放'; recompute(false); };
+  cv.addEventListener('pointerdown', pick); cv.addEventListener('pointermove', e => { if (e.buttons) pick(e); });
+  $('hM').oninput = $('hE').oninput = () => recompute(false);
+  $('hT').oninput = () => { step = +$('hT').value; render(); };
+  $('hPlay').onclick = () => { if (timer) { clearInterval(timer); timer = null; $('hPlay').textContent = '▶ 播放'; return; } step = 0; $('hPlay').textContent = '■ 停止'; timer = setInterval(() => { step++; $('hT').value = step; render(); if (step >= trace.length) { clearInterval(timer); timer = null; $('hPlay').textContent = '▶ 播放'; } }, Math.max(16, Math.min(60, 2400 / Math.max(1, trace.length)))); };
+  recompute(false);
+})();
+
+/* ===== LAB 4.1 量化实测 ===== */
+(function () {
+  const D = 128, N = 3000, NQ = 40;
+  function run() {
+    const r = KB.rng(42), cent = [...Array(16)].map(() => [...Array(D)].map(() => gauss(r)));
+    const nrm = v => { const n = Math.hypot(...v); return v.map(x => x / n); };
+    const X = [...Array(N)].map((_, i) => nrm(cent[i % 16].map(x => x + .9 * gauss(r)))), Q = [...Array(NQ)].map((_, i) => nrm(X[(i * 71) % N].map(x => x + .35 * gauss(r) / Math.sqrt(D) * 4)));
+    const dot = (a, b) => { let s = 0; for (let i = 0; i < D; i++) s += a[i] * b[i]; return s; };
+    const top = (sc, k) => sc.map((s, i) => [s, i]).sort((a, b) => b[0] - a[0]).slice(0, k).map(x => x[1]);
+    const truth = Q.map(q => top(X.map(x => dot(q, x)), 10)), rec = got => got.reduce((s, g, qi) => s + truth[qi].filter(i => g.includes(i)).length / 10, 0) / NQ;
+    const out = [];
+    out.push(['float32（基线）', D * 4, 1, rec(Q.map(q => top(X.map(x => dot(q, x)), 10)))]);
+    const f16 = X.map(x => x.map(v => Math.fround(Math.round(v * 2048) / 2048))); out.push(['float16 近似', D * 2, 2, rec(Q.map(q => top(f16.map(x => dot(q, x)), 10)))]);
+    const mn = [...Array(D)].map((_, j) => Math.min(...X.map(x => x[j]))), mx = [...Array(D)].map((_, j) => Math.max(...X.map(x => x[j]))), I8 = X.map(x => x.map((v, j) => Math.round((v - mn[j]) / (mx[j] - mn[j]) * 255)));
+    const dec = I8.map(c => c.map((v, j) => mn[j] + v / 255 * (mx[j] - mn[j]))); out.push(['int8 标量量化', D, 4, rec(Q.map(q => top(dec.map(x => dot(q, x)), 10)))]);
+    const mean = [...Array(D)].map((_, j) => X.reduce((s, x) => s + x[j], 0) / N), B = X.map(x => x.map((v, j) => v > mean[j] ? 1 : 0)), qb = Q.map(q => q.map((v, j) => v > mean[j] ? 1 : 0));
+    const ham = (a, b) => { let s = 0; for (let i = 0; i < D; i++) s += a[i] !== b[i] ? 1 : 0; return s; };
+    const hamTop = (qi, k) => B.map((b, i) => [-ham(qb[qi], b), i]).sort((a, b) => b[0] - a[0]).slice(0, k).map(x => x[1]);
+    out.push(['二值 1 bit（汉明）', D / 8, 32, rec(Q.map((q, qi) => hamTop(qi, 10)))]);
+    [50, 100, 200].forEach(o => out.push([`二值 + 精排（过采样 ${o / 10}×，取 ${o} 条重排）`, D / 8, 32, rec(Q.map((q, qi) => hamTop(qi, o).map(i => [dot(q, X[i]), i]).sort((a, b) => b[0] - a[0]).slice(0, 10).map(x => x[1])))]));
+    const m = 16, ds = D / m, KC = 64, books = [];
+    for (let s = 0; s < m; s++) { let C = [...Array(KC)].map((_, k) => X[(k * 47) % N].slice(s * ds, (s + 1) * ds)); for (let it = 0; it < 6; it++) { const S = C.map(() => ({ v: Array(ds).fill(0), n: 0 })); X.forEach(x => { const sub = x.slice(s * ds, (s + 1) * ds); let b = 0, bd = 1e9; C.forEach((c, k) => { let d = 0; for (let j = 0; j < ds; j++) d += (c[j] - sub[j]) ** 2; if (d < bd) { bd = d; b = k; } }); S[b].n++; for (let j = 0; j < ds; j++) S[b].v[j] += sub[j]; }); C = C.map((c, k) => S[k].n ? S[k].v.map(v => v / S[k].n) : c); } books.push(C); }
+    const codes = X.map(x => books.map((C, s) => { const sub = x.slice(s * ds, (s + 1) * ds); let b = 0, bd = 1e9; C.forEach((c, k) => { let d = 0; for (let j = 0; j < ds; j++) d += (c[j] - sub[j]) ** 2; if (d < bd) { bd = d; b = k; } }); return b; }));
+    out.push(['PQ（16 段 × 64 码字）', m, 32, rec(Q.map(q => { const tb = books.map((C, s) => C.map(c => { let d = 0; for (let j = 0; j < ds; j++) d += c[j] * q[s * ds + j]; return d; })); return top(codes.map(cd => cd.reduce((s, k, i) => s + tb[i][k], 0)), 10); }))]);
+    return out;
+  }
+  $('qRun').onclick = () => { $('qRun').disabled = true; $('qRun').textContent = '计算中…'; $('qOut').innerHTML = ''; setTimeout(() => { const rows = run(); $('qOut').innerHTML = `<table class="mtab"><thead><tr><th>方案</th><th>每条（128 维）</th><th>压缩</th><th>召回@10</th></tr></thead><tbody>` + rows.map(([n, b, c, rc]) => `<tr><td><b>${n}</b></td><td class="num">${b} B</td><td class="num">${c}×</td><td><div style="display:flex;gap:8px;align-items:center"><span class="tr" style="flex:1"><i style="width:${rc * 100}%;background:${rc > .9 ? 'var(--ok)' : rc > .6 ? 'var(--hyb)' : 'var(--bad)'}"></i></span><b class="num">${(rc * 100).toFixed(0)}%</b></div></td></tr>`).join('') + '</tbody></table>'; $('qRun').disabled = false; $('qRun').textContent = '重新运行'; }, 30); };
+})();
+
+/* ===== LAB 5.1 过滤 ===== */
+(function () {
+  const N = 1200, P = makeData(N, 31, 12), TS = [2, 5, 10, 20, 50, 100], r = KB.rng(13);
+  const Qs = [...Array(150)].map(() => ({ x: .03 + r() * .94, y: .03 + r() * .94 })), rank = Qs.map(q => P.map((p, i) => [d2(p, q), i]).sort((a, b) => a[0] - b[0]).map(x => x[1]));
+  const rnd = KB.rng(77), randAttr = P.map(() => rnd()); let mode = 0;
+  const draw = () => {
+    const T = TS[+$('fT').value], F = +$('fF').value; $('v-fT').textContent = T + '（≈' + (100 / T).toFixed(0) + '%）'; $('v-fF').textContent = F + '×';
+    const attr = i => mode === 0 ? Math.floor(randAttr[i] * T) : P[i].c % T;
+    let ok = 0, rc = 0, tot = 0;
+    Qs.forEach((q, qi) => { const t = mode === 0 ? Math.floor(rnd() * T) : attr(rank[qi][0]); const sub = rank[qi].filter(i => attr(i) === t).slice(0, 10), got = rank[qi].slice(0, 10 * F).filter(i => attr(i) === t).slice(0, 10); if (sub.length) { tot++; if (got.length >= Math.min(10, sub.length)) ok++; rc += sub.filter(i => got.includes(i)).length / sub.length; } });
+    $('fKpi').innerHTML = `<div class="kpi ${ok / tot > .95 ? 'ok' : ok / tot > .6 ? 'warn' : 'bad'}"><span>凑够 10 条的查询</span><b>${(ok / tot * 100).toFixed(0)}%</b></div><div class="kpi ${rc / tot > .95 ? 'ok' : rc / tot > .6 ? 'warn' : 'bad'}"><span>召回（对子集精确 top-10）</span><b>${(rc / tot * 100).toFixed(0)}%</b></div><div class="kpi"><span>实际取回条数</span><b>${10 * F}</b></div><div class="kpi"><span>粗略所需过取</span><b>≈ ${T}×</b></div>`;
+  };
+  mkPills($('fMode'), ['随机分配', '按空间聚簇（租户集中在某些区域）'], i => { mode = i; draw(); }); $('fT').oninput = $('fF').oninput = draw; draw();
+})();
+
+/* ===== LAB 6.1 分段架构 ===== */
+(function () {
+  const init = () => ({ sealed: [{ n: 100e3, del: 0 }], grow: 0 }); let S = init();
+  const msgs = { init: '起点：一个已封存的 10 万条段（已建 HNSW 索引）。试着写入、删除，再封存、合并。' }; let msg = msgs.init;
+  const draw = () => {
+    const live = S.sealed.reduce((s, x) => s + x.n - x.del, 0) + S.grow, dead = S.sealed.reduce((s, x) => s + x.del, 0), tot = S.sealed.reduce((s, x) => s + x.n, 0) + S.grow;
+    $('lcSegs').innerHTML = S.sealed.map((x, i) => `<div class="seg sealed"><b>段 ${i + 1} · 已封存</b>${KB.fmtN(x.n)} 条 · 有 ANN 索引${x.del ? `<span class="del" style="width:${x.del / x.n * 100}%"></span>墓碑 ${KB.fmtN(x.del)}` : ''}</div>`).join('') + (S.grow ? `<div class="seg grow"><b>增长段 · 可写</b>${KB.fmtN(S.grow)} 条 · 无索引<br>查询时暴力扫描</div>` : '');
+    const lat = 1 + .12 * S.sealed.length + S.grow / 2e5;
+    $('lcKpi').innerHTML = `<div class="kpi"><span>有效条数</span><b>${KB.fmtN(live)}</b></div><div class="kpi ${dead / tot > .15 ? 'bad' : dead ? 'warn' : ''}"><span>墓碑占比</span><b>${(dead / tot * 100).toFixed(0)}%</b></div><div class="kpi"><span>查询扇出（段数）</span><b>${S.sealed.length + (S.grow ? 1 : 0)}</b></div><div class="kpi ${lat > 1.8 ? 'warn' : ''}"><span>相对延迟（示意）</span><b>${lat.toFixed(2)}×</b></div>`;
+    $('lcMsg').className = 'note'; $('lcMsg').innerHTML = msg;
+  };
+  $('lcW').onclick = () => { S.grow += 5e4; msg = '新数据进入<b>增长段</b>：马上可查，但没有索引，只能暴力扫描，所以越攒越慢。'; draw(); };
+  $('lcD').onclick = () => { let left = 2e4; S.sealed.forEach(x => { const d = Math.min(left, x.n - x.del); x.del += d; left -= d; }); msg = '删除只是打了<b>墓碑</b>：行还占着空间，搜索时被过滤掉。墓碑占比高了会拖慢查询、浪费存储。'; draw(); };
+  $('lcS').onclick = () => { if (!S.grow) { msg = '增长段是空的，没有可封存的内容。先点「写入」。'; draw(); return; } S.sealed.push({ n: S.grow, del: 0 }); S.grow = 0; msg = '增长段已封存并<b>建好索引</b>，查询变回走 ANN。但段数 +1，每次查询要多扇出一路。'; draw(); };
+  $('lcC').onclick = () => { const live = S.sealed.reduce((s, x) => s + x.n - x.del, 0); S.sealed = [{ n: live, del: 0 }]; msg = '<b>合并</b>：把多个段重建为一个，同时物理清走墓碑。这是后台的重活，会占用 CPU 与 IO，通常在低峰执行。'; draw(); };
+  $('lcR').onclick = () => { S = init(); msg = msgs.init; draw(); }; draw();
+})();
+
+/* ===== 测验 ===== */
+KB.initQuiz({ title: '向量库内核', pass: 4, doneKey: 'c-quiz', questions: [
+  { q: '1 亿条 1024 维 float32 向量，原始数据大约多大？', opts: ['约 4 GB', '约 40 GB', '约 400 GB', '约 4 TB'], a: 2, exp: '1e8 × 1024 × 4 B ≈ 4.1e11 B ≈ 410 GB，还没算索引。' },
+  { q: 'IVF 里把 nprobe 调大，会发生什么？', opts: ['召回下降、速度变快', '召回上升、速度变慢', '索引占用变小', '无影响'], a: 1, exp: 'nprobe 是查询时探测的片区数，探测越多越不容易漏掉边界附近的近邻，但扫描的数据也越多。' },
+  { q: 'HNSW 中的核心参数 M 代表什么，其主要代价是什么？', opts: ['每个节点的连接边数上限，代价是内存随 M 线性增长', '分层的总层数，代价是建索引变慢', '每次查询搜索的候选队列，代价是延迟高', '聚类的中心点数量，代价是容易漏检'], a: 0, exp: 'M 规定了每个节点结交的好友上限（底层为 2M 防止死胡同）。图索引额外内存公式约为 N·2M·4 字节，M 越大图越稠密、内存开销越大。' },
+  { q: '二值量化把 1024 维 float32 压成 1 比特/维，压缩比与常用的补救手段分别是？', opts: ['4×，增大 nprobe', '32×，用原始向量对候选重排', '2×，换 L2 距离', '100×，增大 M'], a: 1, exp: '4096 B → 128 B 约 32×。粗筛取多于 k 的候选，再用全精度向量重排，可挽回大部分召回。' },
+  { q: '租户只占全库 5%，用「先取 top-10 再过滤租户」会怎样？', opts: ['一定准确', '平均只剩约 0.5 条，常拿到空结果', '速度变慢但结果准确', '自动补足到 10 条'], a: 1, exp: '期望留存约 k × 选择性 = 10 × 5%。解决办法：过取、迭代扫描、过滤式 ANN 或分区。' },
+] });
+</script>
+</body>
+</html>
