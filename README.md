@@ -9,7 +9,11 @@ know-as-ui/
 ├── index.html                 # 总索引，所有知识点从这里进入（由 topics.js 渲染）
 ├── topics.js                  # 知识目录数据源：分类 + 主题清单
 ├── catalog.js                 # 首页目录渲染函数（浏览器与 SEO 预渲染共用）
+├── assets/ask-ai.js           # 知识页 AI 上下文交接：范围选择、正文提取、提示词拼装
+├── assets/ask-ai.css          # 浮动入口与面板样式
+├── assets/vendor/             # 本地化的 ask-ai-widget（MIT）与许可证
 ├── scripts/seo.mjs            # make seo：生成 SEO 标签、预渲染目录、sitemap、robots
+├── scripts/llms.mjs           # make llms：用无头 Chrome 生成每页正文快照 <slug>/<page>.llms.txt
 ├── sitemap.xml / robots.txt   # 由 scripts/seo.mjs 生成
 ├── README.md                  # 项目约定
 ├── wrangler.jsonc             # Cloudflare Workers Static Assets 配置
@@ -71,6 +75,10 @@ jev-typesafe/
 └── assets/                    # 封面
 ```
 
+每个知识页旁边还有一份同名正文快照，例如 `pi-agent-loop/a.llms.txt`。
+它由 `scripts/llms.mjs` 从**真实渲染后的 DOM** 生成，保留章节、正文、代码块、表格、FAQ 和外部引用；不包含导航、按钮和测验控件。
+这份文件供「与 AI 讨论本页」或外部模型读取完整内容，不要手工编辑；页面 `<head>` 会自动挂 `rel="alternate"` 指向它。
+
 ## 新增知识点
 
 1. 创建一个小写短横线命名的主题目录，例如 `browser-automation/`。
@@ -78,12 +86,14 @@ jev-typesafe/
 3. 在根目录 `topics.js` 的 `topics` 数组追加一条记录（`slug`、`category`、`date`、`pages`、`title`、`desc`、`tags`、`keywords`），首页自动按分类分组、编号和计数，不用改 `index.html`。需要新分类时在 `categories` 里加一项。
 4. 如果同一个知识点需要拆成多个视角，再在该目录里增加 `b.html`、`c.html`，不要把不相关主题混在同一个目录。
 5. 需要图片、数据或其他专用文件时，放在该主题目录自己的 `assets/` 下。
-6. 运行 `make seo`（即 `node scripts/seo.mjs`），按 `topics.js` 重新生成各页 `<!-- seo:start -->` 区块（description、canonical、Open Graph、JSON-LD）、首页静态预渲染目录、`sitemap.xml` 和 `robots.txt`，把结果一起提交。分享卡片图约定放在 `<slug>/assets/og.jpg`（首页为 `assets/og.jpg`，1200×630），存在即自动挂 `summary_large_image` 大图卡片；用 apimart-image-gen 按现有图的同款风格提示词生成后裁切即可。脚本幂等，生成区块不要手改。
+6. 运行 `make seo`，按 `topics.js` 重新生成各页 `<!-- seo:start -->` 区块、首页静态预渲染目录、`sitemap.xml`、`robots.txt`，以及**每页的 `<slug>/<page>.llms.txt`**，把结果一起提交。首次运行先执行 `npm install`；生成 llms.txt 需要本机 Chrome / Chromium，路径不对时用 `CHROME_PATH=/path/to/chrome make seo` 覆盖。只想更新正文快照可运行 `make llms`。分享卡片图约定放在 `<slug>/assets/og.jpg`（首页为 `assets/og.jpg`，1200×630），存在即自动挂 `summary_large_image` 大图卡片；脚本幂等，生成区块与 `*.llms.txt` 都不要手改。
 
 ## 页面约定
 
+- **正文变更必做**：新增主题、修改知识页正文、增删章节或调整 FAQ 后，都要重新运行 `make seo`，把对应 `.llms.txt` 与 HTML 一起提交，避免模型读到过期内容。
 - 页面应该是可用的知识界面，不只是静态文章。
 - 适合加入流程图、架构图、时间线、模拟器、折叠代码、自测题、搜索、进度记录等交互。
+- 知识页在 `</body>` 前引入 `assets/vendor/ask-ai.min.js` 与 `assets/ask-ai.js`，并在 `<head>` 引入 `assets/ask-ai.css`，右下角会出现「与 AI 讨论」入口。它按「选中片段 → 当前章节 → 整页」自动挑上下文，并把该页 `<slug>/<page>.llms.txt` 的完整正文快照链接写进提示词；支持 ChatGPT、Claude、DeepSeek、Gemini、Perplexity。DeepSeek 与 Gemini 走复制提示词后跳转。新增主题页时复制这三行引用即可。
 - 每个页面的 `<head>` 顶部带上 GA4 统计代码（衡量 ID `G-ZX3SDXK5B3`），可直接从 `index.html` 复制 `<!-- Google tag (gtag.js) -->` 整段。
 - 不依赖构建工具时，直接用浏览器打开即可；如果确实需要依赖，再单独说明运行方式。
 - 中文内容使用 `UTF-8`，文件和目录命名使用 ASCII。

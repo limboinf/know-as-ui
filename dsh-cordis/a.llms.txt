@@ -1,0 +1,720 @@
+# dsh Cordis 与插件开发 · 交互手册
+
+> DeepSeek Harness「一切皆插件」的心脏：四问翻卡、插件树装卸模拟、fiber 状态机动画、effect 回滚栈、waterfall 决策链与 patch 叠层演示，附可运行的工具 / 钩子插件实战。
+
+来源：https://dev.limbo101.win/dsh-cordis/a
+站点：know-as-ui（交互式技术手册，本文件是自动生成的正文快照）
+生成：scripts/llms.mjs
+
+## Cordis 是什么 —— 一块带总闸的智能插线板
+
+先把术语说清楚，再打比方：Cordis 是一个**插件框架**。它自己不实现任何业务功能，只回答三件事——插件怎么装进来、插件怎么干净地卸出去、插件之间怎么找到对方。名字来自拉丁语 cor（心）的所有格，意思是「心脏」：它是 Koishi 的心脏，如今也是 dsh 的心脏。
+
+打个比方（比喻跟在定义后面）：Cordis 像一块**带总闸的智能插线板**。每个插件 = 一个电器：插上就通电（加载）；拔掉时总闸保证不留「暗电流」——定时器、监听器、连接全部自动回收；电器之间互不认识，全都只从插线板取电（服务）。dsh 的每一个工具、模型适配器、UI 面板，都是插在这块板上的电器。
+
+### 为什么插件系统需要一个框架
+
+假设你写了一个聊天机器人，功能变多后开始拆模块。但「模块化」只解决代码怎么组织，解决不了另外四件事——点击下面的卡片，看 Cordis 分别怎么回答：
+
+问题 1
+
+安装：新功能怎么被「接」进系统？
+
+点击翻面
+
+Cordis 的回答
+
+apply 函数
+
+问题 2
+
+配置：同一功能在不同环境用不同配置，写在哪里？
+
+点击翻面
+
+Cordis 的回答
+
+cordis.yml
+
+问题 3
+
+卸载：功能下线时，定时器、监听器、连接由谁清理？
+
+点击翻面
+
+Cordis 的回答
+
+框架清理，不用你记得。
+
+问题 4
+
+协作：功能 A 依赖功能 B，但 B 可能还没启动、之后还可能被替换？
+
+点击翻面
+
+Cordis 的回答
+
+等着
+
+这四个问题里，「卸载」和「协作」最难——它们决定了插件能不能**安全地动态装卸**。Cordis 的特别之处：把这两件事从「插件作者的自觉」上升为「框架级保证」。
+
+**它不是什么：不是传统 DI 容器** 传统依赖注入（Spring 那类）回答「谁创建谁」，隐含假设是「一旦绑定，服务就一直在」。Cordis 回答一个更难的问题：**「谁在什么时候活着」**——服务可以随时出现、随时消失、被替换，依赖它的一切自动跟着调整。论文给它的定位是 meta-framework（元框架）：规定副作用如何组合、依赖如何解析，但不预设任何业务领域。QQ 机器人能用，Agent 运行时也能用。
+
+### 出身：从 QQ 机器人到 DeepSeek 的地基
+
+| 时间 | 事件 |
+| --- | --- |
+| **2020.01** | Shigma 发布跨平台聊天机器人框架 **Koishi**，Cordis 是它抽出来的插件内核 |
+| **2022.04** | `cordis` 包独立登上 npm，成为通用插件框架 |
+| **2024.11** | Cordis 4 开始预发布：彻底重构，引入基于 **fiber** 的生命周期体系（第 4 章） |
+| **2026** | DeepSeek Harness 以 Cordis 为地基发布（vendor 进仓库）；北大 & DeepSeek-AI 发 88 页论文把它形式化 |
+
+图示：Cordis 是什么：插件框架三件事图解
+本节内容的图形化小结：Cordis 这个插件框架只管三件事——装进来、卸干净、找得到；dsh 的一切能力都是插在它上面的插件
+
+图示：Cordis 生态规模数字卡片
+生态规模一瞥（2026-08 实测）：Koishi 社区插件 4100+、cordis 年下载 51 万次、awesome-dsh 收录 174 个、dsh 内置 160 个
+
+
+## 第一个插件：一个文件 + 一行配置
+
+写 Cordis 插件最爽的一点：**完全没有框架启动代码**。一个导出 apply 函数的文件，加一行配置，就能跑。
+
+hello.ts
+
+```
+// 一个最小的 Cordis / dsh 插件
+import type { Context } from '@deepseek-ai/cordis'
+
+export const name = 'hello'   // 可选：诊断信息里的显示名
+
+export function apply(ctx: Context) {
+  console.log('hello from my first plugin')
+}
+```
+
+cordis.yml —— 应用本身就是一个配置文件
+
+```
+- name: './hello.ts'
+```
+
+跑起来（dsh 自带的小启动器：创建根 Context → 挂载 Loader 插件 → 读取 cordis.yml），输出 `hello from my first plugin`。注意分工：**插件只描述贡献，应用长什么样由配置决定**——这叫「配置即组合」。
+
+交互 · 插件是怎么被启动的
+
+6
+
+cordis.yml
+
+声明要挂载的条目
+
+Loader 插件
+
+读取并解析配置
+
+解析模块
+
+找到 ./hello.ts
+
+ctx.plugin()
+
+挂为子插件，建 fiber
+
+apply(ctx)
+
+框架调用你的函数
+
+贡献生效
+
+hello from my first plugin
+
+点击「下一步」，从配置文件走到你的 apply 函数。
+
+点击「下一步」逐步走一遍。任何配置项列表里的条目都是并发启动的：谁先跑由依赖关系（inject）决定，与书写顺序无关。
+
+### 插件的三种形态
+
+shapes.ts
+
+```
+import { Service, type Context } from '@deepseek-ai/cordis'
+
+// 1. 函数形态（最常用，没有对外服务时一直用它）
+export function apply(ctx: Context) {}
+
+// 2. 对象形态：带名字的对象 + apply 方法
+export const objectPlugin = {
+  name: 'object-plugin',
+  apply(ctx: Context) {},
+}
+
+// 3. 类形态：要对外提供服务时用（第 6 章）
+export class MyService extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'myService')
+  }
+}
+```
+
+| 形态 | 什么时候用 | dsh 里的例子 |
+| --- | --- | --- |
+| **函数** | 只做贡献（注册工具 / 监听事件），不对外暴露能力 | 绝大多数 dsh-tool-* |
+| **对象** | 同函数，但想要一个显式名字 | 小型内部插件 |
+| **类（Service）** | 要把一项能力挂到 `ctx.<key>` 上供别人取用 | ctx.tools、ctx.llm 的提供方 |
+
+**新手第一坑：加了插件没反应，先查拼写** 如果配置里的路径或包名拼错了（模块**解析**失败），Cordis 只会通过 logger 服务报一条错误，进程不会崩——启动早期这条消息甚至可能还没接到控制台就丢了。而如果 apply 抛异常，进程会**明确报错退出**。「解析不到」静默、「执行出错」炸裂，两种行为要分清。
+
+
+## ctx 与插件树：一切操作的入口
+
+在 Cordis 里你几乎只跟一个东西打交道：`ctx`。大白话讲，ctx 是插件进厂时领到的**工作台**——上面有事件插孔、副作用登记处、子插件挂钩。插件能做的一切，都是往这张工作台上操作。
+
+ctx 上最常用的五个操作
+
+```
+export function apply(ctx: Context) {
+  ctx.on('some/event', (payload) => {})  // 监听事件（卸载时自动移除）
+  ctx.effect(() => { ... })              // 登记副作用（卸载时自动回滚，第 5 章）
+  ctx.plugin(SomePlugin)                 // 挂载子插件（随父插件卸载）
+  ctx.get('someService')                // 读服务：没有则 undefined（可选依赖探测）
+  ctx.provide('someValue', 42)          // 提供服务
+}
+```
+
+关键在 `ctx.plugin(child)`：它不是简单的「注册」，而是**派生出一个子上下文**。于是插件不是平铺的列表，而是**一棵树**——子上下文能看到父上下文的一切（继承），但卸载是按层级的：父插件卸载，所有子插件**递归**卸载；子插件卸载，不影响兄弟和父级。这棵树是 Cordis 一切生命周期语义的骨架。
+
+[图：插件树结构图解]
+
+插件树图解：灰色虚线的 dsh-jobs 表示已随父插件卸载的子树——下面这个模拟器就是这棵树的可交互版，点它
+
+交互 · 插件树装卸模拟器
+
+点击任意节点 = 卸载 / 重装它
+
+子上下文继承父级可见性；卸载按层级递归
+
+根 Context
+
+new Context()
+
+Loader
+
+读取 cordis.yml
+
+dsh-llm
+
+模型适配器
+
+dsh-agent
+
+智能体循环
+
+my-tool
+
+你的插件 (apply)
+
+dsh-jobs
+
+后台任务
+
+my-ui
+
+你的子插件
+
+点击 dsh-agent 试试：它的子插件 dsh-jobs 会被递归卸载，而兄弟节点 dsh-llm、my-tool 完全不受影响。
+
+再点一次已卸载的节点 = 重新挂载。真实的 dsh 进程里有 160+ 个这样的节点，语义完全相同。
+
+
+## fiber：插件的一生
+
+先大白话定义：**fiber（纤维）是框架给每个已挂载插件实例开的「档案卡 + 生命体征监护仪」**。你声明了插件、它加载到哪一步、为什么没动静、卸载到什么程度——全记录在 fiber 上。Cordis 4 为每个插件实例维护一个 fiber，状态机如下：
+
+| 状态 | 大白话 | 技术含义 |
+| --- | --- | --- |
+| **PENDING** | 菜没上齐，干等 | 已声明，但 inject 的服务尚未就绪（第 6 章） |
+| **LOADING** | 正在开工 | apply 正在执行 |
+| **ACTIVE** | 正常营业 | apply 完成，贡献已生效 |
+| **FAILED** | 当场翻车 | apply 抛异常，或配置校验失败 |
+| **UNLOADING → DISPOSED** | 退租中 → 已退干净 | disposer 执行中 → 一切已拆除 |
+
+[图：fiber 状态机图解]
+
+fiber 状态机图解：无论因何种原因卸载（改配置 / 热重载 / 显式 dispose / 依赖服务消失），清理都是自动的
+
+交互 · fiber 状态机动画
+
+选一个剧本，点播放
+
+PENDING
+
+等依赖就绪
+
+LOADING
+
+apply 执行中
+
+ACTIVE
+
+运行中
+
+UNLOADING
+
+清理中
+
+DISPOSED
+
+已拆除
+
+FAILED
+
+报错，不静默跳过
+
+剧本 A · 正常启动：最常见的一生。
+
+剧本 B 是排障最高频场景：inject 指定的服务无人提供 → 永远 PENDING、不报错、不崩溃（PENDING 的 fiber 不会让进程保持存活）。
+
+
+## effect：可逆副作用 ——「改配置不用重启」的秘密
+
+先大白话定义：**effect = 注册时同时交一张「撤销说明书」**。effect 的主体在插件加载时执行；它返回的那个函数（叫 disposer，清理函数）在插件卸载时由框架自动执行。你永远不需要自己调用清理函数——不管插件因为什么原因被卸载。
+
+比喻：像酒店入住时前台就登记好「退房清单」——不管你什么时候走、为什么走（退房、续住换房、被消防疏散），清单上的事项都会被照单执行。
+
+effect-demo.ts
+
+```
+ctx.effect(() => {
+  const conn = createConnection()   // 加载时：建立连接
+  return () => conn.close()          // disposer：卸载时如何撤销
+})
+```
+
+更关键的事实：Cordis 的内置 API **本身就是 effect**——`ctx.on()` 注册的监听器随插件卸载、`ctx.plugin()` 的子插件递归卸载、服务注册随提供方消失。论文的实现章节有一个结论：**Cordis 中所有对上下文的变更，最终都归结为 ctx.effect 这一个原语**；提供服务、挂载插件、注册监听器，全是它的特例。所以「任何通过上下文进行的操作都自动可追踪、可恢复」不是口号，是结构事实。
+
+**插件作者的唯一铁律** 凡是自己创建、Cordis 不管的资源（setInterval、WebSocket、文件 watcher……），都包进 `ctx.effect()` 并返回 disposer。做不到的代价就是泄漏：插件卸了，定时器还在跑。
+
+撤销说明按**逆序**执行（先注册的后撤销，天然 LIFO——后进先出，像摞盘子：最后摞上的最先拿走）。多个 effect 各自独立时，可以只撤掉其中一个而不惊动别人——这就是「单个插件可热卸载，邻居不受影响」的底层依据。
+
+[图：effect 注册与 LIFO 回滚图解]
+
+effect 图解：加载时执行主体、卸载时自动执行 disposer；多个 effect 按注册的逆序回滚（LIFO）
+
+交互 · effect 回滚动画
+
+注册三个资源，再卸载插件看逆序回滚
+
+栈内 effect
+
+0
+
+已回滚
+
+0
+
+[log]
+
+注意回滚顺序：注册顺序 定时器→连接→监听，回滚一定是 监听→连接→定时器（LIFO）。
+
+**所以「改配置不用重启」是理所当然的** 改配置 → 旧插件卸载（所有 effect 自动回滚）→ 新插件加载。进程从头到尾不重启。因为副作用可逆，插件可以被安全地卸了再装——热重载（HMR）、故障自动恢复、测试隔离，全部建立在这一行原语上。
+
+
+## 服务与 inject：会自动重连的依赖
+
+先大白话定义：**Service（服务）就是把一项能力挂到 ctx 的某个名字上**（比如 `ctx.tools`、`ctx.llm`），别的插件按名字取用，而不是 import 它的代码。**inject 就是声明「我需要哪几个名字」**——声明之后，插件会一直保持 PENDING，直到所列服务全部就绪才启动。
+
+greeter.ts —— 提供服务
+
+```
+import { Service, type Context } from '@deepseek-ai/cordis'
+
+// 编译时：声明合并，让 ctx.greeter 在各处都有类型
+declare module '@deepseek-ai/cordis' {
+  interface Context { greeter: GreeterService }
+}
+
+export class GreeterService extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'greeter')   // 运行时：以 'greeter' 注册，谁都能 ctx.greeter 拿到
+  }
+  greet(who: string) { return `Hello, ${who}!` }
+}
+
+export const name = 'greeter'
+export function apply(ctx: Context) { ctx.plugin(GreeterService) }
+```
+
+consumer.ts —— 只声明名字，不 import 实现
+
+```
+export const name = 'consumer'
+export const inject = ['greeter']      // 声明依赖
+
+export function apply(ctx: Context) {
+  console.log(ctx.greeter.greet('world'))   // 此时 greeter 必定就绪
+}
+```
+
+cordis.yml 里两行的书写顺序**无关紧要**：决定插件何时启动的是依赖关系，不是文件顺序。把 greeter 整个删掉？consumer 保持 PENDING，不输出、不崩溃、也不「只运行一半」。
+
+### 与传统 DI 的本质区别：服务会消失是常态
+
+传统 DI 假设「一旦绑定，服务就一直在」；Cordis 的假设是「**服务可以随时出现，也可以随时消失**」。这在 Agent 场景里是日常：LLM 提供方被限流、MCP 服务器崩溃导致工具被注销、文件 watcher 被系统杀死。Cordis 的处理：**提供方卸载 → 所有依赖它的插件自动卸载（effect 回滚）；提供方恢复 → 自动重载**。依赖方一行重连代码都不用写。
+
+[图：服务与 inject 图解]
+
+服务与 inject 图解：消费方只声明名字、不 import 实现；提供方卸载 → 依赖方自动卸载，恢复 → 自动重载
+
+交互 · 依赖联动模拟器
+
+拨动提供方开关，看下游插件状态联动
+
+### 服务提供方（点击开关）
+
+dsh-llm
+
+提供 llm 服务
+
+dsh-tools
+
+提供 tools 注册表
+
+dsh-bash-local
+
+提供 shell 服务
+
+### 消费方（inject 决定状态）
+
+dsh-agent
+
+inject: [llm, tools]
+
+dsh-tool-bash
+
+inject: [tools, shell]
+
+my-greet-tool
+
+inject: [tools]
+
+my-observer
+
+无 inject，只监听事件
+
+关掉 dsh-tools：所有 inject 里带 tools 的插件立刻转入 PENDING；重新打开，它们自动恢复 ACTIVE——不需要任何重连代码。
+
+这也是「换提供方不改消费方」的原理：卸载 dsh-bash-local、挂载一个沙箱 shell 提供方，所有 inject 'shell' 的插件自动重启并使用新实现。
+
+还有两个配套机制，知道名字即可：`ctx.isolate(key, realm)` 隔离——让某作用域内一项服务解析到独立实例（每个会话各自的模型 / 沙箱，互不干扰）；`ctx.intercept(key, meta)` 拦截——外层上下文给依赖访问附加元数据（沙箱策略插件约束所有用 shell 的人），都不用改组件本身。
+
+
+## 事件与 waterfall：喊一嗓子，与一条决策链
+
+服务适合「直接打电话」（我知道找谁），但很多时候插件只想**喊一嗓子**或者**拦一下**，不关心谁在听——这就是事件。Cordis 的事件是类型化的：事件名和监听器签名靠 TypeScript 声明合并获得全链路类型安全。
+
+声明 / 发出 / 监听
+
+```
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    'stats/report'(name: string, count: number): void
+  }
+}
+
+ctx.emit('stats/report', 'tool_call', 42)    // 发出
+ctx.on('stats/report', (name, count) => {}) // 监听（卸载时自动移除）
+```
+
+### 五种分发模式：事件的「公开契约」
+
+| 模式 | 是否 await | 语义 |
+| --- | --- | --- |
+| `emit` | 否 | 同步广播；不等待、不收集返回值 |
+| `parallel` | 是 | 所有监听器并发执行并一起等待 |
+| `serial` | 是 | 按序执行；第一个非空返回值胜出并停止后续 |
+| `bail` | 否 | serial 的同步版本 |
+| `waterfall` | 否 | **环绕中间件**：每个监听器拿到参数和 next()，可包装、可短路 |
+
+**waterfall 是 dsh 用得最多的模式**，本质是把 Koa / Express 的中间件搬进事件系统：每个监听器收到参数和一个 `next()`。调用 `next()` = 放行给下游；不调 next() 直接返回 = **否决，整条链短路**。多个互不相识的插件，就这样组成一条决策链。
+
+waterfall 监听器的两种姿势
+
+```
+ctx.on('some/decision', async (input, next) => {
+  if (!hasPermission(input)) return { denied: true }  // 不调 next()：否决，短路
+  return next()                                       // 调 next()：放行
+})
+```
+
+[图：waterfall 决策链图解]
+
+waterfall 决策链图解：调 next() 放行、不调 = 否决短路；只负责观察的监听器必须调用 next()
+
+交互 · waterfall 决策链模拟器
+
+一次 bash 工具调用的过闸之旅
+
+请求
+
+一次 bash 工具调用
+
+监听器 1
+
+权限检查
+
+监听器 2
+
+审批
+
+监听器 3
+
+审计 / 日志
+
+默认行为
+
+最内层：真正执行
+
+选一个场景点播放。注意「next()」标签：它是链上每一跳的接力棒。
+
+dsh 里的真实 waterfall 链：tools/pre-execute → tools/execute → tools/post-execute，以及 approval/request、agent/request。
+
+**dsh 明文纪律：只负责观察 / 记录的 waterfall 监听器，必须调用 next()** 不调 next() 直接返回代表「有意否决」。如果一个日志监听器忘了调 next()，它会**无声地吞掉下游所有默认行为**——工具莫名其妙不执行了，还没有任何报错。场景 3 演示的就是这个坑。
+
+
+## 配置即程序：cordis.yml、patch 层与 HMR
+
+第 2 章说过「应用长什么样由配置决定」。这一章把这句话推到底：**cordis.yml 里的每个条目（entry）不只承载「挂哪个插件」，还承载它的配置、开关和身份**——修改配置就是修改应用，而且是热修改。
+
+cordis.yml —— 条目的完整形态
+
+```
+- id: greeter          # 稳定身份：loader 靠它区分「修改」与「删了重加」
+  name: './greeter.ts'
+- id: consumer
+  name: './consumer.ts'
+  disabled: true       # 保留条目但不挂载；改回后自动加载
+  config:              # 传给 apply 的第二个参数
+    greeting: 你好
+```
+
+三个要点：**① id 是增量更新的前提**——不带 id 的条目每次读取都会获得新 id，于是任何编辑都会被当成「先删后加」整体重挂；带 id 才能精准到「只改这一个」。**② Schema 校验**——插件导出 Config schema（用的正是 Shigma 写的 schemastery），框架在调 apply 前校验，配置非法则加载失败并给出精确到字段的错误，插件绝不会半启动。**③ HMR**——挂上 cordis-plugin-hmr 后保存文件即触发热重载，而且不需要像 Webpack / Vite 那样手工标注 accept 边界：fiber 本身就界定了组件全部效果的边界，替换一个组件 = 一次 fiber 操作（dispose 旧实例 → effect 全回滚 → 挂载新实例），失败还会整体回退，绝不半重载。
+
+### dsh 的做法：应用 = 一层层叠加上去的 patch
+
+dsh 把「配置即程序」工程化成了 **Profile + Bundle + patch 覆盖层**：一个 Bundle 就是一个 npm 包，其 package.json 声明一份 patch（一组 insert）；核心组合包 `@deepseek-ai/dsh-base` 的 patch 一次性 insert 几十个核心插件（真实文件约 500 行）；部署方想改默认行为，不用碰任何源码——在自己的 patch 层按 **id** 覆盖一行即可（后写覆盖先写）。
+
+[图：patch 叠层图解]
+
+patch 叠层图解：四层按顺序叠加出生效配置树——按 id 寻址、后写覆盖先写；改应用 = 叠一层 patch
+
+交互 · patch 叠层演示
+
+按顺序点击各层，看生效配置树实时变化
+
+第 0 层
+
+空根
+
+cordis.yml = []，什么都没有，等着被叠
+
+第 1 层 · bundle
+
+@deepseek-ai/dsh-base
+
+一次 insert 五个核心插件：timer / hmr(disabled) / llm / session / agent
+
+第 2 层 · 用户
+
+cordis.patch.yml
+
+按 id 覆盖：把 hmr 的 disabled 改回 false；新增 my-tool
+
+第 3 层 · 临时
+
+--patch ./dev.yml
+
+命令行临时层：再插入 greet-tool
+
+// 生效配置树（点击左侧层来叠加） // 空根：cordis.yml = []
+
+要点：按 id 寻址、后写覆盖先写。第 2 层只改了 hmr 一行，timer/llm/session/agent 原样保留——这就是「改应用 = 叠一层 patch」。
+
+图示：服务槽位注册表图解
+dsh 的扩展点是一张服务注册表：八个常用槽位，任何插件都能注册新服务、也能替换已有提供方
+
+图示：Service Definition / Provider / Consumer 三种角色图解
+三种角色：Definition 定契约、Provider 可替换、Consumer 只认契约——换提供方 = cordis.yml 改一行（配合第 6 章的联动模拟器）
+
+
+## 动手写一个 dsh 插件：三条路线与两个实战
+
+前面的机制全部服务于这一章的实操。先回答「怎么装进去」——三种入口，从最快到最正式：
+
+| 入口 | 怎么用 | 适合 |
+| --- | --- | --- |
+| **① --patch 覆盖层** | 写个 YAML，`dsh web --patch ./my-plugins.yml` 启动时插入 | 本地开发，最快见效 |
+| **② profile 常驻层** | 把条目写进 `$DSH_HOME/profiles/<名字>/cordis.patch.yml` | 日常自用，常驻生效 |
+| **③ bundle 包** | 打包成 npm 包，package.json 声明 `dsh.bundle.patch` | 发布给别人 `dsh plugin add` |
+
+my-plugins.yml —— 第 ① 种入口
+
+```
+- insert:
+    - id: my-greet-tool
+      name: '/abs/path/to/greet-tool.ts'
+```
+
+### 实战一：给 Agent 注册一个工具
+
+Agent 的能力边界是 `ctx.tools` 服务。注册一个工具 = inject 等注册表就绪 + `ctx.tools.register()`。注册本身是 effect，插件卸载时工具自动注销。
+
+greet-tool.ts —— 完整可运行
+
+```
+import type { Context } from '@deepseek-ai/cordis'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+
+export const name = 'greet-tool'
+export const inject = ['tools']          // 等工具注册表就绪（第 6 章）
+
+export function apply(ctx: Context) {
+  ctx.tools.register(defineTool({
+    name: 'greet',
+    description: 'Greet the named person.',
+    parameters: {
+      name: { type: 'string', required: true, description: 'Who to greet' },
+    },
+    async execute(args) {
+      return `Hello, ${args.name}!`
+    },
+  }))
+}
+```
+
+`defineTool` 会把 parameters 规约转成给模型看的 JSON Schema，并在 execute 前校验模型给的参数。想观察每一次工具调用？再写一个**互相不认识**的观察插件——靠事件解耦：
+
+tool-logger.ts —— 观察者：不认识执行者
+
+```
+export const name = 'tool-logger'
+export const inject = ['tools']
+
+export function apply(ctx: Context) {
+  ctx.on('tools/result', (exec, result) => {
+    console.log(`[tool-logger] ${exec.name} -> done`)
+  })
+}
+```
+
+### 实战二：写一个钩子插件（权限门禁）
+
+挂到 `tools/pre-execute` 这条 waterfall 链上，就有权对每次工具调用说「不」——沙箱、权限、plan-mode 插件用的都是这个扩展点：
+
+permission-gate.ts
+
+```
+import type { Context } from '@deepseek-ai/cordis'
+import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+
+export const name = 'permission-gate'
+
+export function apply(ctx: Context) {
+  ctx.on('tools/pre-execute', async (exec: ToolExecution, next) => {
+    if (!(await isAllowed(exec))) {
+      return { kind: 'deny', reason: 'Denied by policy.' }  // 否决：短路
+    }
+    return next()                                          // 放行
+  })
+}
+```
+
+### 槽位：扩展点全部是服务
+
+dsh 的扩展点不是一份「API 列表」，而是**一张 Cordis 服务注册表**：任何插件都能注册新服务，也能替换已有服务的提供方。每个可替换能力都遵循固定模式（上图）：**Definition** 只声明契约几乎不变，**Provider** 可整只替换，**Consumer** 与 Provider 互不依赖。换提供方 = cordis.yml 改一行，所有依赖方自动卸载重载（第 6 章的模拟器）。
+
+交互 · 槽位探索器
+
+点击槽位卡片
+
+ctx.tools
+
+工具注册表
+
+ctx.llm
+
+LLM 适配器
+
+ctx.shell
+
+Bash 执行
+
+ctx.sessions
+
+会话与持久化
+
+ctx.fs
+
+文件系统
+
+ctx.web
+
+Web 访问
+
+ctx.approval
+
+审批 / 权限
+
+ctx.subagents
+
+子 Agent 提供方
+
+提示：
+
+完整槽位表（执行 / 模型 / 智能 / 数据 / 环境 / 治理 / 编排 / 自指 / 前端九大类）见 harness 文档 capability-seams 与子系统页面。
+
+### 排障三连：插件「没反应」时按序检查
+
+- **查拼写**——模块解析失败（路径 / 包名错）只在 logger 报一条，进程不崩（第 2 章）；
+- **查 fiber 状态**——多半是蹲在 PENDING：inject 的服务无人提供。用 `ctx.registry` 遍历 fiber，或直接让 Agent 调 `cordis_inspect` 工具做只读巡检；
+- **补提供方**——把缺的服务提供方加进组合，依赖它的插件会自动激活，无需重启。
+
+
+## 参考资料
+
+本手册整理自以下来源：微信文章正文与配图、dsh 仓库官方文档与真实源码（base bundle patch、vendor Cordis）、以及公开的插件开发教程。
+
+- 腾讯技术工程 · [《DeepSeek Harness 背后的"心脏"：Cordis 到底是什么》（作者 lss233，2026-09）](https://mp.weixin.qq.com/s/3vtCkp6EbA5MhRERD6f17A)——叙事主线参考；本页封面与配图均为 AI 生成，非原文图表
+- dsh 官方文档 · [Cordis 入门（cordis-primer）](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cordis-primer.zh.md) 与 [Cordis 教程（七章，每个例子可运行）](https://github.com/deepseek-ai/deepseek-harness/tree/main/docs/cordis-tutorial)——第 2~7、9 章代码的出处
+- dsh 官方文档 · [扩展实操手册（extension-cookbook）](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cookbook/extension-cookbook.zh.md)——钩子插件与「功能 → 机制映射」表
+- 源码 · `packages/bundle/base/cordis.patch.yml`（真实 base bundle，约 500 行）与 `vendor/cordis/`（vendored Cordis 源码）· 仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
+- 论文 · [A Programming Paradigm for Spatiotemporal Composability](https://arxiv.org/abs/2608.25512)（北大 & DeepSeek-AI，88 页）——effect / coeffect 的形式化
+- 上游框架 · [cordiverse/cordis](https://github.com/cordiverse/cordis) · Koishi 生态 [koishi.chat](https://koishi.chat)
+- 社区插件 · awesome-dsh-plugin（GitHub 搜 `dsh-plugin` 话题，2026-08 收录 174 个）
+
+### 延伸阅读 · 本站相关手册
+
+| 手册 | 关联点 |
+| --- | --- |
+| pi 扩展开发 | 另一个 coding agent 的插件体系：pi 用 ExtensionAPI + 事件生命周期，与 Cordis 的「服务 + 可逆副作用」互为对照 |
+| pi Agent Loop | dsh 的 agentLoop 服务干的是同一层事：循环驱动本身也是插件 |
+| LLM 前缀缓存 | dsh 里 ctx.llm 适配器注册表背后的模型调用层 |
+
+回到总目录
+
+know-as-ui · 还有 7 个可交互知识点
+
+↗
+
+dsh-cordis · 代码与机制事实以 deepseek-harness 官方文档与源码为准 · 封面为 AI 生成插画（豆包 seedream），内容配图为 AI 生成图解（GPT-Image-2），交互组件为本页自制
+
+## 外部引用
+
+- https://arxiv.org/abs/2608.25512
+- https://github.com/cordiverse/cordis
+- https://github.com/deepseek-ai/deepseek-harness
+- https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cookbook/extension-cookbook.zh.md
+- https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/cordis-primer.zh.md
+- https://github.com/deepseek-ai/deepseek-harness/tree/main/docs/cordis-tutorial
+- https://koishi.chat
+- https://mp.weixin.qq.com/s/3vtCkp6EbA5MhRERD6f17A

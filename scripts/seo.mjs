@@ -2,6 +2,7 @@
 //   1. 每个页面 <head> 里 seo 标记之间的 description / canonical / Open Graph / JSON-LD
 //   2. 首页 #catalog 的静态预渲染卡片（让不跑 JS 的爬虫也能看到全部内链）
 //   3. sitemap.xml 与 robots.txt
+// 注意：编辑任何主题正文后，还必须运行 make seo（或 make llms）更新 <slug>/<page>.llms.txt。
 // 分享图按约定放在 <slug>/assets/og.jpg（首页是 assets/og.jpg，1200×630），存在就自动挂上大图卡片。
 // 用法：node scripts/seo.mjs（或 make seo）。新增主题、改 topics.js 后重跑一次。
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -67,10 +68,11 @@ function imageTags(image, alt) {
   ];
 }
 
-function headTags({ title, desc, url, type, image, jsonLd }) {
+function headTags({ title, desc, url, type, image, llms, jsonLd }) {
   const tags = [
     `<meta name="description" content="${esc(desc)}">`,
     `<link rel="canonical" href="${url}">`,
+    `<link rel="alternate" type="text/plain" href="${llms}" title="正文快照">`,
     `<meta property="og:type" content="${type}">`,
     `<meta property="og:site_name" content="${SITE_NAME}">`,
     `<meta property="og:locale" content="zh_CN">`,
@@ -109,7 +111,7 @@ for (const t of KAU.topics) {
     const modified = lastmod(rel, t.date);
     const image = ogImage(`${t.slug}/assets/og.jpg`);
     html = injectHead(html, headTags({
-      title, desc, url, type: 'article', image,
+      title, desc, url, type: 'article', image, llms: `${url}.llms.txt`,
       jsonLd: {
         '@context': 'https://schema.org', '@type': 'TechArticle',
         headline: title, description: desc, url, inLanguage: 'zh-CN',
@@ -130,6 +132,7 @@ for (const t of KAU.topics) {
   const modified = lastmod('index.html', KAU.topics.map(t => t.date).sort().at(-1));
   html = injectHead(html, headTags({
     title: titleOf(html), desc: HOME_DESC, url: `${SITE}/`, type: 'website', image: ogImage('assets/og.jpg'),
+    llms: `${SITE}/llms.txt`,
     jsonLd: {
       '@context': 'https://schema.org', '@type': 'WebSite',
       name: SITE_NAME, url: `${SITE}/`, description: HOME_DESC, inLanguage: 'zh-CN',

@@ -16,6 +16,7 @@
 <!-- seo:start -->
 <meta name="description" content="缓存的不是答案，而是已经算过的前缀状态。用咬合动画、请求步进器、成本实验室与缓存杀手挑战，一次分清 OpenAI、Anthropic、DeepSeek。">
 <link rel="canonical" href="https://dev.limbo101.win/llm-prompt-caching/a">
+<link rel="alternate" type="text/plain" href="https://dev.limbo101.win/llm-prompt-caching/a.llms.txt" title="正文快照">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="know-as-ui">
 <meta property="og:locale" content="zh_CN">
@@ -29,9 +30,10 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://dev.limbo101.win/llm-prompt-caching/assets/og.jpg?v=3093eb86">
 <meta name="twitter:creator" content="@limbopeng">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"LLM Prompt Caching · 前缀缓存实验室","description":"缓存的不是答案，而是已经算过的前缀状态。用咬合动画、请求步进器、成本实验室与缓存杀手挑战，一次分清 OpenAI、Anthropic、DeepSeek。","url":"https://dev.limbo101.win/llm-prompt-caching/a","inLanguage":"zh-CN","datePublished":"2026-08-27","dateModified":"2026-08-27","keywords":"llm prompt prefix cache caching kv cache deepseek openai anthropic 缓存 前缀 命中 成本","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/llm-prompt-caching/assets/og.jpg?v=3093eb86"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"LLM Prompt Caching · 前缀缓存实验室","description":"缓存的不是答案，而是已经算过的前缀状态。用咬合动画、请求步进器、成本实验室与缓存杀手挑战，一次分清 OpenAI、Anthropic、DeepSeek。","url":"https://dev.limbo101.win/llm-prompt-caching/a","inLanguage":"zh-CN","datePublished":"2026-08-27","dateModified":"2026-10-12","keywords":"llm prompt prefix cache caching kv cache deepseek openai anthropic 缓存 前缀 命中 成本","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/llm-prompt-caching/assets/og.jpg?v=3093eb86"}</script>
 <!-- seo:end -->
 <link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="../assets/ask-ai.css">
 <link rel="stylesheet" href="topic.css">
 </head>
 <body>
@@ -330,5 +332,7 @@ function loadQ(){picked=-1;locked=false;const Q=QUESTIONS[qi];qNo.textContent=`Q
 qSubmit.onclick=()=>{if(picked<0)return;locked=true;const Q=QUESTIONS[qi],ok=picked===Q.a;if(ok)qs++;[...qOpts.children].forEach((x,i)=>{x.classList.remove("picked");x.classList.add("locked");if(i===Q.a)x.classList.add("right");else if(i===picked)x.classList.add("wrong")});qExp.textContent=(ok?"✓ ":"✗ ")+Q.x;qExp.classList.add("show");quizScore.textContent=`${qs} / ${QUESTIONS.length}`;qVerdict.textContent=ok?"正确":"再想想";qVerdict.className="q-verdict "+(ok?"ok":"bad");qSubmit.style.display="none";if(qi<QUESTIONS.length-1)qNext.style.display="";else{qRestart.style.display="";qVerdict.textContent+=qs>=4?" · 出师！":" · 建议复习 03 / 05 章"}};
 qNext.onclick=()=>{qi++;loadQ()};qRestart.onclick=()=>{qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};loadQ();
 </script>
+<script src="../assets/vendor/ask-ai.min.js" defer></script>
+<script src="../assets/ask-ai.js" defer></script>
 </body>
 </html>

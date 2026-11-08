@@ -1,0 +1,42 @@
+# know-as-ui
+
+> 把 AI Agent、LLM Infra 等硬核知识做成可打开、点击、探索的交互式 HTML 手册。
+
+每个页面的完整正文快照放在同名 `.llms.txt`，可直接读取；HTML 页面本身包含交互式图解、模拟器和测验。
+
+## 主题
+
+- [pi 扩展开发手册 · Field Manual](https://dev.limbo101.win/pi-extensions/a) — 从 ExtensionAPI、事件生命周期、自定义工具，到 UI、状态持久化和动态 Provider 的可交互开发手册。
+  - 正文快照：https://dev.limbo101.win/pi-extensions/a.llms.txt
+- [pi Agent Loop · 解剖手册](https://dev.limbo101.win/pi-agent-loop/a) — 从 6 行心智模型到 runLoop 双环走读：三层架构、五段工具流水线、steering/followUp 双队列与自愈决策树，配步进器和终极测验。
+  - 正文快照：https://dev.limbo101.win/pi-agent-loop/a.llms.txt
+- [Subagent vs 多 Agent · 架构对照手册](https://dev.limbo101.win/subagent-vs-multi-agent/a) — 控制权谱系、星型 vs 网状拓扑、Handoff 交接模拟、Anthropic 实测数据与交互决策向导——一次分清三种 Agent 架构。
+  - 正文快照：https://dev.limbo101.win/subagent-vs-multi-agent/a.llms.txt
+- [pi 上下文管理 · 压缩生态手册](https://dev.limbo101.win/pi-context-management/a) — 原生压缩的一条规则、三个扩展钩子，与五派插件的内容哲学——遗忘、备忘录、版本管理、源头减噪、预热切换，配水位模拟器和终极测验。
+  - 正文快照：https://dev.limbo101.win/pi-context-management/a.llms.txt
+- [LLM Prompt Caching · 前缀缓存实验室](https://dev.limbo101.win/llm-prompt-caching/a) — 缓存的不是答案，而是已经算过的前缀状态。用咬合动画、请求步进器、成本实验室与缓存杀手挑战，一次分清 OpenAI、Anthropic、DeepSeek。
+  - 正文快照：https://dev.limbo101.win/llm-prompt-caching/a.llms.txt
+- [pi ReAct Agent · 实现手册](https://dev.limbo101.win/pi-react-agent/a) — 由浅入深拆 pi 的 ReAct 循环：三拍节奏与消息模型、四样原料拆件实验台、R/A/O 三要素源码解剖、系统提示词拼装机与「循环之上皆是上下文管理」钉板。
+  - 正文快照：https://dev.limbo101.win/pi-react-agent/a.llms.txt
+- [GPU 与模型部署 · A 底层认知](https://dev.limbo101.win/gpu-and-deployment/a) — GPU 与模型部署实战 · A 底层认知｜从「显存里到底装了什么」到「稳定便宜地服务用户」：显存估算器、推理时间线、并发模拟器、训练显存沙盘与部署架构搭建器，四页走完一个 14B 模型的一生。
+  - 正文快照：https://dev.limbo101.win/gpu-and-deployment/a.llms.txt
+- [GPU 与模型部署 · B 推理与部署](https://dev.limbo101.win/gpu-and-deployment/b) — GPU 与模型部署实战 · B 推理与部署｜从「显存里到底装了什么」到「稳定便宜地服务用户」：显存估算器、推理时间线、并发模拟器、训练显存沙盘与部署架构搭建器，四页走完一个 14B 模型的一生。
+  - 正文快照：https://dev.limbo101.win/gpu-and-deployment/b.llms.txt
+- [GPU 与模型部署 · C 微调实战](https://dev.limbo101.win/gpu-and-deployment/c) — GPU 与模型部署实战 · C 微调实战｜从「显存里到底装了什么」到「稳定便宜地服务用户」：显存估算器、推理时间线、并发模拟器、训练显存沙盘与部署架构搭建器，四页走完一个 14B 模型的一生。
+  - 正文快照：https://dev.limbo101.win/gpu-and-deployment/c.llms.txt
+- [GPU 与模型部署 · D 选型与运维](https://dev.limbo101.win/gpu-and-deployment/d) — GPU 与模型部署实战 · D 选型与运维｜从「显存里到底装了什么」到「稳定便宜地服务用户」：显存估算器、推理时间线、并发模拟器、训练显存沙盘与部署架构搭建器，四页走完一个 14B 模型的一生。
+  - 正文快照：https://dev.limbo101.win/gpu-and-deployment/d.llms.txt
+- [dsh Cordis 与插件开发 · 交互手册](https://dev.limbo101.win/dsh-cordis/a) — DeepSeek Harness「一切皆插件」的心脏：四问翻卡、插件树装卸模拟、fiber 状态机动画、effect 回滚栈、waterfall 决策链与 patch 叠层演示，附可运行的工具 / 钩子插件实战。
+  - 正文快照：https://dev.limbo101.win/dsh-cordis/a.llms.txt
+- [Jev 深入浅出 · 只做判断题的模型 · 交互手册](https://dev.limbo101.win/jev-typesafe/a) — 只做判断题的模型：state 加三种题型换类型化答案与概率。概率翻译机、歧义工单路由、等级设计实验台、Noul 天平、风险阈值路由器，再配十类社区玩法、18 份官方 cookbook 与生态地图。
+  - 正文快照：https://dev.limbo101.win/jev-typesafe/a.llms.txt
+- [RAG 与向量数据库 · A 直觉](https://dev.limbo101.win/rag-vector-db/a) — RAG 与向量数据库 · A 直觉｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。
+  - 正文快照：https://dev.limbo101.win/rag-vector-db/a.llms.txt
+- [RAG 与向量数据库 · B 检索质量](https://dev.limbo101.win/rag-vector-db/b) — RAG 与向量数据库 · B 检索质量｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。
+  - 正文快照：https://dev.limbo101.win/rag-vector-db/b.llms.txt
+- [RAG 与向量数据库 · C 向量库内核](https://dev.limbo101.win/rag-vector-db/c) — RAG 与向量数据库 · C 向量库内核｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。
+  - 正文快照：https://dev.limbo101.win/rag-vector-db/c.llms.txt
+- [RAG 与向量数据库 · D 选型与实战](https://dev.limbo101.win/rag-vector-db/d) — RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。
+  - 正文快照：https://dev.limbo101.win/rag-vector-db/d.llms.txt
+- [RAG 与向量数据库 · E 更新治理与问题手册](https://dev.limbo101.win/rag-vector-db/e) — RAG 与向量数据库 · E 更新治理与问题手册｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。
+  - 正文快照：https://dev.limbo101.win/rag-vector-db/e.llms.txt

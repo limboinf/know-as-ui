@@ -1,0 +1,256 @@
+# pi 上下文管理 · 压缩生态手册
+
+> 原生压缩的一条规则、三个扩展钩子，与五派插件的内容哲学——遗忘、备忘录、版本管理、源头减噪、预热切换，配水位模拟器和终极测验。
+
+来源：https://dev.limbo101.win/pi-context-management/a
+站点：know-as-ui（交互式技术手册，本文件是自动生成的正文快照）
+生成：scripts/llms.mjs
+
+## 原生：pi 自带的压缩，其实只有一条规则
+
+Context 快满了 → 总结旧消息 → 保留最近一段 → 继续干活。pi 的原生 compaction 朴素到可以用一句话讲完，但它把每个细节都做对了——这也是整个插件生态得以生长的地基。
+
+### 触发条件：一行不等式
+
+compaction.js · 触发判定
+
+```
+// contextTokens > contextWindow - reserveTokens 时触发
+return contextTokens > contextWindow - settings.reserveTokens;
+// 默认 reserveTokens = 16384（给模型回复留的座位）
+// 默认 keepRecentTokens = 20000（最近这段永远不总结）
+```
+
+两个默认值都在 `~/.pi/agent/settings.json` 里可调。除了阈值自动触发，还有两种手动路径：`/compact [指令]` 直接压，以及请求撞上 provider 硬上限时的 overflow 自愈（reason 为 `"overflow"`，压缩后重试被中断的那一轮）。
+
+fig.01 — 压缩 = 在会话树里追加一条摘要条目；旧数据永不删除，只是「不再发出去」
+
+### 切点的三条铁律
+
+- **从最新往回数**：累积 token 到 ≥20k（keepRecentTokens）停下，这里就是切点。
+- **只在合法边界下刀**：user / assistant / bash 执行 / custom 消息可以切；**toolResult 永远不能和它的 toolCall 分家**。
+- **巨型 turn 允许腰斩**（split turn）：单个 turn 超 20k 时，在 assistant 消息处硬切，历史摘要 + turn 前缀摘要两段合并。
+
+CompactionEntry · 摘要条目结构（session-manager.ts）
+
+```
+interface CompactionEntry<T = unknown> {
+  type: "compaction";
+  summary: string;            // 结构化摘要正文
+  firstKeptEntryId: string;   // 从哪条起原样保留
+  tokensBefore: number;       // 压缩前的真实上下文水位
+  details?: T;                // 扩展可塞任意 JSON —— 插件生态的钥匙
+}
+// 默认实现用它记录：{ readFiles: string[], modifiedFiles: string[] }
+// 且文件清单跨多次压缩累积，不会因为二次压缩而丢失
+```
+
+**✦ 摘要不是自由发挥** 无论压缩还是分支切换，摘要都套同一个结构化模板：`Goal / Constraints / Progress(Done·In·Blocked) / Key Decisions / Next Steps / Critical Context`，外加 `<read-files>` 和 `<modified-files>` 清单。序列化时 toolResult 截断到 2000 字符——read 和 bash 输出才是上下文的大头。
+
+**自测：为什么切点永远不能落在 toolResult 上？**
+Provider API 要求每条 assistant 消息里的 toolCall 必须有配对的 toolResult。把结果切掉、调用留下，下一轮请求直接 schema 报错。所以 pi 只允许在 user / assistant / bash / custom 这几种消息边界下刀，成对的工具消息永远同生共死。
+
+
+## 模拟器：亲手推一次压缩水位线
+
+按「继续工作」让对话增长，观察什么时候越过阈值、切在哪里、模型下一轮看到什么。这就是原生 compaction 的全部动态行为。
+
+window − reserve
+
+100%
+
+75%
+
+50%
+
+25%
+
+0
+
+128,000
+
+0
+
+20,000
+
+0
+
+0% 水位
+
+# 新会话 · settings: reserve=16k, keepRecent=20k
+
+turn 0
+
+**⚠ 注意看第一次压缩之后的第二次压缩** 二次压缩的总结范围**不是从上一条 cmp 条目开始**，而是回退到上次压缩的 firstKeptEntryId——上次幸存的消息会再次进入这次摘要。这样「幸存区」永远完整地被重新评估，代价是摘要输入略大。
+
+
+## 地基：三个事件，把压缩的控制权交了出去
+
+原生逻辑之所以敢写得简单，是因为 pi 把「策略」全部外挂给了扩展系统。五个社区插件，全都是从这三扇门进来的。
+
+| 扩展事件 | 触发时机 | 能做什么 |
+| --- | --- | --- |
+| `session_before_compact` | 自动压缩或 `/compact` 执行前 | 拿到 preparation 全量参数（messagesToSummarize / previousSummary / firstKeptEntryId / reason），**返回 cancel 取消压缩**，或返回自己的 `{ summary, firstKeptEntryId, details }` 整个替换掉官方摘要 |
+| `session_compact_failed` | 压缩失败 / 被取消后 | 遥测与善后：区分 manual / threshold / overflow 三种 reason，感知 willRetry 与 fromExtension |
+| `session_before_tree` | `/tree` 切分支前（必发） | 取消导航，或在用户同意时提供自定义 BranchSummary |
+
+扩展侧 · 接管压缩的最小骨架
+
+```
+pi.on("session_before_compact", async (event, ctx) => {
+  const { preparation, reason } = event;
+
+  // serializeConversation 把消息转成纯文本，喂给自己的模型
+  const text = serializeConversation(
+    convertToLlm(preparation.messagesToSummarize));
+
+  const { summary, usage } = await myModel.summarize(text);
+
+  return { compaction: {
+    summary,
+    firstKeptEntryId: preparation.firstKeptEntryId,
+    tokensBefore: preparation.tokensBefore,
+    usage,                       // 计入 session 总消耗
+    details: { mine: "任意 JSON" }
+  }};
+});
+```
+
+**✦ 设计启示** 「机制下沉、策略上浮」在压缩这件事上体现得最彻底：内核只负责*何时*触发和*如何安全落盘*，*总结什么*完全留给扩展。后面五个插件，本质上是五种不同的内容选择策略。
+
+**自测：扩展返回自定义摘要时，为什么必须带上 firstKeptEntryId？**
+摘要只回答「过去发生了什么」，但「接下来还看得见什么」由 firstKeptEntryId 定义。落盘时会话重建上下文依赖它找到保留区的起点。不带这个字段，内核无法保证你的摘要和保留消息无缝拼在一起。
+
+
+## 江湖：五个插件，五种内容哲学
+
+同一个「上下文要满了」的问题，社区给出了五份截然不同的答卷。先看总表，再逐个拆。
+
+| 插件 | 流派 | 一句话主张 | 接管方式 |
+| --- | --- | --- | --- |
+| **pai-acp** | 遗忘流派 | 让模型自己决定忘什么，忘掉的还能搜回来 | 拦 context 事件，**取消**原生压缩，自己当唯一管理者 |
+| **alpertarhan/pi-smart-compact** | 备忘录流派 | 保住目标、改动文件、错误、决策、未完成事项 | 参与 session_before_compact，验证式四段管线 |
+| **ttttmr/pi-context** | 版本管理流派 | 上下文当 Git 管：checkpoint / timeline / 选择性 compact | 不发钩子，给模型三件工具让它主动经营历史 |
+| **@hypabolic/pi-hypa (Hypa)** | 源头拦截流派 | 最好的压缩是从一开始就不让垃圾进来 | 改写 shell/file 工具，输出进门之前先瘦 |
+| **@sunnyx11/pi-press** | 预热流派 | 提前在后台算好摘要，压缩瞬间完成切换 | 不改摘要内容，只把「等待时间」搬走 |
+
+### pai-acp — 遗忘是模型的工作，不是代码的工作
+
+别的方案都在替模型做决定，pai-acp 把 `compress` 工具直接发给模型：每条消息带一个隐形 `<acp>` 引用标号，模型自己挑范围压缩、自己决定何时压。**Pi 内置自动压缩会被它取消**——它是唯一的上下文管理者。
+
+- **多级蒸馏**：摘要还能再被压缩（T1→T2→T3），上下文长期稳定在十几万 token 以内，单会话可连续干几个月。
+- **可逆**：`decompress` 解开某个块；`search_context` 不解包就能搜已压缩内容——忘了 ≠ 丢了。
+- **保护区**：compress 调用本身、最后 N 条近期消息、最后一条用户消息永不被压缩。
+- 附带 `acp_delegate`：任务派给干净上下文的子进程，父上下文只收「标题 + 结果文件路径」。
+
+### pi-smart-compact — 先提炼意图，再逐个审判工具调用
+
+默认压缩「一视同仁地有损」。这个插件用两阶段 LLM 流程做定向取舍：
+
+两阶段管线
+
+```
+Phase 1 · 意图提取
+  只取 user + assistant 文字（滤掉工具噪音）
+    → LLM：「用户在重构 auth 模块，JWT 迁移到 session cookie，
+       5 个文件已完成 3 个」
+
+Phase 2 · 工具判决（batch=20/次）
+  [read  src/auth/jwt.ts]   → ✗ 丢弃   // 已消费的探索
+  [edit  src/auth/cookie.ts] → ✓ 保留   // 改动即证据
+  [bash  npm test]           → ✓ 保留末次 // 验证状态
+  [grep  "import auth"]      → ✗ 丢弃
+
+产物 = 意图摘要 + 幸存工具结果 + 文件追踪
+```
+
+推荐用便宜快模型（glm-4-flash 一类）跑这两个阶段——这是分类/摘要活儿，不是推理活儿。另有 alpertarhan 的同名变体走得更远：确定性抽取 → 探索 → 综合 → **校验**，「tests passed」这类高风险结论必须在源消息里找得到原文，否则整份摘要在落地前就被拒收。
+
+### pi-context — 给对话历史装上 Git
+
+思路来自 kimi-cli 的 d-mail：与其等压缩，不如让 Agent 主动经营历史。三个工具构成一套「对话版版本控制」：
+
+| 工具 | 类比 | 作用 |
+| --- | --- | --- |
+| `context_checkpoint` | git tag | 给有意义的节点打语义锚点名（如 `parser-fix-start`） |
+| `context_timeline` | git log | 查看活动路径的结构地图：检查点、压缩点、分支、当前位置 |
+| `context_compact` | 选择性 rebase | 从某个早期 checkpoint 开出「摘要续接分支」，噪音路径留在原地 |
+
+作者特意改名去 Git 化：`context_checkout` 改叫 compact，因为这些操作只管**对话历史**，不动仓库、进程和远程状态。配套 `/acm` 开启、`/context` 可视化 token 分布。
+
+### Hypa (@hypabolic/pi-hypa) — 别让垃圾进门
+
+前四种都在讨论「怎么处理已经进来的上下文」，Hypa 把战场前移到**入口**：shell 命令通过 `hypa -c` 执行，构建/lint/k8s/docker 等几十类工具的输出经过确定性 reducer 和 DSL 过滤器后才回到 agent 手里，全程本地无 LLM：
+
+hypa 输出 · 自带账单
+
+```
+$ hypa dotnet build
+(压缩后的高信号输出……)
+[hypa: 1200→340 tok, -72%, reducer=dotnet-build]
+
+# 失败/截断时完整原始输出 tee 到 ~/.hypa/artifacts/
+# 上下文里留小票，证据在地窖 —— 要翻旧账随时读得回来
+```
+
+token 记账用 o200k_base 精确计算存进本地 SQLite。它的赌注是：**压缩是有损的止损，源头减噪才是无损的赚**。
+
+### pi-press — 压缩不该有停顿
+
+以上方案都在改「压什么」，pi-press 改的是「**什么时候压**」：上下文到 80%（可配 softThresholdPercent）就开始后台预生成摘要，provider 后续请求先用「虚拟上下文」（摘要 + 未压尾部）顶上；agent 停稳后 pi 再写入正式 CompactionEntry。正式压缩那一刻几乎零等待。
+
+- 虚拟上下文只影响发给模型的请求，**不改内部消息和 session 文件**——正式压缩、恢复、分支仍全是原生实现。
+- 同一压缩周期内可增量刷新检查点，避免长工具调用期间虚拟尾巴越拖越长。
+- 代价：额外的 provider 请求和 token 消耗——本质是「花钱买不停机」。
+
+**自测：五个插件里谁动了原生 CompactionEntry 的内容，谁完全没动？**
+pai-acp 和 pi-smart-compact 通过 session_before_compact **替换摘要内容**；pi-context 不碰钩子，靠模型主动调 context_compact 间接产生新分支；pi-press 内容照旧，只改变时机；Hypa 最彻底——它在工具输出入口就把体积降下来，让压缩尽量根本不用发生。
+
+
+## 全景：干预时机光谱
+
+把五个插件放回同一条时间轴上，分歧立刻清晰：越早介入越省 token，越晚介入信息越全。没有最优解，只有你愿意在哪一站上车。
+
+fig.02 — 干预越早越省 token、越晚信息越全；原生层永远是大家共享的安全网
+
+**✦ 组合拳** 这些方案并不互斥。一个务实的长会话配置可能是：Hypa 在门口减噪（省 60–90% 工具 token）+ pi-press 消除压缩停顿 + 保留原生压缩做最后兜底。而 pai-acp 用户则相反——它要求独占上下文管理权，装它就别再叠其他压缩插件。
+
+
+## 实操：你来当一次 smart-compact 的法官
+
+场景：用户正在把 auth 模块从 JWT 迁移到 session cookie。下面 6 条历史工具调用，哪些该在压缩中幸存？点击 KEEP 或 DROP，看看和 Phase 2 判决的一致率。
+
+Phase 1 提炼出的意图摘要
+
+用户在重构 auth 模块：JWT → session cookie 迁移。已完成 3/5 个文件，下一步改 cookie.ts 的中间件，然后跑测试回归。
+
+edit src/auth/middleware.ts (+42 −17)
+
+read src/auth/jwt.ts (340 行)
+
+bash npm test → 3 failed (cookie expiry)
+
+grep -r "verifyToken(" src/ (11 hits)
+
+user: 「session 过期时间改成 7 天，别用 24h」
+
+read cookie 文档 MDN Set-Cookie (节选)
+
+
+## 选型：你的会话该请哪位管家
+
+没有银弹。按你最痛的症状对症下单。
+
+| 症状 | 处方 | 代价 |
+| --- | --- | --- |
+| 每次压缩后就「失忆」，反复重读文件、重复犯错 | **pi-smart-compact**：意图 + 关键工具结果存活 | 每次压缩多几次廉价 LLM 调用 |
+| 超长会话（周级），压缩摘要摞摘要还是爆 | **pai-acp**：多级蒸馏保持有界 + 可搜索 | 独占上下文管理权，信任模型的取舍 |
+| 想要精确控制「回到哪个时刻重来」 | **pi-context**：checkpoint / timeline / 选择性 compact | 依赖模型自觉使用三件工具 |
+| 构建/测试输出巨大且大部分是废话 | **Hypa**：源头确定性减噪 | 命令经一层包装，需维护过滤器信任 |
+| 压缩瞬间的停顿打断心流 / 自动化流水线 | **pi-press**：后台预热摘要 | 额外 provider 请求与 token 费用 |
+| 轻度使用，没觉得痛 | **什么都不装**：原生 compaction 已经够好 | 无 |
+
+**⚠ 互斥提醒** pai-acp 会取消 Pi 内置自动压缩、自立为王——它和其他任何接管 session_before_compact 的插件（如 pi-smart-compact auto 模式）同时安装会产生控制权冲突。混搭前先想清楚谁是唯一的上下文管理者。
+
+**自测：如果只能给「每天 8 小时长会话的重度用户」推荐一个，选谁？为什么？**
+倾向 **pai-acp**：日级会话的核心痛点是摘要摞摘要后的累积失真和「忘了就永远丢了」，ACP 的多级蒸馏让上下文长期有界，decompress/search_context 又保证了遗忘可逆。若更在意成本可控和可解释性，pi-smart-compact manual 模式是稳妥的第二选择。

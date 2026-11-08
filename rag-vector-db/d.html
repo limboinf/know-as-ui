@@ -16,6 +16,7 @@
 <!-- seo:start -->
 <meta name="description" content="RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。">
 <link rel="canonical" href="https://dev.limbo101.win/rag-vector-db/d">
+<link rel="alternate" type="text/plain" href="https://dev.limbo101.win/rag-vector-db/d.llms.txt" title="正文快照">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="know-as-ui">
 <meta property="og:locale" content="zh_CN">
@@ -29,9 +30,10 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc">
 <meta name="twitter:creator" content="@limbopeng">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"RAG 与向量数据库 · D 选型与实战","description":"RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。","url":"https://dev.limbo101.win/rag-vector-db/d","inLanguage":"zh-CN","datePublished":"2026-10-05","dateModified":"2026-10-05","keywords":"rag 检索增强生成 向量数据库 vector database embedding 嵌入 bm25 hybrid 混合检索 rrf rerank 重排 chunking 切块 hnsw ivf 量化 rabitq pgvector milvus qdrant 选型 graphrag agentic 评估 recall 增量更新 incremental upsert 对账 删除 别名 alias 蓝绿 重建 治理 元数据 faq 常见问题 排障","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"RAG 与向量数据库 · D 选型与实战","description":"RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。","url":"https://dev.limbo101.win/rag-vector-db/d","inLanguage":"zh-CN","datePublished":"2026-10-05","dateModified":"2026-10-12","keywords":"rag 检索增强生成 向量数据库 vector database embedding 嵌入 bm25 hybrid 混合检索 rrf rerank 重排 chunking 切块 hnsw ivf 量化 rabitq pgvector milvus qdrant 选型 graphrag agentic 评估 recall 增量更新 incremental upsert 对账 删除 别名 alias 蓝绿 重建 治理 元数据 faq 常见问题 排障","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/rag-vector-db/assets/og.jpg?v=c3ba7fdc"}</script>
 <!-- seo:end -->
 <link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="../assets/ask-ai.css">
 <link rel="stylesheet" href="topic.css">
 <style>
 /* ===== 本页专属 ===== */
@@ -567,5 +569,7 @@ KB.initQuiz({ title: '选型与实战', pass: 4, doneKey: 'd-quiz', questions: [
   { q: '答案不对，排障的第一步应该是？', opts: ['换更大的生成模型', '确认正确的那一块在不在库里、有没有被检索到', '重建整个向量库', '把 top-k 调到 100'], a: 1, exp: '先分清是检索的锅还是生成的锅：正确内容在不在库里、进没进候选、排没排进前几名，最后才看模型是否忠实。' },
 ] });
 </script>
+<script src="../assets/vendor/ask-ai.min.js" defer></script>
+<script src="../assets/ask-ai.js" defer></script>
 </body>
 </html>

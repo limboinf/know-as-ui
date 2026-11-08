@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "puppeteer-core": "^25.16.0",
     "wrangler": "^4.125.0"
   }
 }

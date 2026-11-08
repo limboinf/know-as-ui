@@ -1,0 +1,311 @@
+# pi Agent Loop · 解剖手册
+
+> 从 6 行心智模型到 runLoop 双环走读：三层架构、五段工具流水线、steering/followUp 双队列与自愈决策树，配步进器和终极测验。
+
+来源：https://dev.limbo101.win/pi-agent-loop/a
+站点：know-as-ui（交互式技术手册，本文件是自动生成的正文快照）
+生成：scripts/llms.mjs
+
+## 浅层：所谓 Agent Loop，就是六行伪代码
+
+LLM 自己不会动手——它只能输出文字和「工具调用申请」。让申请落地、把结果喂回去、再问一次「还要不要继续」，这个转圈的动作就是 Agent Loop。
+
+剥掉所有工程细节，pi 的 agent loop 核心就是一个双条件 while：
+
+心智模型 · 6 行版
+
+```
+while (true) {
+  msg = callLLM(messages)          // ① 问模型：下一步干嘛？
+  if (msg.没有工具调用) break       // ② 模型交卷 → 收工
+  results = runTools(msg.toolCalls) // ③ 替模型干活
+  messages.push(msg, ...results)   // ④ 干活结果写回上下文
+}                                  // ↻ 回到①，直到模型不再要工具
+```
+
+### 为什么必须有这个循环
+
+- **LLM 是无状态的**——每次调用都要把完整历史塞过去，「上下文」本质是客户端自己维护的一个数组。
+- **工具调用是一次性的**——模型说「帮我读 a.js」，读文件这件事必须由 loop 所在的进程完成，再把内容作为新消息追加进去。
+- **停止权在模型手里**——loop 从不替模型决定何时结束；回复里没有 `toolCall` 块，循环自然退出。
+
+fig.01 — 整个 Agent 的心跳：问 → 干 → 喂回 → 再问，直到模型不再要工具
+
+**✦ pi 的特别之处** 这个循环在 pi 里是一个**纯函数**：`runAgentLoop(prompts, context, config, emit, signal)`。不碰全局变量、不知道类为何物、所有副作用通过 `emit` 回调往外吐事件。理解了「纯函数 + 事件外吐」这八个字，后面全是细节。
+
+**自测：循环什么时候结束？是谁决定的？**
+正常情况下由**模型**决定：assistant 回复的 content 里没有 `type:"toolCall"` 块，`hasMoreToolCalls=false` 且队列里没有待注入消息，循环退出。但有三处例外可以提前终止：回复 `stopReason` 为 `error/aborted`；`shouldStopAfterTurn` 钩子返回 true；整批工具结果的 `terminate` 都为 true。
+
+
+## 架构：一个循环被拆成了三层
+
+pi 把「循环」拆成纯函数、状态机、产品壳三层，每层职责单一。这也是你以后自己写 agent 时最值得抄的结构决策。
+
+| 层 | 代码位置 | 体量 | 职责 | 知道什么 / 不知道什么 |
+| --- | --- | --- | --- | --- |
+| **L1 纯函数** `runAgentLoop` | `@earendil-works/pi-agent-core/dist/agent-loop.js` | 552 行 | 双环调度、流式消费、工具执行管线、事件发射 | 只知道传入的 context 和 config； 不知道会话持久化、UI、扩展的存在 |
+| **L2 状态机** `Agent` | `…/pi-agent-core/dist/agent.js` | 421 行 | 持有 transcript、订阅者分发、abort 生命周期、steering / followUp 双队列 | 知道「当前这轮谁在跑」； 不知道压缩、重试、系统提示词 |
+| **L3 产品层** `AgentSession` | `@earendil-works/pi-coding-agent/dist/core/agent-session.js` | 2686 行 | 系统提示词组装、扩展事件、自动压缩、错误重试、skill 展开、模型鉴权 | 知道一切产品语义； 通过钩子函数遥控 L1/L2 |
+
+fig.02 — 下行是「控制流」（上层指挥下层），上行是「事件流」（下层只管往外吐）
+
+### 为什么要拆三层
+
+- **纯函数可测试**——L1 不依赖任何全局态，测试时喂假 streamFn 就能把整个循环跑遍，不用 mock 文件系统或终端。
+- **状态机可复用**——L2 不知道「coding agent」这回事。你想做一个浏览器里的聊天 agent，直接拿 L1+L2 换个 UI 就是了。
+- **脏活全在壳里**——压缩、重试、扩展这些高频变更的产品逻辑被隔离在 L3，靠 `beforeToolCall` / `transformContext` / `shouldStopAfterTurn` 这些钩子注入，心脏保持稳定。
+
+**⚠ 读源码时的定位口诀** 看到「turn 怎么转、工具怎么执行」去 `agent-loop.js`；看到「消息队列、abort 之后状态对不对」去 `agent.js`；看到「为什么会突然压缩、systemPrompt 为什么变了」去 `agent-session.js`。
+
+**自测：想在「每次调 LLM 前」偷偷改消息列表，应该改哪一层？用什么机制？**
+机制在 **L1 定义**（`config.transformContext` 钩子，每个 turn 调 LLM 前触发），但实际注册发生在 **L3**（AgentSession 把扩展系统的 `session_before_compact`/上下文整理逻辑接进来）。这正是分层设计的味道：**机制下沉，策略上浮**。
+
+
+## 核心：runLoop 的双环走读（配步进器）
+
+真正的循环长这样：**外环处理「follow-up 追加任务」，内环处理「工具调用 + steering 插话」**。下面是可以一步步踩着走的真实代码骨架。
+
+pi-agent-core/dist/agent-loop.js · runLoop（节选注释版）
+
+```
+async function runLoop(ctx, cfg, signal, emit) {
+  let firstTurn = true;
+  let pending = await cfg.getSteeringMessages();  // ⓪ 启动前先看有没有插队
+  while (true) {                                   // ── 外环：follow-up ──
+    let moreTools = true;
+    while (moreTools || pending.length > 0) {      // ── 内环：工具 + steering ──
+      emit({ type: "turn_start" });
+      ctx.messages.push(...pending); pending = [];  // ① 注入插话（在 LLM 调用前！）
+      const msg = await streamAssistantResponse(ctx, cfg, emit); // ② 调 LLM
+      if (msg.stopReason === "error" || msg.stopReason === "aborted")
+        return emit({ type: "agent_end" });        // ③ 失败即终止，不吞错
+      const calls = msg.content.filter(c => c.type === "toolCall");
+      moreTools = false;
+      if (calls.length) {
+        const batch = msg.stopReason === "length"     // ④ 截断的参数不可信
+          ? await failAllToolCalls(calls, emit)
+          : await executeToolCalls(ctx, msg, cfg, emit);
+        ctx.messages.push(...batch.messages);        // ⑤ 结果写回上下文
+        moreTools = !batch.terminate;                // ⑥ 整批 terminate 可提前收工
+      }
+      emit({ type: "turn_end", message: msg });
+      await cfg.prepareNextTurn?.(…)                // ⑦ 每 turn 后可换模型/换上下文
+      if (await cfg.shouldStopAfterTurn?(…)) return; // ⑧ 外部闸门
+      pending = await cfg.getSteeringMessages();    // ⑨ 再偷看一眼有没有新插话
+    }
+    const followUps = await cfg.getFollowUpMessages();
+    if (followUps.length) { pending = followUps; continue; } // ── 外环续命 ──
+    break;                                          // 真没活了 → agent_end
+  }
+}
+```
+
+fig.03 — runLoop 完整控制流。注意两条回流边：内环回到「调 LLM」，外环把 follow-up 变成新一轮内环
+
+### 交互步进器：亲手跑一圈
+
+下面是一场真实缩排的对话：「帮我看下 repo 结构 → bash ls → 总结」。点击下一步，观察左侧高亮代码行、右侧 messages 数组的增长和当前阶段说明。
+
+```
+async function runLoop(ctx, cfg, signal, emit) {
+  let pending = await cfg.getSteeringMessages();
+  while (true) {                    // ── 外环 ──
+    let moreTools = true;
+    while (moreTools || pending.length > 0) {  // ── 内环 ──
+      ctx.messages.push(...pending); pending = [];
+      const msg = await streamAssistantResponse(...);
+      if (msg.stopReason === "error" || "aborted") return end();
+      const calls = msg.content.filter(c => c.type === "toolCall");
+      moreTools = false;
+      if (calls.length) {
+        const batch = await executeToolCalls(...);
+        ctx.messages.push(...batch.messages);
+        moreTools = !batch.terminate;
+      }
+      emit({ type: "turn_end", message: msg });
+      pending = await cfg.getSteeringMessages();
+    }
+    const followUps = await cfg.getFollowUpMessages();
+    if (followUps.length) { pending = followUps; continue; }
+    break;
+  }
+}
+```
+
+— 按「开始」起跑 —
+
+这场戏共 12 步：一次 steering 插话、两轮 LLM、一次工具执行、最后自然收敛。
+
+（上下文为空）
+
+0 / 12
+
+**自测：为什么 steering 消息要在「下一次 LLM 调用之前」注入，而不是等这一轮工具跑完随便找个空档？**
+因为 **LLM 是无状态的**——一旦下一次请求发出，这次对话的「事实」就定格了。插话必须赶在下一次请求组装之前进入 `ctx.messages`，否则模型永远看不到。这也是为什么 `getSteeringMessages()` 在循环开头和每个 turn_end 后各被调用一次：抓住每一个「即将调 LLM」的窗口。
+
+
+## 解剖：一次工具调用的五段流水线
+
+「执行工具」不是一句 `tool.execute()` 就完事。pi 给每一次调用铺了五段流水线，每一段都是一个可插拔的安全阀。
+
+fig.04 — 五段流水线。①②④ 都是同步检查/改写点，只有 ③ 会花时间；异常在任何一段都会变成 isError 的 toolResult 而不是抛出
+
+### 两个容易忽略的防御性设计
+
+**✗ length 截断 → 整批枪毙工具调用** 先把话说准：`stopReason === "length"` 指的不是「普通文本没说完」，而是**模型在流式输出中途撞上输出 token 上限、被硬性打断**——这次回复不是模型自愿收尾的，而断在哪里，模型自己感知不到也控制不了。最危险的断点，恰恰落在 toolCall 的参数 JSON 中间。
+
+为什么偏偏是工具调用遭殃？因为一次回复的 content 数组里，文本块和 toolCall 块**都是靠流式 delta 一点点拼出来的**。如果切断发生在参数 JSON 的中间，pi 又用「尽力抢救的 JSON 解析器」去拼接片段，被砍断的参数就**有一定概率凑成一个语法合法、能通过解析的 JSON**——但语法合法 ≠ 语义正确：
+
+同一条 rm 命令，截断前后
+
+```
+模型想生成的参数    { "command": "rm -rf ./build/tmp" }
+撞上限后被截成      { "command": "rm -rf ./" }
+                    ↑ 解析器视角：语法完全合法，一声不吭
+                    实际语义：「删一个子目录」→「删当前目录下所有东西」
+```
+
+而且你没有任何办法事后甄别——无法判断哪个字段是完整的、哪个是「截断后凑巧合法」。所以整批枪毙的推理链是一条直线：
+
+| ① | `stopReason === "length"` | 回复是被砍断的，不是模型自愿收尾 |
+| --- | --- | --- |
+| ② | 批内所有 toolCall 参数都不可信 | 截断点未知，「完整」与「凑巧合法」无法区分 |
+| ③ | 一次回复可带多个 toolCall | 整批里只要有一个有截断风险，就足以造成事故 |
+| ④ | **全部判失败**，错误信息喂回模型 | 让它重新完整生成一遍，下一轮照常继续 |
+
+**⚠ 为什么只枪毙工具调用，不动文本** `"length"` 本身只是「输出被截断」的通用信号。纯文本被截断顶多是话没说到头；而工具调用参数一旦不完整还照常执行，产生的是真实副作用（误删文件、误写配置）。风险等级完全不同，所以 pi 在这里选择了**防御性悲观**：宁可多浪费一轮 LLM 调用，绝不赌一次静默的参数错误被真实执行。
+
+**✓ 错误是数据，不是异常** StreamFn 的契约写着：**绝不允许 throw**。网络错、限流、模型拒答……一律编码成 `stopReason:"error"` 的 assistant 消息向上传。工具执行同理：任何异常都被包成 `isError:true` 的 toolResult 喂回给模型。这让整个 loop 在类型层面不可能因为一次失败而失控。
+
+**自测：模型一次回了 3 个 toolCall，其中第 2 个被 beforeToolCall block 掉。另外两个还执行吗？循环停吗？**
+执行——block 只影响那一个调用（它会得到一条以 reason 为内容的错误 toolResult）。循环是否提前停看 **terminate 投票**：仅当 3 个结果**全部** terminate:true 才终止；只要有一个 false（包括没设置），下一轮 LLM 照常发生，模型会看到 block 原因并自行调整。
+
+
+## 边界：消息的两副面孔（AgentMessage vs Message）
+
+pi 全程使用自由的 `AgentMessage`（可以有自定义类型），只在「按下发送键」的一瞬间收窄成 LLM 认识的三种消息。这条窄门是整个设计的粘合剂。
+
+fig.05 — convertToLlm 是单向阀门：宽类型进窄类型出，且每个 turn 都重新执行
+
+### 两道工序，到底是干什么的
+
+`transformContext` 和 `convertToLlm` 都是 `streamAssistantResponse` 在**每个 turn 开场时依次执行**的消息加工钩子——一个可选、一个必需，作用完全不同：
+
+**✓ transformContext —— 可选的「最后一道加工」** 宽类型进、宽类型出。它拿到的是 pi 内部维护、可以包含任意自定义类型（渲染卡片等 custom 消息）的完整 `AgentMessage[]`，返回的还是同样宽的数组——只是可能被裁剪、重排或改写。典型用途是在正式转成 LLM 消息前做上下文层面的定制处理（如压缩、过滤某些内部消息）。**不提供这个钩子就直接跳过。**
+
+**✦ convertToLlm —— 必需的「收窄阀门」** 把宽类型消息收窄成 LLM 真正认识的三种角色（user / assistant / toolResult）。这是一道单向阀门：**每个 turn 都重新执行一次**，不是只做一次缓存。默认实现会把非三种角色的消息（比如 custom）直接过滤掉——所以模型看不到它们，但它们仍保留在 session 历史和 UI 里。想让模型「看见」这类自定义消息？要么在业务层把内容并进一条 user 消息，要么自己实现一个把 custom 映射成 user 的 convertToLlm。
+
+| 维度 | transformContext | convertToLlm |
+| --- | --- | --- |
+| **是否必需** | 可选（不注册就跳过） | 必需（没有它 LLM 无消息可吃） |
+| **输入 / 输出** | 宽类型 → 宽类型（AgentMessage[]） | 宽类型 → 窄类型（只剩三种角色） |
+| **执行顺序** | 先执行 | 后执行（吃上一步的结果） |
+| **典型用途** | 上下文层面的自定义加工：裁剪、重排、改写内部消息 | 收窄成 Provider API 能接受的标准消息格式 |
+
+这个设计把「内部语义丰富的消息模型」和「LLM 只认三种角色」两件事解耦：边界清晰、每轮重新收窄，历史里就算塞进了模型看不懂的东西，也不会出现不可预期的行为。
+
+streamAssistantResponse · 每个 turn 的固定开场（节选）
+
+```
+async function streamAssistantResponse(context, config, …) {
+  let messages = context.messages;
+  if (config.transformContext)                       // 可选：内部宽类型的最后一道加工
+    messages = await config.transformContext(messages, signal);
+  const llmMessages = await config.convertToLlm(messages);  // 必需：收窄成三种角色
+  const response = await streamFunction(config.model, {
+    systemPrompt: context.systemPrompt,
+    messages: llmMessages,
+    tools: context.tools,
+  }, { apiKey: await config.getApiKey?.(config.model.provider), … });
+  // 之后就是对流的 switch：start/text_delta/toolcall_delta/done …
+  // 每个增量事件都会更新 partialMessage 并 emit message_update
+}
+```
+
+**✦ 流式消费的小机关** 流一开始，partial assistant 消息就被 push 进 `context.messages`，之后每个 delta 事件都是「原地替换数组最后一个元素」。好处：任何时刻去看上下文，它都是完整的（正在生长的最后一条也算数）；坏处：中断时要记得清理半成品——pi 用 `done/error` 事件的 finalMessage 统一回填来兜底。
+
+**自测：扩展往历史里塞了一条 custom 消息（比如一张渲染卡片），下一轮 LLM 会看到它吗？**
+取决于 **convertToLlm 的实现**。默认实现会把非 user/assistant/toolResult 的角色过滤掉，所以模型看不到——但它仍在 session 历史和 UI 里。想让模型看见，要么把内容并进一条 user 消息，要么提供自定义 convertToLlm 把 custom 映射成 user。
+
+
+## 并发：打断一门正在跑的任务（steering vs followUp）
+
+agent 正在埋头干活，用户又发来一句话怎么办？pi 给了两条不同性格的通道：**steering 抢方向，followUp 排下一单**。
+
+|  | steer() 插话转向 | followUp() 排队续命 |
+| --- | --- | --- |
+| **注入时机** | 下一个 turn 开始时、LLM 调用之前（内环开头 + 每个 turn_end 后轮询） | agent 本来要停的那一瞬间（内环出口 → 外环判断） |
+| **效果** | 改变**本次任务**的走向：「等等，先别动那个文件」 | 开启**新的工作**：「干完这个再帮我看看 X」 |
+| **队列模式** | 默认都是 `"one-at-a-time"`（每次排水口只放最老的一条）；可切 `"all"` 一次放光 |
+| **上层路由** | AgentSession.prompt 检测到正在 streaming 时，要求显式指定 `streamingBehavior: "steer" \| "followUp"`，否则抛错——逼调用方想清楚意图 |
+
+fig.06 — 同一条时间轴上，两种队列在两个不同的「排水口」泄洪。steering 抢在下次请求前，followUp 卡在停止点上
+
+AgentSession · 正在流式时收到新输入的路由（节选）
+
+```
+if (this.isStreaming) {
+  if (!options?.streamingBehavior)
+    throw new Error("Agent is already processing. Specify " +
+      "streamingBehavior ('steer' or 'followUp') to queue the message.");
+  if (options.streamingBehavior === "followUp")
+    await this._queueFollowUp(expandedText, images);
+  else
+    await this_queueSteer(expandedText, images);
+  return;
+}
+```
+
+**自测：steer 的消息会不会打断「正在执行中的工具」？**
+**不会。**注入点只有两个：内环开头和每个 turn_end 之后——都落在「工具批次已收尾、下一次 LLM 还没发车」的间隙里。正在跑的工具不受影响（要停它得用 `abort()`，那是另一条通路）。所以 steering 的粒度是「回合间」，不是「毫秒级抢占」。
+
+
+## 韧性：出错之后发生了什么（L1 停机 + L3 自愈）
+
+L1 的原则是「错了就停，绝不硬撑」；L3 的职责是「停下来之后，看看能不能不动声色地救回来」。两层配合出一个打不死的 agent。
+
+### L1 的三种停法
+
+| stopReason | 含义 | L1 的动作 |
+| --- | --- | --- |
+| `"stop"` | 正常说完，没有（或不再需要）工具 | 内环退出 → 检查 follow-up → agent_end |
+| `"error"` | API 错误 / 限流 / 内容拒绝 | 立刻 turn_end + agent_end，错误挂在消息上上抛 |
+| `"aborted"` | 用户按了 Esc / abort() | 同上，但保留已生成的部分内容 |
+| `"length"` | 撞到输出 token 上限 | 不算致命：本批 toolCall 全部判失败后照常继续（见第 04 章） |
+
+### L3 的自愈决策树
+
+fig.07 — agent 停稳后的四连问。注意所有自愈最终都汇入 `agent.continue()`——复用同一个 loop，而不是另起炉灶
+
+agent-session.js · 自愈驱动的外层再入（节选）
+
+```
+async _runAgentPrompt(messages) {
+  await this.agent.prompt(messages);
+  // prompt 返回 ≠ 真结束：可能刚做完一次自愈，需要 continue 再入
+  while (await this._handlePostAgentRun()) {
+    await this.agent.continue();   // 重试 / 溢出压缩 / agent_end 处理器塞的新消息
+  }
+}
+```
+
+**自测：为什么溢出自愈要先「删掉最后一条 assistant 消息」再压缩？**
+那条消息正是撑爆上下文的元凶（或是带着错误状态的半成品）。它留在 session.jsonl 里供回溯，但必须从 **agent 的活动上下文**里摘除，否则：① 压缩摘要把垃圾也编进去；② `continue()` 要求末尾是 user/toolResult，挂着 assistant 尾巴根本无法续跑。删尾巴 + 压缩 + continue，三步才构成一次完整自愈。
+
+
+## 俯瞰：这套设计教会我们的五件事
+
+读完源码，值得带走的不只是「pi 怎么写的」，而是这些可以直接迁移到自己项目里的结构性决策。
+
+| # | 设计决策 | 代价 | 收益 |
+| --- | --- | --- | --- |
+| 1 | **循环写成纯函数**，副作用全部走 emit 事件 | 多一层事件 plumbing | 任意 UI（TUI/RPC/网页）都能挂上来；循环本身可用假 streamFn 全路径测试 |
+| 2 | **错误即消息**：StreamFn 与工具都不许 throw | 调用方要多检查 stopReason/isError | 控制流永远线性可推理，不会出现「半个 turn 悬在空中」的状态 |
+| 3 | **机制下沉、策略上浮**：钩子在 L1 定义，语义在 L3 注册 | 钩子签名要提前设计好 | 心脏 552 行几乎不变，产品逻辑随意迭代 |
+| 4 | **防御性悲观**：length 整批枪毙、terminate 一票否决制反着用（全票才停）、溢出只自愈一次 | 偶尔多做一轮无用功 | 杜绝「静默截断的参数被执行」「stale 触发的无限压缩」这类最难查的事故 |
+| 5 | **队列即 API**：steering/followUp 是一等公民而非补丁 | 调用方必须显式选行为 | 「打断正在跑的 agent」从玄学变成两个语义清晰的排水口 |
+
+**✦ 一句话总结** pi 的 agent loop = **一个纯函数双环 + 两道消息窄门 + 两条排队通道 + 一棵自愈决策树**。所有复杂度都被推到了「边界」上：LLM 调用边界（convertToLlm）、工具边界（五段流水线）、停止边界（三问自愈）。边界清晰，内核才能小。
+
+**自测：如果让你给自己的 agent 加「每轮结束后上报 token 消耗」，你会挂在哪个点？**
+首选 `turn_end` 事件（L1 已带 message.usage）——订阅即可，零侵入。要聚合统计就在 L2 的 subscribe 监听里累加。千万别去改 L1 的循环体：那是「策略入侵机制」的反面教材，升级 pi 时会被冲掉。

@@ -1,0 +1,482 @@
+# pi 扩展开发手册 · Field Manual
+
+> 从 ExtensionAPI、事件生命周期、自定义工具，到 UI、状态持久化和动态 Provider 的可交互开发手册。
+
+来源：https://dev.limbo101.win/pi-extensions/a
+站点：know-as-ui（交互式技术手册，本文件是自动生成的正文快照）
+生成：scripts/llms.mjs
+
+## 心智模型：扩展到底是什么
+
+pi 的扩展就是一个 **TypeScript 文件**，导出一个默认函数，pi 把 `ExtensionAPI` 对象递给你——你用它订阅事件、注册工具、注册命令、操作 UI。没有框架、没有构建步骤，写完就能跑。
+
+三条最重要的底层事实：
+
+- **加载器是 jiti** —— TypeScript 直接加载，npm install 的依赖和 Node 内置模块（`node:fs` 等）都能用，无需编译。
+- **工厂函数可以 async** —— 返回 Promise 时 pi 会等它完成再继续启动（适合启动时拉远端配置、动态发现模型）。
+- **扩展拥有你的全部系统权限** —— 只装可信来源的扩展。
+
+**⚠ 别在工厂函数里起后台资源** 工厂可能在「永远不开会话」的调用里运行。进程、socket、文件监视器、定时器统统延迟到 `session_start` 再启动，并注册幂等的 `session_shutdown` 来清理。
+
+### 架构总览：一个扩展够得着哪些内脏
+
+fig.01 — ExtensionAPI 是唯一入口：事件订阅打进去，工具/命令/Provider 注册送进来
+
+### 最小可用扩展（能跑的全部要素）
+
+~/.pi/agent/extensions/my-extension.ts
+
+```
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+
+export default function (pi: ExtensionAPI) {
+  // ① 订阅事件
+  pi.on("session_start", async (_event, ctx) => {
+    ctx.ui.notify("Extension loaded!", "info");
+  });
+
+  // ② 拦截工具调用（危险命令闸门）
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "bash" && event.input.command?.includes("rm -rf")) {
+      const ok = await ctx.ui.confirm("Dangerous!", "Allow rm -rf?");
+      if (!ok) return { block: true, reason: "Blocked by user" };
+    }
+  });
+
+  // ③ 注册 LLM 可调用的自定义工具
+  pi.registerTool({
+    name: "greet",
+    label: "Greet",
+    description: "Greet someone by name",
+    parameters: Type.Object({ name: Type.String({ description: "Name to greet" }) }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      return { content: [{ type: "text", text: `Hello, ${params.name}!` }], details: {} };
+    },
+  });
+
+  // ④ 注册斜杠命令
+  pi.registerCommand("hello", {
+    description: "Say hello",
+    handler: async (args, ctx) => ctx.ui.notify(`Hello ${args || "world"}!`, "info"),
+  });
+}
+```
+
+**自测：工厂函数里 await fetch 拉模型列表，pi 会等吗？等完之后发生了什么？**
+会。**如果工厂返回 Promise，pi 会 await 它才继续启动**——所以异步初始化会在 `session_start`、`resources_discover` 之前完成，通过 `pi.registerProvider()` 注册的模型也能在正常启动和 `pi --list-models` 里看到。这也是文档推荐的「启动时拉远端配置」模式。
+
+
+## 放哪里、怎么加载
+
+两条路径：`-e` 旗标做快速试验；放进自动发现目录才能用 /reload 热重载。项目本地的扩展要等项目被信任后才会加载。
+
+| 位置 | 作用域 |
+| --- | --- |
+| `~/.pi/agent/extensions/*.ts` | 全局（所有项目） |
+| `~/.pi/agent/extensions/<dir>/index.ts` | 全局（子目录形态） |
+| `.pi/extensions/*.ts` | 项目本地 |
+| `.pi/extensions/<dir>/index.ts` | 项目本地（子目录形态） |
+
+### 三种组织形态
+
+- **单文件** —— 一个 `.ts`，小扩展首选。
+- **目录 + index.ts** —— 多文件拆分，入口仍是默认导出函数。
+- **带依赖的包** —— 目录里有 `package.json`，声明 `"pi": {"extensions": ["./src/index.ts"]}`，`npm install` 后 node_modules 自动解析。注意分发时依赖必须放 `dependencies`（安装用 `--omit=dev`）。
+
+settings.json · 追加路径 / 分发包
+
+```
+{
+  "packages": ["npm:@foo/bar@1.0.0", "git:github.com/user/repo@v1"],
+  "extensions": ["/path/to/local/extension.ts", "/path/to/dir"]
+}
+```
+
+| 命令 | 用途 |
+| --- | --- |
+| `pi -e ./my-extension.ts` | 临时挂载单个扩展测试（不进自动发现目录） |
+| `/reload` | 热重载自动发现目录里的扩展（所以开发时放对地方） |
+| `pi --no-builtin-tools -e ./x.ts` | 禁用全部内置工具，只用扩展工具 |
+
+### 加载流水线：从磁盘到生效
+
+fig.02 — 想用 /reload 就别用 -e：只有自动发现位置支持热重载
+
+**⛔ 安全红线** 扩展以你的完整系统权限执行任意代码。npm/git 分发的扩展同理——装之前看源码。
+
+**自测：为什么开发时建议放 ~/.pi/agent/extensions/ 而不是一直用 -e？**
+因为只有自动发现位置的扩展支持 /reload 热重载。用 `-e` 每次改代码都得重启整个 pi；放进目录后改完敲 `/reload` 即可，还触发 `resources_discover {reason:"reload"}` 让资源一起刷新。
+
+
+## 事件系统：一次对话的完整旅程
+
+扩展的骨架是事件。下面的模拟器演示用户发送一条消息后，事件按什么顺序触发、哪些能拦截修改。先玩一遍模拟器，再对照下方总表。
+
+普通消息（完整回合）
+
+tool_call 拦截 rm -rf
+
+input 事件改写输入 ?quick → 简短回答
+
+### 事件总表（含能力标注）
+
+| 事件 | 时机 | 能力 |
+| --- | --- | --- |
+| `project_trust` | 决定是否信任项目前（仅全局/CLI 扩展参与） | 决定 trust |
+| `resources_discover` | session_start 后，贡献 skill/prompt/theme 路径 | 返回路径 |
+| `session_start` / `session_shutdown` | 会话开始 / 销毁（reason: startup·new·resume·fork·reload） | 通知 |
+| `session_before_switch` / `_before_fork` | /new /resume /fork 前 | 可 cancel |
+| `session_before_compact` | 压缩前（手动/阈值/溢出） | 可 cancel 自定义摘要 |
+| `input` | 收到输入后、skill/template 展开前 | continue / transform / handled |
+| `before_agent_start` | 进入 agent 循环前 | 注入 message、改 systemPrompt |
+| `context` | 每次 LLM 调用前 | 增删消息（深拷贝安全） |
+| `before_provider_headers` / `_request` | HTTP 头组装后 / payload 构建后 | 原地 mutate / 替换 payload |
+| `after_provider_response` | 收到 HTTP 响应、消费流之前 | 读 status/headers |
+| `message_start/_update/_end` | 消息生命周期（update 为流式 token） | end 可替换同 role 消息 |
+| `turn_start` / `turn_end` | 每个回合（一次 LLM 响应+工具调用） | 通知 |
+| `tool_execution_start/_update/_end` | 工具执行生命周期 | 通知（并行模式交错） |
+| `tool_call` | 工具执行前 | 可 block 可原地改 input |
+| `tool_result` | 工具执行完成后 | 链式修改结果（中间件） |
+| `user_bash` | 用户执行 `!`/`!!` 命令 | 可接管 operations / 直接给 result |
+| `model_select` / `thinking_level_select` | 模型 / 思考级别切换 | 更新 UI |
+| `agent_settled` | agent 彻底停稳（无 retry/compaction/follow-up） | 状态集成用这个 |
+
+### tool_call 拦截：一次工具调用的生死判定
+
+fig.03 — handler 抛异常也算 block：权限系统的失败模式是拒绝
+
+tool_call · 类型收窄 + 原地改参 + 拦截
+
+```
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+
+pi.on("tool_call", async (event, ctx) => {
+  // isToolCallEventType 收窄类型，拿到 typed input
+  if (isToolCallEventType("bash", event)) {
+    // input 可变！原地修改会真实影响执行，且后续 handler 能看到
+    event.input.command = `source ~/.profile\n${event.input.command}`;
+
+    if (event.input.command.includes("rm -rf")) {
+      return { block: true, reason: "Dangerous command", terminate: true };
+    }
+  }
+});
+```
+
+**ℹ 并行工具模式的顺序保证** 默认并行执行下：`tool_execution_start` 按助手消息里的源顺序发出；`tool_result` 和 `tool_execution_end` 按**完成顺序**交错；最终 toolResult 消息仍按源顺序。`tool_call` 不保证能看到同一批兄弟工具的结果。
+
+**自测：想在发给 LLM 前偷偷删掉某些旧消息，应该挂在哪个事件上？为什么不能在 before_agent_start 里干这事？**
+挂在 `context` 上——它在**每次 LLM 调用前**触发，event.messages 是深拷贝、随便改，返回 `{ messages: filtered }` 即可，非破坏性（不影响 session 存储）。before_agent_start 每轮只触发一次且职责是注入消息/改 system prompt，逐次请求级别的上下文裁剪是 context 的活。
+
+
+## 自定义工具：registerTool 全解
+
+这是扩展最核心的能力——给 LLM 新的手。`execute` 返回的 `content` 发给 LLM，`details` 留给你自己渲染和恢复状态。
+
+### 完整定义（每个字段都有用）
+
+registerTool · 生产级写法
+
+```
+import { Type } from "typebox";
+import { StringEnum } from "@earendil-works/pi-ai";
+
+pi.registerTool({
+  name: "todo",
+  label: "Todo",
+  description: "List or add items in the project todo list",
+  // 进系统提示词 Available tools 区的一行简介（不加就不出现）
+  promptSnippet: "Manage the shared todo list",
+  // 进 Guidelines 区的子弹。注意：必须自带工具名！
+  promptGuidelines: [
+    "Use todo for task planning instead of direct file edits when the user asks for a task list."
+  ],
+  parameters: Type.Object({
+    action: StringEnum(["list", "add"] as const),
+    text: Type.Optional(Type.String()),
+  }),
+  prepareArguments(args) { return args; }, // 校验前的兼容垫片
+
+  async execute(toolCallId, params, signal, onUpdate, ctx) {
+    if (signal?.aborted) return { content: [{ type: "text", text: "Cancelled" }] };
+
+    // 流式进度（TUI 实时可见）
+    onUpdate?.({ content: [{ type: "text", text: "Working..." }], details: { progress: 50 } });
+
+    const result = await pi.exec("some-command", [], { signal });
+
+    return {
+      content: [{ type: "text", text: "Done" }],  // → 给 LLM
+      details: { data: result },                    // → 给渲染/状态恢复
+      // terminate: true,  // 本批全是 terminate 则跳过后续 LLM 调用
+    };
+  },
+
+  renderCall(args, theme, context) { /* TUI 里怎么画调用行 */ },
+  renderResult(result, options, theme, context) { /* TUI 里怎么画结果 */ },
+});
+```
+
+### 四条保命规矩
+
+- **枚举用 `StringEnum`**（来自 pi-ai）。`Type.Union/Type.Literal` 在 Google 的 API 上不工作。
+- **报错靠 throw**。从 `execute` 抛错 → 结果标记 `isError:true` 报告给 LLM，流程继续；**return 永远不会设置错误标志**，返回什么对象都没用。
+- **必须截断输出**。内置限制 50KB / 2000 行先到为准。用现成的 `truncateHead`（搜索/读文件留头部）/ `truncateTail`（日志留尾部），截断后要把全文落盘并把路径告诉 LLM。
+- **改文件的工具要进 `withFileMutationQueue()`**。工具默认并行跑——不排队的话你的 edit 和内置 edit 同时读旧内容各改各的，后写的覆盖先写的，改动丢失。传**解析后的绝对路径**，read-modify-write 全程包进去。
+
+截断 + 文件变更队列
+
+```
+import { truncateHead, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES,
+         withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+
+async execute(_id, params, _signal, _onUpdate, ctx) {
+  const abs = resolve(ctx.cwd, params.path);
+  return withFileMutationQueue(abs, async () => {
+    const output = await runCommand();
+    const t = truncateHead(output, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
+    let text = t.content;
+    if (t.truncated) text += `\n\n[Truncated. Full output saved to ${tempFile}]`;
+    return { content: [{ type: "text", text }] };
+  });
+}
+```
+
+### 覆盖内置工具 & 动态装卸
+
+- **同名即覆盖**：注册一个叫 `read` 的工具就替换内置 read（TUI 会警告）。渲染器按槽位独立继承——你不写 renderCall/renderResult 就沿用内置的（语法高亮、diff 都还在），适合只加日志/权限控制的包装。`promptSnippet/guidelines` 不继承，需要就显式写。
+- **动态加载**：注册很多工具但只激活少部分，loader 工具执行中调 `pi.setActiveTools([...current, ...matches])`（必须纯增量），下一个请求前新定义就会暴露给模型。Anthropic 4.5+/新版 OpenAI 走原生 deferred loading 保住 prompt 缓存前缀，其他模型自动回退为全量列表。
+- **随时可注册**：`registerTool` 在启动后任何时刻调用都行，新工具立即生效，不需要 /reload。配套 `getActiveTools()/getAllTools()/setActiveTools()` 管理开关。
+
+**自测：promptGuidelines 里写「Use this tool when…」为什么是错的？**
+因为 guidelines 子弹是**平铺追加到系统提示词 Guidelines 区的，没有工具名前缀**——LLM 看到「this tool」根本不知道指谁。必须写成「Use my_tool when…」，让每个子弹自带工具名。这是文档特意加粗强调的坑。
+
+
+## ctx.ui：跟用户对话
+
+从一行 notify 到完整的自定义 TUI 组件都在 `ctx.ui` 上。但先记住模式问题：`print -p` 和 json 模式下没有 UI，弹窗方法要用 `ctx.hasUI` 守门。
+
+| 模式 | ctx.mode | ctx.hasUI | 说明 |
+| --- | --- | --- | --- |
+| 交互 TUI | `"tui"` | ✅ | 完整终端 UI |
+| RPC | `"rpc"` | ✅ | 对话框走 JSON 协议；`custom()` 返回 undefined |
+| JSON | `"json"` | ❌ | UI 方法全是 no-op |
+| Print（-p） | `"print"` | ❌ | 扩展照常运行，但不能提问 |
+
+### 对话框与常驻元素
+
+ui 工具箱
+
+```
+// 阻塞式对话框
+const choice = await ctx.ui.select("Pick one:", ["A", "B", "C"]);
+const ok     = await ctx.ui.confirm("Delete?", "This cannot be undone");
+const name   = await ctx.ui.input("Name:", "placeholder");
+const text   = await ctx.ui.editor("Edit:", "prefilled");
+
+// 非阻塞
+ctx.ui.notify("Done!", "info");  // "info" | "warning" | "error"
+
+// 倒计时自动关闭：confirm 超时返回 false，其余返回 undefined
+const sure = await ctx.ui.confirm("Timed", "Auto-cancel in 5s. Sure?", { timeout: 5000 });
+
+// 常驻元素
+ctx.ui.setStatus("my-ext", "Processing...");            // footer 状态
+ctx.ui.setWidget("my-widget", ["Line 1", "Line 2"]);      // 编辑器上方小部件
+ctx.ui.setWidget("w", [...], { placement: "belowEditor" }); // 或编辑器下方
+ctx.ui.setTitle("pi - my-project");
+ctx.ui.setWorkingMessage("Thinking deeply...");           // 流式时的 loader 文案
+
+// 完整自定义组件：临时替换编辑器，done() 收场
+const result = await ctx.ui.custom<boolean>((tui, theme, keybindings, done) => {
+  const text = new Text("Enter=确认 Esc=取消", 1, 1);
+  text.onKey = (key) => {
+    if (key === "return") done(true);
+    if (key === "escape") done(false);
+    return true;
+  };
+  return text;
+});
+// 加 { overlay: true } 变悬浮 modal，不清屏
+```
+
+**✓ 守卫写法** 弹窗类方法（select/confirm/input/editor）和 fire-and-forget 类（notify/setStatus/setWidget）在 TUI 与 RPC 下都可用 → 用 `ctx.hasUI` 判断；terminal 输入、custom()、组件工厂这类 TUI 专属 → 用 `ctx.mode === "tui"` 判断。
+
+**自测：扩展要在 -p 打印模式下也正常工作，哪类调用必须包在 hasUI 判断里？哪类不用管？**
+所有需要**用户应答**的对话框（select/confirm/input/editor/custom）必须包在 `if (ctx.hasUI)` 里——print 模式下没人能回答你，会卡死或拿到空值。notify 这类虽然也是 no-op 但无害；纯逻辑、exec、事件处理完全不受影响。设计上应该做到：无 UI 时选择安全的默认行为而不是停下来问。
+
+
+## 消息注入与会话状态持久化
+
+两条注入通道方向相反：想让 **LLM 看到**用 `sendMessage/sendUserMessage`；只想**人看到 + 存档**用 `appendEntry`。搞反了要么污染上下文，要么 LLM 根本不知道。
+
+| API | 进 LLM 上下文? | TUI 显示? | 典型用途 |
+| --- | --- | --- | --- |
+| `sendMessage({customType,...})` | ✅ | 配 registerMessageRenderer | 注入额外上下文/状态更新 |
+| `sendUserMessage(text)` | ✅（作为用户消息） | 像用户手打一样 | 程序化触发回合、排队指令 |
+| `appendEntry(customType,data)` | ❌ | 配 registerEntryRenderer | 持久化扩展状态、纯展示卡片 |
+
+### 三条注入通道的去向
+
+fig.04 — 记忆口诀：① 给模型递纸条 ② 替用户说话 ③ 自己记账
+
+### 投递时机（deliverAs）
+
+- `"steer"`（默认）—— 流式中排队，当前助手回合的工具执行完后、下次 LLM 调用前送达。**插话转向**。
+- `"followUp"` —— 等 agent 完全收工再送。
+- `"nextTurn"` —— 排到下一次用户输入，不打断任何东西。
+- `triggerTurn: true` —— agent 空闲时立刻触发响应（仅 steer/followUp 有效）。
+- 流式中调 `sendUserMessage` 不带 deliverAs 会**直接抛错**。
+
+状态的正确存法
+
+```
+export default function (pi: ExtensionAPI) {
+  let items: string[] = [];
+
+  // 重启/reload 后从会话重建状态
+  pi.on("session_start", async (_e, ctx) => {
+    items = [];
+    for (const entry of ctx.sessionManager.getBranch()) {
+      if (entry.type === "message" && entry.message.role === "toolResult"
+          && entry.message.toolName === "my_tool") {
+        items = entry.message.details?.items ?? [];  // 从 details 恢复
+      }
+    }
+  });
+
+  pi.registerTool({
+    name: "my_tool", /* ... */
+    async execute(_id, params) {
+      items.push(params.text);
+      return {
+        content: [{ type: "text", text: "Added" }],
+        details: { items: [...items] },  // 存快照 → 天然支持 /tree 分支回溯
+      };
+    },
+  });
+
+  // 纯展示卡片（LLM 看不到）
+  pi.appendEntry("status-card", { title: "Indexed files", count: 17 });
+}
+```
+
+**ℹ 为什么状态要放在工具结果的 details 里？** 会话是一棵树（/fork、/tree 回溯会切分支）。状态存在工具结果的 details 里，重建时沿着当前分支扫一遍即可——分支切到哪状态就跟到哪。存在闭包变量或 appendEntry 里的全局状态则做不到这种「时间旅行一致性」。另有 `pi.setLabel(entryId,label)` 做书签、`pi.appendEntry` 做跨重启持久数据。
+
+**自测：想做一个「任务跑完自动总结」的功能，agent 忙时提交、闲时触发——用什么组合拳？**
+`pi.sendUserMessage("请总结以上工作", { deliverAs: "followUp" })`——followUp 保证 agent 干完所有工具后才送达，且总是触发新回合。若只是补充上下文不想打断，用 `sendMessage(..., {deliverAs:"nextTurn"})`。注意流式中裸调 sendUserMessage 会抛错，deliverAs 不是可选项而是必选项。
+
+
+## 动态 Provider：接入任意模型源
+
+`pi.registerProvider()` 能新增代理、接本地 llama.cpp/Ollama、甚至覆盖 anthropic 的 baseUrl。启动期调用会排队，启动后的调用（比如命令处理器里）**立即生效，不用 reload**。
+
+四个典型姿势
+
+```
+// ① 简单注册：本地 OpenAI 兼容端点
+pi.registerProvider("local-openai", {
+  baseUrl: "http://localhost:1234/v1",
+  apiKey: "$LOCAL_API_KEY",              // 支持 $ENV / ${ENV} / !command
+  api: "openai-completions",             // 或 anthropic-messages / openai-responses …
+  models: [{ id: "qwen3-32b", name: "Qwen3 32B", reasoning: false,
+             input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+             contextWindow: 128000, maxTokens: 16384 }],
+});
+
+// ② 动态发现：live llama.cpp，刷新时拉 /v1/models
+pi.registerProvider("llama.cpp", {
+  baseUrl: "http://localhost:8080/v1",
+  apiKey: "$LLAMA_API_KEY",
+  api: "openai-completions",
+  async refreshModels({ signal }) {
+    const r = await fetch("http://localhost:8080/v1/models", { signal });
+    const { data } = await r.json();
+    return data.map(({ id }) => ({ id, name: id, reasoning: false,
+      input: ["text"], cost: { input:0, output:0, cacheRead:0, cacheWrite:0 },
+      contextWindow: 128000, maxTokens: 16384 }));
+  },
+});
+
+// ③ 只覆盖 baseUrl，模型全保留
+pi.registerProvider("anthropic", { baseUrl: "https://proxy.example.com" });
+
+// ④ 带 OAuth 登录流（出现在 /login 菜单）
+pi.registerProvider("corporate-ai", {
+  baseUrl: "https://ai.corp.com", api: "openai-responses", models: [/*…*/],
+  oauth: {
+    name: "Corporate AI (SSO)",
+    async login(callbacks) {
+      callbacks.onAuth({ url: "https://sso.corp.com/..." });
+      const code = await callbacks.onPrompt({ message: "Enter code:" });
+      return { refresh: code, access: code, expires: Date.now() + 3600000 };
+    },
+    async refreshToken(credentials, signal) { signal.throwIfAborted(); return credentials; },
+    getApiKey(credentials) { return credentials.access; },
+  },
+});
+
+pi.unregisterProvider("my-proxy");  // 移除；被覆盖的内置模型恢复原样
+```
+
+**ℹ 相关上下文** 读取侧：`ctx.modelRegistry`（找 provider/model、解析 auth）、`ctx.model` 当前模型、`ctx.scopedModels` 会话内限定模型集（做自定义 picker 用它而不是全量枚举）。控制侧：`pi.setModel(model)`（没 key 返回 false）、`pi.getThinkingLevel()/setThinkingLevel(level)`。
+
+**自测：朋哥想把 ollama(127.0.0.1:11434/v1) 挂进 pi，该用哪个 api 类型？key 怎么填最省事？**
+Ollama 提供 OpenAI 兼容端点，用 `api: "openai-completions"` + `baseUrl: "http://127.0.0.1:11434/v1"`。本地不需要真 key，但 apiKey 字段必填——可以用环境变量引用形式塞个占位（如 `$OLLAMA_DUMMY`），或者干脆用 refreshModels 动态拉 `/v1/models` 免去手写模型表。这正好复用他 M4 Pro 上已有的 ollama 环境。
+
+
+## 坑点清单：文档里加粗的部分都在这
+
+这些是官方文档特意强调、或者语义反直觉的地方。写扩展前过一遍，省掉半夜 debug。
+
+| # | 坑 | 正解 |
+| --- | --- | --- |
+| 1 | promptGuidelines 写「Use this tool when…」 | 子弹平铺进 Guidelines 无前缀，LLM 不知道 this 是谁。每个子弹自带工具名：「Use my_tool when…」 |
+| 2 | execute 返回 {error:…} 期望标记失败 | 没用。**只有 throw 才置 isError:true**；return 什么都不标 |
+| 3 | 工具输出不截断 | 50KB/2000 行硬约束，超了撑爆上下文+压缩失败。truncateHead/Tail + 全文落盘告知路径 |
+| 4 | 改文件的工具不排队 | 默认并行执行，会和内置 edit/write 竞争丢改动。withFileMutationQueue(绝对路径, fn) 包住整个 read-modify-write |
+| 5 | 工厂函数里起 watcher/timer/socket | 工厂可能在不开会话的调用里跑。延迟到 session_start 启动，session_shutdown 幂等清理 |
+| 6 | 流式中裸调 sendUserMessage | 直接抛错。必须带 `deliverAs: "steer" \| "followUp"` |
+| 7 | session 切换后复用旧的 ctx.sessionManager / pi | 替换后旧对象已 stale 会 throw。withSession 回调里只用传进来的那个 ctx；只捕获字符串/id/序列化配置这类干净数据 |
+| 8 | await ctx.reload() 后继续干活 | reload 后当前 handler 还跑在旧版本帧里，旧内存状态不可信。规范写法：`await ctx.reload(); return;` 当终结语句 |
+| 9 | print/json 模式下调对话框 | hasUI 为 false，没人能回答。先判断再问，无 UI 时走安全默认值 |
+| 10 | Google 模型上枚举参数失效 | Type.Union/Literal 不兼容 Google API。统一用 pi-ai 的 StringEnum |
+| 11 | 以为 registerTool 要 reload 才生效 | 不用。运行中随时注册立即生效；setActiveTools 同样即时 |
+| 12 | 自定义工具接受 path 却不处理 @ 前缀 | 有些模型会带上 @ 前缀（内置工具都剥掉了）。自己的 path 参数也要 normalize 掉开头的 @ |
+| 13 | ctx.signal 在 idle 时当必然存在用 | signal 通常只在活跃回合事件（tool_call/tool_result/message_update/turn_end）里有定义，session 事件和空闲命令里多为 undefined |
+| 14 | extension 抛异常导致整个 agent 崩溃 | 不会。扩展错误只记日志，agent 继续。但 tool_call handler 抛错 = fail-safe 阻断该工具调用 |
+
+**自测：为什么「tool_call 里抛异常」反而是安全行为？什么场景会利用它？**
+扩展错误默认只记日志不阻断主流程，但 **tool_call 的错误被特殊处理为 fail-safe 阻断**——拿不准是否该放行时，宁可挡下来也不让危险操作执行。典型用法：权限闸门扩展在确认逻辑本身出错时抛异常，工具就被拦住，符合「权限系统的失败模式应该是拒绝」的设计原则。
+
+
+## 官方示例地图：照着抄就完了
+
+全部在仓库 `packages/coding-agent/examples/extensions/`。学每个主题前先找对应示例读一遍——下面按学习路径排序，可搜索。
+
+| 示例 | 学什么 | 关键 API |
+| --- | --- | --- |
+| `hello.ts` | 最小工具注册（第一站） | registerTool |
+| `permission-gate.ts` | 危险命令确认闸门 | on("tool_call"), ui.confirm |
+| `protected-paths.ts` | 保护 .env/node_modules 写入 | on("tool_call") block |
+| `question.ts` / `questionnaire.ts` | 工具里问用户 / 多步向导 | ui.select, ui.custom |
+| `todo.ts` | 有状态工具 + 持久化 + 渲染（第二站） | registerTool, appendEntry, renderResult |
+| `dynamic-tools.ts` | 启动后/命令中动态加工具 | registerTool, setActiveTools |
+| `truncated-tool.ts` | 包装 rg + 正确截断 | truncateHead |
+| `tool-override.ts` | 覆盖内置 read 加日志和访问控制 | 同名 registerTool |
+| `pirate.ts` | 逐回合改 system prompt | registerCommand, before_agent_start |
+| `input-transform.ts` | 改写用户输入 | on("input") |
+| `claude-rules.ts` | 从文件加载规则进 prompt | session_start, before_agent_start |
+| `git-checkpoint.ts` | 每回合 stash 快照 | turn_start, exec |
+| `auto-commit-on-exit.ts` | 退出时自动 commit | session_shutdown, exec |
+| `custom-compaction.ts` | 用自己的方式压上下文 | session_before_compact |
+| `status-line.ts` / `widget-placement.ts` | footer 状态 / 编辑器上下 widget | setStatus, setWidget |
+| `github-issue-autocomplete.ts` | #issue 自动补全叠加内置补全 | addAutocompleteProvider |
+| `modal-editor.ts` | vim 模式编辑器 | setEditorComponent, CustomEditor |
+| `plan-mode/` | 完整计划模式（综合大例，第三站） | 几乎全部 API |
+| `preset.ts` | 可保存预设（模型/工具/thinking） | registerCommand/Flag, setModel… |
+| `ssh.ts` / `sandbox/` / `gondolin/` | 远程执行 / 沙箱 / micro-VM | tool operations, user_bash |
+| `subagent/` | 生成子 agent | registerTool, exec |
+| `snake.ts` / `doom-overlay/` | 游戏（验证 custom UI 极限） | ui.custom |
+| `event-bus.ts` | 扩展间通信 | pi.events on/emit |

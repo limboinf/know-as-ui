@@ -1,0 +1,531 @@
+# RAG 与向量数据库 · D 选型与实战
+
+> RAG 与向量数据库 · D 选型与实战｜从「开卷考试」到「一千万条怎么扛」：BM25×向量对撞、切块实验台、RRF 调参、真实跑 k-means / HNSW / 量化的内核实验，用 pgvector 和 Milvus 各搭一套混合检索，再讲上线后的增量更新、蓝绿换模型、数据治理与 29 条常见问题手册。
+
+来源：https://dev.limbo101.win/rag-vector-db/d
+站点：know-as-ui（交互式技术手册，本文件是自动生成的正文快照）
+生成：scripts/llms.mjs
+
+## 选型地图 —— 别从「哪个最快」开始问
+
+知识库要上线了，该选哪个向量数据库？2026 年的答案比两年前更分化：有的是「Postgres 里加个扩展」，有的是为十亿级设计的分布式系统，有的是跑在对象存储上的无服务器服务。
+
+先说一个反直觉的结论：**在大多数业务里，性能不是选型的第一变量**。当规模在千万条以内，几个主流方案在延迟和召回上的差距，远小于「你的团队已经会运维什么」「你需要混合检索吗」「有多少租户」这些问题带来的差距。下面的向导把这几个变量问一遍，给出倾向，而不是标准答案。
+
+LAB 1.1 · 选型向导
+
+规则打分，非定论；规则见下方脚注
+
+向量规模
+
+团队现状
+
+混合检索（关键词 + 向量）
+
+租户规模
+
+运维偏好
+
+冷数据 / 成本敏感
+
+#1
+
+Qdrant
+
+6 分
+
+- 规模「100 万～1000 万」适配度 +3
+- 自运维契合
+- 支持稀疏 / 全文 + 向量的混合查询
+
+⚠ 自托管需自己运维集群；也有云服务。
+
+#2
+
+Elasticsearch / OpenSearch
+
+6 分
+
+- 规模「100 万～1000 万」适配度 +3
+- 内置关键词（BM25）+ 向量混合检索
+- 自运维契合
+
+⚠ 向量是搜索引擎之上的能力，内存与调优成本需评估；适合已有集群的团队。
+
+#3
+
+Weaviate
+
+6 分
+
+- 规模「100 万～1000 万」适配度 +3
+- 内置关键词（BM25）+ 向量混合检索
+- 自运维契合
+
+⚠ 开源与云两种形态；自托管需运维。
+
+Qdrant
+
+6
+
+Elasticsearch / OpenSearch
+
+6
+
+Weaviate
+
+6
+
+pgvector / pgvectorscale
+
+5
+
+Milvus
+
+5
+
+LanceDB
+
+4
+
+turbopuffer
+
+1
+
+Pinecone
+
+1
+
+打分规则（全部在本页脚本里，可审）：规模适配 −3～+3；已有 Postgres 且规模不大给 pgvector +3；需要混合检索时，自带 BM25 或稀疏检索的 +1～+2；海量租户偏向支持租户分区/按租户索引的方案；偏好托管偏向 Pinecone、turbopuffer 等；嵌入式偏向 LanceDB；冷数据多偏向对象存储架构。这是经验启发，不是基准测试。
+
+### 几类方案的定位
+
+| 方案 | 一句话定位 | 资料里的信号 |
+| --- | --- | --- |
+| **pgvector / pgvectorscale** | Postgres 的扩展，向量与业务数据同库、同事务 | ACID 与关系数据联查是最大优势；多篇 2026 博客认为超过约 1000 万～5000 万条后运维开始吃力 博客观点 |
+| **Qdrant** | Rust 实现的专用向量库，过滤与低延迟见长 | 多篇对比里单节点延迟领先 厂商/博客数据 |
+| **Milvus** | 分布式、索引类型最全（IVF、HNSW、DiskANN、GPU 等），面向超大规模 | 索引构建快、可上 GPU；小规模也可用 Lite / standalone 博客观点 |
+| **LanceDB** | 嵌入式、基于 Lance 列存格式，天然适合对象存储 | 适合本地原型、边缘与数据湖场景；支持 RaBitQ 量化 |
+| **turbopuffer** | 建在对象存储上的无服务器检索，冷数据成本低 | 仅托管；冷启动查询延迟需实测 |
+| **Pinecone** | 全托管，开箱即用 | 省运维，规模上去后成本需评估；闭源 |
+| **Elasticsearch / OpenSearch** | 已有搜索集群时顺手加向量 | 原生 BM25 + 向量混合；内存与调优成本需评估 |
+
+**关于 benchmark 数字**市面上的对比数字（如「某方案在 5000 万条上 QPS 是另一方案的 11 倍」）绝大多数来自厂商或博客，数据集、硬件、召回目标、参数都不统一，不能横向直接比。本手册刻意不把它们放进向导的打分里。选型最可靠的做法：用你自己的 100 万条真实向量、你的真实过滤条件，在 2～3 个候选上各跑一遍，对比召回、p95 延迟和运维感受。
+
+**查看参考答案**
+大白话
+先问：数据有多少、团队已经会运维什么、要不要关键词搜索加向量搜索一起用、有多少个客户要隔离。benchmark 像厂商自己出的考试成绩，题目、考场都是他们选的，只能当参考，要拿自己的数据去考一遍。
+专业版
+决定变量：规模量级、既有技术栈（如已有 Postgres）、混合检索需求、租户模型与过滤选择性、运维模式（托管/自运维/嵌入式）、冷热数据成本。厂商基准的数据集、召回目标、硬件与参数不一致，且常只报单一召回点上的 QPS，不可横向比较。
+
+
+## 进阶架构 —— 不是每个问题都配得上同一条流水线
+
+上线后会发现：「退款几天」这种问题一次检索就够，「对比三份合同里的违约条款」一次检索根本不够，而「今年工单的整体趋势」几乎不可能靠检索几个块回答。一条固定的流水线，对三类问题是同一个答案：都不太行。
+
+2026 年的主流做法叫 **Adaptive RAG（自适应）**：前面放一个轻量的路由，先判断问题属于哪一类，再走对应的流水线。检索也从「固定前置步骤」变成可被调用的工具，这就是 **Agentic RAG**：模型自己决定查什么、查几次、查完是否够用。选哪条路径，直接决定了你要付出几次模型调用和多少延迟。
+
+LAB 2.1 · 问题路由器
+
+选一类问题，看它该走哪条流水线
+
+用户的问题属于……
+
+**简单事实**「企业版退款期限是几天？」答案就在某一块里。
+
+1 次检索
+
+1 次 LLM
+
+LLM 调用
+
+1
+
+检索次数
+
+1
+
+相对延迟（示意）
+
+1×
+
+提示
+
+绝大多数问题走这条，别为了「先进」把它复杂化。
+
+调用次数与延迟倍数是典型形态下的示意，实际取决于你的模型、检索器与迭代上限。建议给 Agentic 路径设最大轮数（如 3～5 轮）和总 token 预算，避免失控。
+
+### GraphRAG：什么时候值得为「关系」付钱
+
+有些问题的答案不在任何一个块里，而在块与块的**关系**里：「A 事故和 B 变更有什么关联」「所有提到供应商 X 的合同里，付款条款有何共性」。GraphRAG 的做法是在建库时让模型抽取实体和关系，构成知识图谱，再在图上做检索与摘要。代价主要在建库：据 2026 年一篇实践博客的对比，对 500 页语料建索引，LightRAG 约 3 分钟、$0.5，微软 GraphRAG 约 $50～200（博客数据，量级参考）。
+
+- **适合**：知识天然互相引用（制度引用制度、事故关联变更）、需要多跳推理或全局主题归纳。
+- **不适合**：扁平的 FAQ 与文档问答，普通混合检索 + 重排已经够用，上图是为复杂度付费。
+- **起步顺序**：先把混合检索做好，评估后确有「关系类问题答不好」再引入，从 LightRAG 这类轻量方案试起。
+
+**查看参考答案**
+大白话
+简单问题直接查一次；一句话含几件事，拆开分别查；要一层层追问的，让模型边查边想；要「总体上怎么样」的，靠图谱或预先做好的摘要。越复杂的路径，模型调用越多，越慢越贵，所以要先分诊再开药。
+专业版
+简单事实 → 单次混合检索 + 重排；多意图 → 问题分解 + 多路检索 + RRF；多跳 → Agentic 迭代检索（带轮数/预算上限）；全局归纳 → GraphRAG 或层级摘要（map-reduce）。Agentic 的代价是 LLM 调用数与延迟的放大，以及对失控循环的治理需求。
+
+
+## 上线的四件事 —— 权限、新鲜度、溯源与成本账
+
+原型能跑和生产能用之间，隔着四件和检索算法无关、却最容易出事故的事。
+
+① 权限：在检索层拦，不要在生成层拦
+
+用户不该看到的文档，一旦进了提示词，模型就可能复述出来。正确做法是检索时就带上用户身份的过滤条件（租户、部门、文档密级），连候选都不让它进来。别指望「让模型别说」。
+
+② 新鲜度：知道每一块是几号的
+
+块上存 `doc_id`、`version`、`updated_at`；文档更新时按 doc_id 删旧块再写新块（不是追加）。更换嵌入模型要整库重嵌入，所以要保留原文与块版本，别只存向量。
+
+③ 溯源：每个结论带出处
+
+提示词里给每块编号，要求模型引用编号；回答里把编号映射回文档链接和段落。这既是用户信任的来源，也是你排查错误答案时的第一手线索。
+
+④ 成本账：大头通常不在向量库
+
+每次提问最贵的是把检索到的块送进大模型。先优化 top-k、块大小、是否真需要重排，往往比换一个更便宜的向量库省得多。下面的计算器让你亲手核一遍。
+
+LAB 3.1 · 月度成本计算器
+
+每一项单价都是可改的假设
+
+6.3K 次
+
+5
+
+500
+
+6.3M 条
+
+$3.0
+
+$15.0
+
+$2.0
+
+$6.0
+
+是否使用重排
+
+月度合计（不含建库）
+
+$3.5K
+
+单次问答
+
+$0.02
+
+一次性建库嵌入
+
+$315
+
+每次送入模型
+
+3.3K token
+
+大模型 · 输入
+
+$1.9K
+
+大模型 · 输出
+
+$852
+
+重排
+
+$379
+
+向量库内存
+
+$403
+
+查询嵌入
+
+$0.76
+
+向量库内存估算：67.2 GB（含索引 +30% 与 2 副本）
+
+假设：每次请求提示词固定开销 800 token、输出 300 token；向量 1024 维 float32，HNSW 索引按 +30% 估算，2 副本；一次性建库嵌入按 $0.10/百万 token 估算；其余价格请换成你实际的报价。目的是看清各项占比，不是预测账单。
+
+**查看参考答案**
+大白话
+权限像图书馆门禁：不让不该看的人进书库，比让他进去再叮嘱「别乱说」可靠得多。成本方面，把计算器的默认值跑一遍，会发现大模型读取那些块的费用远超向量库的内存费用，所以优先瘦身 top-k 和块大小。
+专业版
+权限：将 ACL 作为检索过滤条件（元数据过滤），保证未授权内容不进入上下文。成本：LLM 输入 token = top-k × 块大小 + 固定开销，随 QPS 线性增长；向量库成本主要是内存（向量 + 索引）。优化顺序：降低 top-k/块大小、重排后截断、缓存高频问题，再考虑量化与换库。
+
+
+## 实战 A · pgvector —— 在 Postgres 里搭一套混合检索
+
+把前面三页串起来：同一个客服知识库，用 Postgres + pgvector 做到「向量 + 关键词 + RRF 融合 + 租户过滤」。已经有 Postgres 的团队，这是成本最低的路径。
+
+### 1. 起一个带 pgvector 的 Postgres
+
+shell
+
+```
+docker run -d --name kb-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=pw pgvector/pgvector:pg17
+```
+
+### 2. 建表与索引
+
+schema.sql
+
+```
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE chunks (
+  id          bigserial PRIMARY KEY,
+  tenant_id   text          NOT NULL,
+  doc_id      text          NOT NULL,
+  version     int           NOT NULL DEFAULT 1,
+  content     text          NOT NULL,           -- 原文，给模型和用户看
+  content_seg text          NOT NULL,           -- 应用层分词后用空格连接（中文必需，见下方说明）
+  embedding   vector(1024)  NOT NULL,
+  tsv         tsvector GENERATED ALWAYS AS (to_tsvector('simple', content_seg)) STORED
+);
+
+-- 向量索引：m / ef_construction 为 pgvector 默认值，建库后不再改
+CREATE INDEX chunks_hnsw ON chunks USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+CREATE INDEX chunks_tsv    ON chunks USING gin (tsv);
+CREATE INDEX chunks_tenant ON chunks (tenant_id);
+```
+
+**中文全文检索的坑**Postgres 内置的 `simple` 配置只按空格和标点分词，不认识中文词界，直接对中文原文建 tsvector 基本等于没有。三条路：① 应用层先用 jieba 之类分词，存空格连接的 `content_seg`（本例，适合托管 Postgres，不用装插件）；② 装 zhparser、pg_jieba 等分词插件；③ 用 ParadeDB 等提供真 BM25 的扩展。另外，`ts_rank_cd` 不是 BM25（没有语料级的 IDF），只是够用的排序函数。
+
+### 3. 写入与混合检索（Python）
+
+kb_pg.py（pip install psycopg[binary] pgvector numpy jieba）
+
+```
+import jieba, numpy as np, psycopg
+from pgvector.psycopg import register_vector
+
+conn = psycopg.connect("postgresql://postgres:pw@localhost:5432/postgres", autocommit=True)
+register_vector(conn)                                  # 让 numpy 数组可直接作为 vector 参数
+
+seg = lambda s: " ".join(jieba.lcut(s))
+
+def upsert_doc(tenant, doc_id, version, chunks, embed):
+    # 更新 = 先删旧版本的块，再写新块（不要只追加）
+    conn.execute("DELETE FROM chunks WHERE tenant_id=%s AND doc_id=%s", (tenant, doc_id))
+    for text in chunks:
+        conn.execute(
+            "INSERT INTO chunks (tenant_id, doc_id, version, content, content_seg, embedding) VALUES (%s,%s,%s,%s,%s,%s)",
+            (tenant, doc_id, version, text, seg(text), np.array(embed(text))))
+
+HYBRID_SQL = """
+WITH vec AS (
+  SELECT id, row_number() OVER (ORDER BY embedding <=> %(qv)s) AS rnk
+  FROM chunks WHERE tenant_id = %(tenant)s
+  ORDER BY embedding <=> %(qv)s LIMIT 20
+), lex AS (
+  SELECT id, row_number() OVER (ORDER BY ts_rank_cd(tsv, q) DESC) AS rnk
+  FROM chunks, to_tsquery('simple', %(qs)s) q
+  WHERE tenant_id = %(tenant)s AND tsv @@ q
+  ORDER BY ts_rank_cd(tsv, q) DESC LIMIT 20
+)
+SELECT c.id, c.doc_id, c.content,
+       COALESCE(1.0 / (60 + vec.rnk), 0) + COALESCE(1.0 / (60 + lex.rnk), 0) AS rrf
+FROM vec FULL OUTER JOIN lex USING (id)
+JOIN chunks c USING (id)
+ORDER BY rrf DESC LIMIT 5
+"""
+
+def search(tenant, question, embed):
+    terms = [t for t in jieba.lcut(question) if t.strip() and t.isalnum()]
+    qs = " | ".join(terms) or "''"              # 关键词路用 OR 连接，提升召回
+    conn.execute("SET hnsw.ef_search = 100")                 # 查询期调召回/延迟
+    conn.execute("SET hnsw.iterative_scan = strict_order")   # 带过滤时自动继续扫索引（pgvector 0.8+）
+    return conn.execute(HYBRID_SQL, {"qv": np.array(embed(question)), "qs": qs, "tenant": tenant}).fetchall()
+```
+
+### 4. 验证它真的在用索引
+
+psql
+
+```
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT id FROM chunks WHERE tenant_id = 'acme' ORDER BY embedding <=> '[0.1, 0.2, ...]' LIMIT 20;
+-- 期望看到：Index Scan using chunks_hnsw ...
+-- 如果是 Seq Scan：检查向量维度、距离算子是否与索引的 vector_cosine_ops 一致（<=>）
+```
+
+**三个常见的踩坑点**：① 距离算子要和索引的操作类对应（余弦用 `vector_cosine_ops` 配 `<=>`），不一致时索引不会被使用，不报错只变慢；② 带 `WHERE` 过滤时，HNSW 可能先扫出 `ef_search` 条再过滤导致不足，pgvector 0.8 的迭代扫描就是为此（`strict_order` 保证距离顺序，`relaxed_order` 更快但可能轻微乱序）；③ 大批量导入时，先导数据再建 HNSW 索引通常比边插边建快得多。
+
+**查看参考答案**
+大白话
+SQL 里 `vec` 那一段是按语义找，`lex` 那一段是按关键词找，最后 SELECT 里把两边的名次换算成分数相加就是 RRF。Postgres 自带的全文检索看不懂中文怎么断词，所以要先在代码里切好词再存。
+专业版
+vec CTE：HNSW 近邻（cosine）取 top-20 并用 row_number 记名次；lex CTE：GIN tsvector 匹配 + ts_rank_cd 取 top-20；外层 FULL OUTER JOIN 后按 Σ 1/(60+rank) 融合。simple 配置不做中文分词，故在应用层分词写入 content_seg，查询侧同样分词并以 OR 组合。带租户过滤用 hnsw.iterative_scan 避免过滤后结果不足。
+
+
+## 实战 B · Milvus —— 用专用向量库做同一件事
+
+同一个任务，换成 Milvus：它把「全文检索」做成了内置的 BM25 函数，混合检索是一等公民，不用自己写 SQL 拼融合。
+
+### 1. 启动 Milvus（Docker 单机版）
+
+shell
+
+```
+curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
+bash standalone_embed.sh start        # 默认监听 19530
+pip install -U pymilvus
+```
+
+也可以先用本地文件版的 Milvus Lite（`MilvusClient("./kb.db")`）做原型；全文检索、混合检索等较新的能力是否在 Lite 里可用，请以当前版本文档为准，下面按 standalone 写。
+
+### 2. 建集合：稠密向量 + BM25 稀疏向量 + 租户分区键
+
+kb_milvus.py
+
+```
+from pymilvus import (MilvusClient, DataType, Function, FunctionType,
+                     AnnSearchRequest, RRFRanker)
+
+client = MilvusClient(uri="http://localhost:19530")
+
+schema = client.create_schema(auto_id=True)
+schema.add_field("id", DataType.INT64, is_primary=True)
+schema.add_field("tenant_id", DataType.VARCHAR, max_length=64, is_partition_key=True)  # 多租户：分区键
+schema.add_field("doc_id", DataType.VARCHAR, max_length=128)
+schema.add_field("text", DataType.VARCHAR, max_length=8192,
+                 enable_analyzer=True, analyzer_params={"type": "chinese"})      # 中文分析器；英文用 "standard"，以官方文档为准
+schema.add_field("dense", DataType.FLOAT_VECTOR, dim=1024)
+schema.add_field("sparse", DataType.SPARSE_FLOAT_VECTOR)                          # 由 BM25 函数自动生成
+
+schema.add_function(Function(name="text_bm25", function_type=FunctionType.BM25,
+                             input_field_names=["text"], output_field_names=["sparse"]))
+
+index = client.prepare_index_params()
+index.add_index(field_name="dense", index_type="HNSW", metric_type="COSINE",
+                params={"M": 16, "efConstruction": 200})
+index.add_index(field_name="sparse", index_type="SPARSE_INVERTED_INDEX", metric_type="BM25")
+
+client.create_collection("kb", schema=schema, index_params=index)
+```
+
+### 3. 写入与混合检索
+
+kb_milvus.py（续）
+
+```
+def upsert_doc(tenant, doc_id, chunks, embed):
+    client.delete("kb", filter=f'tenant_id == "{tenant}" and doc_id == "{doc_id}"')   # 先删旧块
+    client.insert("kb", [{"tenant_id": tenant, "doc_id": doc_id, "text": t, "dense": embed(t)} for t in chunks])
+    # 注意：不用自己算 sparse，BM25 函数会根据 text 自动生成
+
+def search(tenant, question, embed):
+    flt = f'tenant_id == "{tenant}"'
+    dense_req  = AnnSearchRequest(data=[embed(question)], anns_field="dense",
+                                  param={"metric_type": "COSINE", "params": {"ef": 100}}, limit=20, expr=flt)
+    sparse_req = AnnSearchRequest(data=[question], anns_field="sparse",           # 直接传查询文本
+                                  param={"metric_type": "BM25"}, limit=20, expr=flt)
+    res = client.hybrid_search("kb", reqs=[dense_req, sparse_req],
+                               ranker=RRFRanker(60), limit=5, output_fields=["doc_id", "text"])
+    return [(h["entity"]["doc_id"], h["entity"]["text"], h["distance"]) for h in res[0]]
+```
+
+**和 pgvector 版对照着看**pgvector 版里你自己写了：分词、tsvector、两路 CTE、RRF 公式。Milvus 版里这些都由 schema 里的 `Function` 与 `RRFRanker` 承担，代码短得多，代价是多运维一个组件、多学一套概念。注意示例里的 filter 字符串拼接仅为演示，生产环境请对租户 ID 做校验或使用参数化方式，防止表达式注入。
+
+**查看参考答案**
+大白话
+BM25 由 schema 里那个 `Function` 自动把文本变成稀疏向量；RRF 由 `hybrid_search` 里的 `RRFRanker(60)` 完成；租户隔离靠 `tenant_id` 的 `is_partition_key` 加上每次检索带的 filter。
+专业版
+schema.add_function(BM25) 生成 sparse 字段；SPARSE_INVERTED_INDEX + metric BM25 建索引；两路 AnnSearchRequest（dense / sparse）经 hybrid_search + RRFRanker 融合；is_partition_key=True 按租户哈希分区，expr 过滤只扫相关分区。
+
+
+## 对照与排障 —— 两套怎么选，答案错了怎么查
+
+两套方案都能把客服知识库跑起来。差别不在「能不能」，而在你愿意把复杂度放在哪。
+
+| 维度 | pgvector | Milvus |
+| --- | --- | --- |
+| **起步成本** | 已有 Postgres 时几乎为零 | 多一个服务（standalone）或一个集群 |
+| **关键词路** | tsvector + 自己分词，非 BM25 | 内置 BM25 函数与分析器 |
+| **融合** | 自己写 SQL（RRF 十几行） | `RRFRanker` 一行 |
+| **事务与联查** | 与业务表同库同事务，可直接 JOIN | 需在应用层关联业务数据 |
+| **规模上限** | 博客多认为千万到数千万级后吃力 | 为亿级到十亿级设计，索引类型丰富 |
+| **多租户** | 字段过滤 + 迭代扫描；可用分区表 | partition key 原生支持 |
+| **运维** | 沿用现有 DBA 体系（备份、监控、权限） | 需学习新组件；也可用托管版 |
+
+**建议路径**：已有 Postgres 且预计千万级以内，从 pgvector 起步，把精力放在切块、混合检索、评估上；等到规模、过滤复杂度或写入吞吐真的顶到天花板，再迁移，因为你保留了原文与块版本，迁移只是重新嵌入加导入，不是推倒重来。（这也是「架构决策往长了做」的体现：数据结构设计对，换引擎不疼。）
+
+### 答案不对：一棵排障决策树
+
+用户反馈「答错了」，别急着换模型。按下面的顺序一层层排除，每个叶子都指向前面对应的章节。
+
+LAB 6.1 · RAG 排障决策树
+
+点「是 / 否」，一路走到根因
+
+开始
+
+先问：用户问题的正确答案，所在的那一块文档，在知识库里吗？
+
+这棵树的前提是你有可复现的错误问题，并且能拿到「理应命中的那一块」。这就是为什么 B 页第 6 章强调要有一份带标注的黄金集。
+
+**补一句：什么时候别用向量库**如果你的内容是代码或日志、词汇确定、规模不大，让 Agent 用 grep / 关键词工具直接翻文件，往往比建向量库更省事，不少编程 Agent 就是这么做的。向量检索真正不可替代的场景，是词汇不匹配（同义改写）、非文本内容、需要低延迟的大规模语料，以及要求权限与审计的企业场景。先从最简单的开始，用评估数据证明需要再升级。
+
+**查看参考答案**
+大白话
+先看正确内容有没有在库里，再看有没有被找出来、有没有排进送给模型的前几名，最后才看模型有没有照着资料回答。每一层有不同的药：补文档、改检索、调排序、收紧提示词。
+
+
+## 参考资料 · References
+
+产品能力与代码接口会随版本更新，本页代码核对于 2026-10-05，使用前请对照官方文档。博客类来源标为「观点」。
+
+### 官方文档（代码出处）
+
+- pgvector README（HNSW 参数、`hnsw.ef_search`、迭代扫描、混合检索）· [github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)
+- pgvector-python 混合检索示例（RRF）· [examples/hybrid_search/rrf.py](https://github.com/pgvector/pgvector-python/blob/master/examples/hybrid_search/rrf.py)
+- Milvus · Full Text Search（BM25 Function）· [milvus.io/docs/full-text-search.md](https://milvus.io/docs/full-text-search.md)
+- Milvus · Multi-Vector Hybrid Search（AnnSearchRequest、RRFRanker）· [milvus.io/docs/multi-vector-search.md](https://milvus.io/docs/multi-vector-search.md)
+- Milvus · Use Partition Key（多租户）· [milvus.io/docs/use-partition-key.md](https://milvus.io/docs/use-partition-key.md)
+
+### 2026 年的资料
+
+- Best Vector Databases in 2026: Pricing, Scale Limits, and Architecture Tradeoffs Across Nine Leading Systems（MarkTechPost，2026-05）· [marktechpost.com](https://www.marktechpost.com/2026/05/10/best-vector-databases-in-2026-pricing-scale-limits-and-architecture-tradeoffs-across-nine-leading-systems/)
+- Choosing the Foundation for Your RAG System: pgvector vs Qdrant vs Milvus (2026)（观点）· [dev.to](https://dev.to/linou518/choosing-the-foundation-for-your-rag-system-pgvector-vs-qdrant-vs-milvus-2026-4i5o)
+- Best Vector Databases in 2026: A Complete Comparison Guide（观点）· [firecrawl.dev](https://www.firecrawl.dev/blog/best-vector-databases)
+- Vector Database Benchmark 2026（厂商数据，注意口径）· [salttechno.ai](https://www.salttechno.ai/datasets/vector-database-performance-benchmark-2026/)
+- GraphRAG in 2026: What to Use, When to Use It, and What to Watch Out For（成本与适用场景，观点）· [medium.com](https://medium.com/@tongbing00/graphrag-in-2026-what-to-use-when-to-use-it-and-what-to-watch-out-for-a1fa1c283023)
+- Graph RAG in 2026: What Works in Production（观点）· [paperclipped.de](https://www.paperclipped.de/en/blog/graph-rag-production/)
+- RAG Best Practices 2026: Chunking, Reranking, Hybrid Search（Adaptive RAG、RRF k=60，观点）· [callmissed.com](https://www.callmissed.com/en/blog/rag-best-practices-2026)
+- Is RAG Dead? Long Context, Grep, and the End of the Mandatory Vector DB（2026-04，观点）· [akitaonrails.com](https://akitaonrails.com/en/2026/04/06/rag-is-dead-long-context/)
+
+选型向导的打分规则与成本计算器的所有单价，都是本页脚本里可读可改的假设，不构成对任何产品的评测结论。
+
+下一页 · E 更新治理与问题手册
+
+增量更新实验台 · 先删后写还是先写后删 · 蓝绿切换换模型 · 知识库体检 · 29 条常见问题手册
+
+→
+
+回到起点：A 页 · 直觉　·　首页
+
+资料核对日期：2026-10-05 · 产品能力、价格与榜单会变化，请以官方页面为准 · know-as-ui collection
+
+## 外部引用
+
+- https://akitaonrails.com/en/2026/04/06/rag-is-dead-long-context/
+- https://dev.to/linou518/choosing-the-foundation-for-your-rag-system-pgvector-vs-qdrant-vs-milvus-2026-4i5o
+- https://github.com/pgvector/pgvector
+- https://github.com/pgvector/pgvector-python/blob/master/examples/hybrid_search/rrf.py
+- https://medium.com/@tongbing00/graphrag-in-2026-what-to-use-when-to-use-it-and-what-to-watch-out-for-a1fa1c283023
+- https://milvus.io/docs/full-text-search.md
+- https://milvus.io/docs/multi-vector-search.md
+- https://milvus.io/docs/use-partition-key.md
+- https://www.callmissed.com/en/blog/rag-best-practices-2026
+- https://www.firecrawl.dev/blog/best-vector-databases
+- https://www.marktechpost.com/2026/05/10/best-vector-databases-in-2026-pricing-scale-limits-and-architecture-tradeoffs-across-nine-leading-systems/
+- https://www.paperclipped.de/en/blog/graph-rag-production/
+- https://www.salttechno.ai/datasets/vector-database-performance-benchmark-2026/

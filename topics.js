@@ -1,5 +1,6 @@
 // 知识目录的唯一数据源。新增主题只改这里，index.html 自动渲染。
 // 用 <script> 而不是 fetch JSON，保证双击 index.html（file://）也能打开。
+// 新增/删除 pages 或改动任何知识页正文后，必须运行 make seo，同步生成对应 <slug>/<page>.llms.txt。
 window.KAU = {
   // 分类顺序即首页分组顺序
   categories: [

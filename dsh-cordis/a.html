@@ -16,6 +16,7 @@
 <!-- seo:start -->
 <meta name="description" content="DeepSeek Harness「一切皆插件」的心脏：四问翻卡、插件树装卸模拟、fiber 状态机动画、effect 回滚栈、waterfall 决策链与 patch 叠层演示，附可运行的工具 / 钩子插件实战。">
 <link rel="canonical" href="https://dev.limbo101.win/dsh-cordis/a">
+<link rel="alternate" type="text/plain" href="https://dev.limbo101.win/dsh-cordis/a.llms.txt" title="正文快照">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="know-as-ui">
 <meta property="og:locale" content="zh_CN">
@@ -29,9 +30,10 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://dev.limbo101.win/dsh-cordis/assets/og.jpg?v=c7496d8f">
 <meta name="twitter:creator" content="@limbopeng">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"dsh Cordis 与插件开发 · 交互手册","description":"DeepSeek Harness「一切皆插件」的心脏：四问翻卡、插件树装卸模拟、fiber 状态机动画、effect 回滚栈、waterfall 决策链与 patch 叠层演示，附可运行的工具 / 钩子插件实战。","url":"https://dev.limbo101.win/dsh-cordis/a","inLanguage":"zh-CN","datePublished":"2026-09-05","dateModified":"2026-09-05","keywords":"dsh cordis deepseek harness plugin 插件开发 agent runtime ctx effect inject service 事件 waterfall fiber hmr 配置 cordis.yml 一切皆插件","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/dsh-cordis/assets/og.jpg?v=c7496d8f"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"dsh Cordis 与插件开发 · 交互手册","description":"DeepSeek Harness「一切皆插件」的心脏：四问翻卡、插件树装卸模拟、fiber 状态机动画、effect 回滚栈、waterfall 决策链与 patch 叠层演示，附可运行的工具 / 钩子插件实战。","url":"https://dev.limbo101.win/dsh-cordis/a","inLanguage":"zh-CN","datePublished":"2026-09-05","dateModified":"2026-10-12","keywords":"dsh cordis deepseek harness plugin 插件开发 agent runtime ctx effect inject service 事件 waterfall fiber hmr 配置 cordis.yml 一切皆插件","author":{"@type":"Person","name":"limbo","url":"https://x.com/limbopeng"},"isPartOf":{"@type":"WebSite","name":"know-as-ui","url":"https://dev.limbo101.win/"},"image":"https://dev.limbo101.win/dsh-cordis/assets/og.jpg?v=c7496d8f"}</script>
 <!-- seo:end -->
 <link rel="stylesheet" href="../assets/handbook.css">
+<link rel="stylesheet" href="../assets/ask-ai.css">
 <link rel="stylesheet" href="topic.css">
 <style>
 /* ===== 本页专属组件样式（不改 topic.css） ===== */
@@ -1177,5 +1179,7 @@ qNext.onclick=()=>{qi++;loadQ()};
 qRestart.onclick=()=>{qi=0;qs=0;quizScore.textContent="0 / 5";loadQ()};
 loadQ();
 </script>
+<script src="../assets/vendor/ask-ai.min.js" defer></script>
+<script src="../assets/ask-ai.js" defer></script>
 </body>
 </html>

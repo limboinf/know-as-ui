@@ -1,0 +1,26 @@
+ask-ai-widget
+Copyright (c) 2026 ask-ai-widget contributors
+Licensed under the MIT License (see LICENSE).
+
+Third-party material
+--------------------
+
+Icons: the monochrome logo paths in src/icons.ts (generated from
+scripts/icons-src/*.svg by scripts/compact-icons.mjs) derive from lobe-icons,
+https://github.com/lobehub/lobe-icons, MIT License, Copyright (c) LobeHub.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the above copyright notice and this permission
+    notice being included in all copies or substantial portions of the Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+Trademarks: ChatGPT and OpenAI, Claude and Anthropic, Perplexity, Gemini and
+Google, Grok and xAI, Mistral AI, and DeepSeek are trademarks of their
+respective owners. The names and logos are used only to identify and link to
+those services (nominative use). This project is not affiliated with or
+endorsed by any of them. The MIT license of this project does not grant any
+rights in those marks.

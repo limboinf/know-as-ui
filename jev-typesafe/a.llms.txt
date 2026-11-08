@@ -1,0 +1,1033 @@
+# Jev 深入浅出 · 只做判断题的模型 · 交互手册
+
+> 只做判断题的模型：state 加三种题型换类型化答案与概率。概率翻译机、歧义工单路由、等级设计实验台、Noul 天平、风险阈值路由器，再配十类社区玩法、18 份官方 cookbook 与生态地图。
+
+来源：https://dev.limbo101.win/jev-typesafe/a
+站点：know-as-ui（交互式技术手册，本文件是自动生成的正文快照）
+生成：scripts/llms.mjs
+
+## Jev 是什么 —— 不聊天，只做判断题
+
+先把术语说清楚，再打比方：**Jev 是 TypeSafe 公司的旗舰模型，也是第一个「System One 模型」**。System One 模型是专门给软件用的判断模型——读一份材料，回答一组**类型化的问题**，直接返回答案和概率分布。它不生成文本，你的代码也就不需要解析文本。
+
+先立三个名词，后面全书都用：**TypeSafe** 是做这类模型的公司；**Jev** 是它家的旗舰模型（API 里叫 `jev-latest`）；**System One** 是这类模型的类别名，出自心理学家卡尼曼《思考，快与慢》——System 1 是快而直觉的思考，System 2 是慢而缜密的推理。Jev 只做 System 1 的活儿：给足上下文后**几秒内能下的判断**；需要长链推理的事，交回给你的代码、通用大模型或者人。
+
+再打比方（比喻跟在定义后面）：通用 LLM 像一位**会写作的实习生**——你问「这封投诉该给哪个组」，他回你一段漂亮的话，礼貌、周全，但你的程序还得从中抠出「billing」这个词。Jev 像一位**专职阅卷老师**——你递上卷子（材料）和评分标准（问题与选项），他直接填答题卡：选了哪项、每项多少概率、整体多大把握。没有客套话，没有格式漂移。
+
+交互 · 四问翻卡
+
+点卡片翻面
+
+Q1
+
+它解决什么问题？
+
+点击翻面 ↻
+
+让 AI 的判断直接进代码
+
+LLM 为「人读的文本」而生，塞进自动化流水线就得「生成 → 解析 → 祈祷不出格式错」。Jev 直接返回**类型化答案 + 概率**，代码可以分支、排序、路由，不用解析。
+
+Q2
+
+它不是什么？
+
+点击翻面 ↻
+
+不是聊天机器人
+
+不写回复、不写代码、不解释推理。你通过「题型 + 选项 / 等级」**定义答案空间**，它只在里面作答。它也不是慢推理模型——那是 RLVR 路线的活儿（第 7 章）。
+
+Q3
+
+名字哪来的？
+
+点击翻面 ↻
+
+卡尼曼的 System 1
+
+《思考，快与慢》：System 1 快而直觉，System 2 慢而缜密。Jev 是第一个 System One 模型——强调**快、聚焦的判断**，嵌在更大的工作流里当「秒级微判断层」。
+
+Q4
+
+输出长什么样？
+
+点击翻面 ↻
+
+三种形状的答案
+
+选择题：`choice + probabilities + confidence`；打分题：`score + legend + …`；判断题：`noul`（0–1）。答案**永远限定在你给的选项内**，不会冒出选项外的值。
+
+「几秒内能下的判断」（a gut-check determination）是官方对问题粒度的要求——一个内行拿到上下文后一眼能断的事。
+
+### 同一份输入，两种模型的活儿
+
+分工感最直观的方式是看同一段客服工单分别交给两者。左边是通用 LLM 的典型输出形态（示意文案），右边是 Jev 对同一组问题的真实响应（取自官方快速上手示例）。注意右边每个字段你的代码都能直接用：`choice` 进 switch，`score` 比阈值，`noul` 进 if。
+
+交互 · 实习生 vs 阅卷老师
+
+点「换一份输入」切换工单
+
+STATE · 被评估的材料
+
+"Hi, I've been trying to connect my Stripe account for 3 days and it keeps failing. I'm losing sales. Please help ASAP."
+
+### 通用 LLM（生成文本）
+
+示意 · 典型形态
+
+—— 一段给人读的话：礼貌、周全，但你的程序还得从中解析出「该派给谁」
+
+### Jev（类型化答案 + 概率）
+
+官方文档真实响应
+
+"model"
+
+"jev-latest"
+
+// 哪个模型答的（别名→具体版本）
+
+"answers"
+
+"department"
+
+// ── Choice：选择题
+
+"type"
+
+"choice"
+
+"choice"
+
+"billing"
+
+// 填了哪个格 = 概率最高的选项
+
+"probabilities"
+
+// 每个格各分到多少把握（和 = 1）
+
+"billing"
+
+0.84
+
+// 胜出：账务问题
+
+"technical"
+
+0.159
+
+// 第二名不是噪音：也沾技术问题
+
+"sales"
+
+0.001
+
+"confidence"
+
+0.596
+
+// 分布形状→一个数：偏尖但没全押
+
+"frustration"
+
+// ── Score：打分题
+
+"type"
+
+"score"
+
+"score"
+
+1.035
+
+// 光谱位置：1 档「沮丧但克制」多一点
+
+"legend"
+
+// 档号翻译回你自己写的描述
+
+"0"
+
+"Calm, just stating facts"
+
+"1"
+
+"Frustrated but civil"
+
+"2"
+
+"Very angry, strong language"
+
+"confidence"
+
+0.842
+
+// Score 答案同样带各档 probabilities，官方示例此处从略（第 5 章实验台可看到完整形态）
+
+"is_urgent"
+
+// ── Noul：判断题
+
+"type"
+
+"noul"
+
+"noul"
+
+0.999
+
+// P(是) = 99.9%：几乎确定紧急
+
+"usage"
+
+"input_tokens"
+
+312
+
+"output_tokens"
+
+48
+
+// 输出只花 48 token：只「填卡」，不写作文
+
+左栏为形态示意（真实 LLM 输出因模型而异）；右栏 JSON 逐字取自官方 quickstart 与 Choice 文档示例。
+
+|  | 通用 LLM / 聊天模型 | Jev（System One 模型） |
+| --- | --- | --- |
+| **为谁设计** | 人读的文本 | 软件直接消费的判断 |
+| **输出** | 自由生成的散文（需要再解析） | 类型化答案 + 概率分布（无解析） |
+| **答案空间** | 开放的，啥都可能说 | 你定义的：选项列表 / 有序等级 / 是否 |
+| **拿手活** | 写作、解释、长推理 | 秒级、聚焦的单一判断（大量并行） |
+| **不确定性** | 藏在语气里（常常过度自信） | 显式概率 + confidence（第 8 章） |
+
+**边界要知道**Jev 目前只收文本：字符串、JSON 对象、文本数组。图片、音频、视频暂不支持。它主要训练语言是英文，中文等 CJK 语言可用但准确率较低——写 `state`、`instructions` 和等级描述时，生产环境建议用英文（第 2 章有细则）。
+
+**自测 · 为什么说「让作家去填答题卡」是种错位？**
+因为目标函数不同：LLM 被优化来产出「人偏好读的文本」，这在自动化里会变成格式漂移、解析失败、语气自信但内容不可靠；而代码需要的是约束在固定答案空间里、带可校准不确定性的结构化输出。Jev 干脆把输出空间收窄成三种题型，从接口层面消灭「解析」这一步。
+
+
+## 一次调用长什么样 —— state 与 questions
+
+Jev 的 API 只有一个核心动作：**一份材料（state）+ 一组问题（questions），换回一组类型化答案**。这一章把请求和响应的每个字段拆开，并给你一个可以亲手拼装的模拟台。
+
+先说 **state**（大白话：你递给评审团的卷宗）。它是被评估的内容——一封客服消息、一段代码、或你应用的当前状态。三种形态都行：
+
+| 形态 | 适合 | 例子 |
+| --- | --- | --- |
+| **字符串** | 单段文本的简单场景 | `"My card was charged twice."` |
+| **对象** | 多数请求：各部分有名字、关系清楚 | `{"message": …, "order_id": "A-104"}` |
+| **数组** | 一连串消息或记录 | `["Hi", "My card was charged twice."]` |
+
+官方建议**多数请求用对象**：把工单、订单、政策这些相关材料放进同一个 state，让需要互相对照的判断在一次调用里完成。问题指向材料哪一段，就在 `instructions` 里用**带反引号的点路径**点名，比如 `Does `ticket.messages[0].text` request a refund?`——模型就知道该看哪块卷宗。
+
+一次调用 = 一份 state × N 个问题，并行出 N 个类型化答案
+
+下面是官方快速上手的完整请求：一段 Stripe 连不上、客户在流失的工单，混着三种题型一次问完——
+
+request · POST https://api.typesafe.ai/v1/systemone
+
+```
+{
+  "state": "Hi, I've been trying to connect my Stripe account for 3 days and it keeps failing. I'm losing sales. Please help ASAP.",
+  "model": "jev-latest",
+  "questions": {
+    "department": {
+      "type": "choice",
+      "instructions": "Which team should handle this",
+      "criteria": {
+        "billing":   "Payment or subscription issues",
+        "technical": "Bugs or integration problems",
+        "sales":     "Pricing or account questions"
+      }
+    },
+    "frustration": {
+      "type": "score",
+      "instructions": "How frustrated the customer appears",
+      "criteria": [
+        "Calm, just stating facts",
+        "Frustrated but civil",
+        "Very angry, strong language"
+      ]
+    },
+    "is_urgent": {
+      "type": "noul",
+      "instructions": "The message conveys urgency or time-sensitivity"
+    }
+  }
+}
+```
+
+交互 · 请求拼装台
+
+勾选问题 → 点发送，看响应逐块点亮
+
+state（固定为左侧工单）
+
+"Hi, I've been trying to connect my Stripe account for 3 days and it keeps failing. I'm losing sales. Please help ASAP."
+
+choice
+
+department
+
+Which team should handle this
+
+score
+
+frustration
+
+How frustrated the customer appears
+
+noul
+
+is_urgent
+
+The message conveys urgency or time-sensitivity
+
+// 勾选至少一个问题，然后点「发送」 // 响应数据 = 官方文档真实示例
+
+字段解读
+
+真实响应里 usage 为 input 312 / output 48 tokens——注意输出端的 token 极少，因为它不写文章，只「填卡」。
+
+### 四条上手路径
+
+| 路径 | 怎么走 | 适合 |
+| --- | --- | --- |
+| **Playground** | [console.typesafe.ai/playground](https://console.typesafe.ai/playground)，登录后粘贴任意文字就能问 | 零代码试手感 |
+| **HTTP API** | `POST api.typesafe.ai/v1/systemone`，Bearer token 鉴权 | 任何语言 |
+| **Python SDK** | `pip install typesafe-sdk`（≥3.10），默认读 `TYPESAFE_API_KEY`、默认 `jev-latest` | 生产集成 |
+| **Agent skill** | `npx skills add typesafe-ai/skills --skill typesafe-ai`（或 Claude Code 插件市场） | 让编码 agent 替你写集成 |
+
+**中文用户要留意**Jev 的主要训练语言是英文；中文等 CJK 文本可用，但官方明确标注当前准确率较低。生产系统里，材料可以用原文，但 `instructions`、选项与等级描述建议用英文写，再用文档里的真实例句校准手感。
+
+**自测 · 什么时候该把多份材料合并进一个 state？**
+当判断需要**对照**这些材料时。比如「政策是否支持这笔退款」必须同时看退款请求、交易记录和退款政策——分开问就丢了对照关系。反之，互不相干的判断不必强行塞进一个 state。
+
+
+## 三种题型 —— 选择、打分、判断
+
+Jev 的答案空间只有三种形状，对应三种「题型」。选对题型，答案才能直接映射到代码动作——这是整个系统设计里你**唯一要认真做的设计决策**。
+
+三种题型用大白话说：**Choice 是选择题**（从你给的固定清单里挑一个，清单里的选项之间没有顺序）；**Score 是打分题**（在你给的一串有序档位上找位置，可以落在两档之间）；**Noul 是判断题**（返回「是」的概率，0 到 1）。
+
+| 题型 | 答案的形状 | 返回字段 | 代码里长成 |
+| --- | --- | --- | --- |
+| **Choice** 选择 | 固定选项里挑一个（无顺序） | `choice` + `probabilities` + `confidence` | `switch` / 路由表 |
+| **Score** 打分 | 有序光谱上的位置 | `score` + `legend` + `probabilities` + `confidence` | 阈值判断 / 排序 |
+| **Noul** 判断 | 是 / 否 | `noul`（0–1，无单独 confidence） | `if` |
+
+### 底层其实是同一件事：一张概率表
+
+三个题型看着不一样，底层共享同一条逻辑：模型心里握着**一张概率表**——「答案落在每个可能位置的可能性各是多少」。三种题型只是**答案空间的形状**不同：Choice 是一排并立的选项袋，Score 是一把带刻度的尺子，Noul 是一架只有两端的天平。返回值都是把这张表「读」出来的方式：
+
+- **Choice** 把表原样给你（`probabilities`），并帮你圈出最大的那格（`choice`）；
+- **Score** 把表沿刻度压成一个数（`score`，即概率的加权平均，下面亲手拖一下就懂）；
+- **Noul** 的表只有两格——是、否——直接报「是」那格的读数（`noul`）。
+
+交互 · 概率翻译机
+
+切题型 / 拖概率，看同一个底层怎么读出不同答案
+
+题型
+
+Level 0
+
+0 · 外观问题
+
+Level 1
+
+1 · 坏了但有绕行
+
+0.70
+
+Level 2
+
+2 · 彻底堵死
+
+0.30
+
+score 1.30
+
+P(0 档) 外观问题
+
+0.00
+
+P(2 档) 彻底堵死
+
+0.30
+
+1.30
+
+拖动两个滑块：score 不是模型「感觉」出来的数字，而是三块砝码在刻度尺上压出来的**平衡点（重心）**——砝码集中在一档，重心落在档位上；摊在两档，重心就停在**两档之间**。砝码越摊开，confidence 越低（第 5、8 章）。
+
+Score 预设的五个分布均为官方文档真实结果（bug 严重度三档量表）；Choice 用第 4 章歧义工单的真实分布。
+
+交互 · 题型决策向导
+
+两步选出题型
+
+① 你需要的答案，是什么形状？
+
+② 清单里的选项之间，有顺序吗？
+
+做完选择，这里给出推荐题型、返回字段与代码形态。
+
+官方判准：两种题型都说得通时，选「答案能被代码直接行动」的那个。
+
+### 三个最常见的选题型错误
+
+- **把「程度」塞进 Noul。**问「这候选人 Python 强吗」得到 0.5——这不是「中等水平」，是「模型对是/否五五开」。测程度请用 Score（无经验 → 有点熟 → 日常用 → 精通）。
+- **把「有顺序的档位」塞进 Choice。**冷静/沮丧/愤怒明明是一条光谱，做成 Choice 就丢了「1.5 档」这种中间位置信息，也没法排序。
+- **选项清单不设「都不像」。**清单可能盖不住所有输入，加一个 `other` / `none of the above`，模型才有地方放「这题出错了」。
+
+**问题要原子**每个问题只问一件「内行几秒能断」的小事。要衡量多个独立因素的复杂判断，拆成多个问题、在代码里组合（第 9 章整章讲怎么拆、怎么加权）。「分析这条消息并决定最佳行动方案」不是一道好题——那是慢思考的活儿。
+
+三种题型的答案还有一个共同的好性质：**受限且独立**。受限——答案永远在你给的选项/等级内，代码不用从散文里抠值；独立——一次调用里各个问题互看不见，加一问、删一问都不会改变其他答案。这个性质是第 9 章「放心并行提问」的前提。
+
+**自测 · 「这条评论是不是垃圾评论」和「这条评论有多像广告」分别该用什么题型？**
+前者是干净的是非，且概率本身就是信号（0.9 直接拦、0.3 放行）——用 Noul。后者是程度、且你能描述光谱的每一档（正常讨论 → 提到产品 → 纯推销话术）——用 Score。判断口诀：答案形状决定题型，能映射到 `if` 的是 Noul，能映射到阈值/排序的是 Score。
+
+
+## Choice —— 概率分布会说话
+
+Choice 的答案里最值钱的不是选中的那一项，而是**整张概率分布**：它告诉你模型在犹豫什么、第二名是谁、这份犹豫值不值得你抄送一个团队。
+
+Choice 的三个返回字段（大白话版）：`choice` 是**填了哪个格**（概率最高的选项）；`probabilities` 是**每个格各分到多少把握**（全部加起来等于 1）；`confidence` 是把分布的形状压成的一个数——**分布越尖，把握越大；摊得越平，越拿不准**。
+
+看两组真实对比（取自官方文档的鞋店工单示例）。清晰的工单：尺码错了想换——`returns` 拿走全部概率，confidence 1.0。歧义的工单：晚了两周 + 尺码错了 + 卡上还有两笔扣款——`returns` 0.60 当选，但 `billing` 0.38 紧咬，confidence 掉到 0.39。注意：confidence 低不是说「答案错了」，而是「第二名不是噪音」。
+
+交互 · 歧义工单路由模拟器
+
+选一张工单 → 看 department 分布与派单逻辑
+
+TICKET A · 清晰版
+
+TICKET B · 歧义版
+
+### department · probabilities + confidence
+
+returns
+
+1.00
+
+billing
+
+0.00
+
+shipping
+
+0.02
+
+confidence
+
+1.00
+
+### 你的代码怎么走（真实官方示例逻辑）
+
+自动派单 → returns（附 return_reason: wrong_size）
+
+conf 1.0 ≥ 0.3
+
+无需抄送：第二名是噪音
+
+billing 0.00 ≤ 0.25
+
+客户诉求明确（exchange），走对应流程
+
+resolution conf 1.0
+
+分布与 confidence 均为官方文档真实响应；派单逻辑取自官方 triage 示例代码：conf < 0.3 转人工、第二名概率 > 0.25 抄送、resolution conf < 0.5 反问客户。
+
+### 把选项清单写好
+
+- **给全，别给短名单。**一个 Choice 最多 255 个选项，每个选项只花几个 token。团队列表、商品类目直接给全量，比先筛再问准得多。
+- **描述的作用是「把选项彼此分开」。**选项名 + 描述都会发给模型。名称自己能说明白时，描述可以写 `null`（官方 tone 例题就这么干）。
+- **容易混淆的选项，升级成结构化对象。**官方例子：`return_policy`（能不能退、怎么退）vs `return_status`（退的货到哪了）——两个选项都会提到退货退款，于是各写 `what`（管什么）、`not_for`(不管什么)、`examples`（例句），边界立刻清晰。
+
+易混选项的结构化写法 · 节选自官方示例
+
+```
+"return_topic": {
+  "type": "choice",
+  "instructions": { "question": "Which returns topic is the customer asking about?" },
+  "criteria": {
+    "return_policy": {
+      "what":    "Whether and how an item can be returned",
+      "not_for": "Progress of a return already sent",
+      "examples": ["How long do I have to return an order?"]
+    },
+    "return_status": {
+      "what":    "Progress of a return already sent",
+      "not_for": "Whether and how an item can be returned",
+      "examples": ["When will my refund be paid?"]
+    }
+  }
+}
+```
+
+字段名 `what`、`not_for`、`examples` 都不是 API 保留字——你自己起名，模型看得见字段名，起短而准的名字即可。要给深目录分类（几百个类目），官方做法是一层一层 Choice 走树，每层把子树当选项描述发给模型，让它在提交前「看见分支下有什么」。
+
+**自测 · department 返回 returns 0.60 / billing 0.38，你的路由代码除了派 returns 还该做什么？**
+把 billing 也抄送一份。官方示例的规则是：非选中选项概率 > 0.25 就 `notify(ticket, team)`。0.38 的 billing 不是噪音，是「这个工单一半是账务问题」——让两个团队都知情，比硬选一个更稳。
+
+
+## Score —— 等级设计的陷阱
+
+Score 是三兄弟里最容易踩坑的：它的 `criteria` 是一串**有序等级**（2 到 10 档），而模型评估每一档的方式和你的直觉完全不同——不理解这一点，分数就会「不对劲」。
+
+先建立直觉（第 3 章的概率翻译机可以亲手拖）：模型对每一档各押一份概率，**像在 0、1、2 三个刻度上放砝码**；返回的 `score` 就是这堆砝码的**平衡点（重心）**。官方例子里，0.70 押「有绕行」、0.30 押「无绕行」——重心停在 1×0.70 + 2×0.30 = **1.30**，两档**之间**。所以小数分数不是什么「模型的犹豫值」，就是概率重量压出来的落点。四个返回字段这样分工：
+
+- `score` —— 重心落在刻度的哪里（0 到最高档号之间，含小数）；
+- `legend` —— 把档号翻译回你写的描述；
+- `probabilities` —— 每块砝码有多重（加起来 = 1）；
+- `confidence` —— 砝码是集中还是摊开。0.70/0.30 这种「分裂」分布，confidence 就低（官方例子里是 0.54）。
+
+**最大的陷阱：每一档都是独立评估的**模型看不到档位编号，也看不到相邻档。它拿到的是「一堆描述」，把材料分别与每个描述对照。所以：**「比上一档更严重」这种写法完全无效**（没有「上一档」）；「中等严重」也无效（没有可对照的情境）。每一档必须写成**具体情境**：「功能坏了但有替代方案」是好等级；「比较严重」是坏等级。
+
+官方做了一个对照实验，值得亲手玩一遍：同一份 bug 报告，三种等级写法，分数天差地别——
+
+交互 · 等级设计实验台
+
+选工单 × 选等级写法，看 score / confidence 变化
+
+被评估的 bug 报告
+
+severity 的等级（criteria）写法
+
+0
+
+Cosmetic; no impact to functionality
+
+1
+
+but workaround exists
+
+2
+
+Blocking issue; no workaround exists
+
+—— 每档一个情境画像
+
+score
+
+1.30
+
+confidence
+
+0.54
+
+一句话解读
+
+0.7 押「有绕行」+ 0.3 押「无绕行」：Safari-only 用户确实没退路
+
+Level 0
+
+0.00
+
+Level 1
+
+0.70
+
+Level 2
+
+0.30
+
+score = 0×0.00 + 1×0.70 + 2×0.30 = 1.30
+
+score 重心 ↓
+
+0‥2
+
+所有数字均为官方文档真实实验结果（贴脸/无关例子两组仅公布 score 与 confidence，概率条按 score 公式反推）。
+
+四个读数背后是四条设计经验：
+
+- **纯数字是灾难。**「Rate 0–2」加 `["0","1","2"]`：像素错位的报告从 0.0@1.0 掉到 0.57@0.35——模型没有东西可对照，只能瞎摊概率。
+- **例子要像你的真实输入。**「export fails in one browser but works in another」贴住 Safari 报告，confidence 0.54 → 0.90；换成无关例子（搜索坏但浏览分类还在）几乎不帮忙。
+- **同一个 score 可能来自不同分布。**1.0 可以是「全押 1 档」，也可能是「0 档 2 档各半」——含义完全不同。永远把 `probabilities` 和 `confidence` 跟 score 一起读。
+- **一问只测一个维度。**等级写「准时、聪明、有经验」是三件事，输入高一项低一项就放不进光谱，confidence 掉、分数失义。拆成三个 Score（第 9 章组合）。
+
+**两个补充技巧**① 顶端有需要区别对待的罕见极端时，单开一档：情绪量表在「很生气」之上加「辱骂或威胁」，分数才能分开这两类。② 完全没有中间态、答案就是几个离散类别时，改用 Choice 或多个 Noul。档数：能描述得多不同就写多少档（上限 10），三档很常用，写不distinct的档别硬加。
+
+**自测 · 为什么「比上一档更严重」「中等严重」都是坏等级描述？**
+因为每档是独立送评的：模型看不到档位编号、看不到邻居，也做不了程度副词的量化对照。它需要一个能和材料匹配的**情境画像**——「功能坏了、但有绕行方案」这种。程度词给不出画像，模型只好把概率摊开，score 和 confidence 一起失真。
+
+
+## Noul —— 一道判断题的概率
+
+Noul 最简单也最容易被误读：它返回**「是」的概率**，一个 0 到 1 的数。会读这个数，你就掌握了系统里最便宜的「条件判断」。
+
+用法定义清楚：Noul 评估一个**单一的是非问题或陈述**。把它的概率表想清楚就一通百通——这张表**只有两格：是、否**，加起来永远 = 1；`noul` 就是「是」那格的份额，读数方式天然直观：靠近 1 是强「是」，靠近 0 是强「否」，**正中间 0.5 是两边一样重——「模型拿不准」**，不是「中等程度」。措辞上让高概率 = 是，答案含义才不拧巴；也可以写成陈述句让模型判真伪（「客户在要求退款」≈ 1 表示为真）。
+
+是非边界微妙时，可以加可选的 `criteria`，用 `true` / `false` 两段描述钉住边界。官方例题：「客户以前就这事联系过支持吗？」——true = 提到先前尝试/工单/问过；false = 没有任何先前联系的迹象。同一份「I have asked three times now. Can I please just talk to a real person?」返回 0.93。
+
+交互 · Noul 天平
+
+拖动滑块：是/否两格怎么分，读数就是什么
+
+0.93
+
+P(是) = 93% · P(否) = 7% —— 一张只有两格的概率表
+
+否
+
+是
+
+强否 ≤0.1
+
+偏否
+
+拿不准 ~0.5
+
+偏是
+
+强是 ≥0.9
+
+强「是」
+
+0.999
+
+0.99
+
+陷阱演示 · 0.5 ≠ 中等
+
+点按钮切换问题
+
+0.999
+
+✔ Noul 是正确的工具：答案本来就是「是/否」，概率本身就是信号。
+
+读数区间的真实锚点：0.999 = Stripe 工单紧急度（quickstart）、0.99 = 要求转人工、0.93 = 重复来访（Noul 文档）。
+
+工程上你多半会把 `noul` 阈值化成布尔：≥ 0.9 拦截、≤ 0.3 放行、中间走复核。但要记住它**没有单独的 confidence**——分布本身就只有一维，「拿不准」已经写在 0.5 里。需要「程度」时那是 Score 的领地；需要「几个类别」时是 Choice 的。
+
+**自测 · 「简历里提到分布式系统经验吗」和「候选人的系统设计水平如何」分别用什么？**
+前者 Noul：干净的是非，0.92 直接过筛、0.4 进复核。后者 Score：水平是光谱，定义好每一档（没做过 → 用过现成框架 → 设计过 → 主导过大规模权衡）才能排出高下。Noul 的 0.5 是「说不准」，永远当不了「中等水平」。
+
+
+## 为什么它的概率能信 —— RLCD 与校准
+
+前六章一直在说「概率、概率」——凭什幺 Jev 说的 0.8 就真的八成会发生？答案在一个词：**校准（calibration）**。这一章讲 TypeSafe 为此走的第三条训练路线。
+
+先大白话定义「校准」：模型报的概率**长期对得上事实的发生频率**。报 0.2 的事，一大批复测里真的约 20% 发生；报 0.8 的约 80% 发生。注意口径：校准是**一群预测的统计性质**，不保证任何单个答案正确——这正是第 8 章 confidence 路由存在的原因。
+
+预训练之后的语言模型有三条「后训练」路线，目标函数完全不同：
+
+| 路线 | 优化什么 | 造出了什么 | 副作用 |
+| --- | --- | --- | --- |
+| **RLHF** 人类反馈强化学习 | 人**更喜欢读**哪种回复 | 聊天机器人（InstructGPT / ChatGPT） | 谄媚、听起来自信的幻觉、mode dropping（分布收窄、别的说法被压掉） |
+| **RLVR** 可验证奖励强化学习 | 答案能否被**客观验证**（数学、代码） | 推理模型 | 慢、贵 |
+| **RLCD** 校准决策强化学习 | 概率与真实结果的对齐（TypeSafe 的路线） | 决策模型：返回判断 + 校准概率，不生成文本 | 不会聊天、不解释——故意的 |
+
+一个有意思的传承：RLHF 的共同发明人之一 Diogo Almeida，正是 TypeSafe 的联合创始人——他造过「讨人喜欢的模型」，现在造「机器信得过的模型」。TypeSafe 的判断是：大规模自动化里约 **99% 是机器对机器**的交互，机器接口比聊天界面重要。他们称之为 **Machine Native Intelligence**：让 AI 拥有软件的性质——结构化、可靠、可观测、可测试、快、一致、便宜。
+
+交互 · 校准对比器
+
+切预测组，看「说的把握」vs「实际命中率」
+
+一批预测，模型都报同一个概率：
+
+### 校准的模型（RLCD 目标）
+
+✓
+
+✓
+
+✓
+
+✓
+
+✓
+
+✓
+
+✓
+
+✓
+
+✗
+
+✗
+
+8/10
+
+### 过度自信的模型（示意）
+
+✓
+
+✓
+
+✓
+
+✓
+
+✓
+
+✗
+
+✗
+
+✗
+
+✗
+
+✗
+
+5/10
+
+校准定义与左列行为出自官方文档；右列「报 80% 只中 5 个」为示意，演示 RLHF 式「听起来自信」的失准形态。
+
+**校准买到的是什么**是「阈值可设计性」。概率可信，你才敢写 `if noul >= 0.9: 拦截` 这样的代码，并且能预估误杀率 ≈ 10%。概率不可信时，任何阈值都是玄学。下一章就把这个思想落成完整的路由架构。
+
+为什么不用 RLHF 模型凑合做判断？官方给了两个理由：一是它**奖励的是「人爱读」**，与「机器可依赖」是两个目标——一段话可以写得让人信服，却不足以让程序无人值守地执行；二是偏好优化带来 **mode dropping**，输出分布收窄，潜力被压掉。RLHF 依然是聊天模型的好路线，只是生产自动化需要不同的目标函数。
+
+**自测 · 「校准」保证了单个答案正确吗？**
+不保证。校准是群体统计性质：报 0.8 的预测群里约八成会对——单看某一个，它照样可能落在错的那两成里。所以工程上不是「信单个答案」，而是用 confidence + 阈值设计群体的期望行为（第 8 章），错了有兜底路径。
+
+
+## confidence —— 什么时候自动干，什么时候交给人
+
+校准给了你诚实的概率，`confidence` 给了你拒绝行动的勇气。这一章是把「我不知道」变成系统架构的一章。
+
+定义先行：Choice 和 Score 的答案里都带 `confidence`（0–1），它是**从 probability 分布的形状算出来的统计量**——官方替你算好，最常见场景零成本。分布尖 = 高 confidence；摊平 = 低。Noul 没有 confidence，因为它的「拿不准」就写在 0.5 里。官方同时强调：这不是把你锁死在他们的定义里——完整 `probabilities` 都在响应里，你要别的度量自己算。
+
+低 confidence 是有用的信号，不是失败。Choice 上它常意味着「没有哪个选项明显赢」；Score 上常意味着「等级重叠 / 问题测了不止一件事 / 材料不够」。官方给的起始模式是**三档**：
+
+| confidence | 系统行为 | 例子 |
+| --- | --- | --- |
+| **高** | 自动执行，不打扰人 | 清晰工单直接派组 |
+| **中** | 谨慎：请用户确认 / 标记复核 / 先补材料 | 转账前多问一句 |
+| **低** | 不行动：转人工、要求澄清、换系统兜底 | 歧义工单进人工分诊 |
+
+关键工程观：**阈值不是一个数，而是随风险缩放的一组数**。官方示例——同一个「用户想干什么」的 Choice，查余额（只读、可恢复）低门槛放行；批准转账（破坏性）必须 confidence > 0.9 才自动走、否则先向用户求证；而 0.5 是全局地板：模型自己都说拿不准的，一律转人工。
+
+交互 · 风险阈值路由器
+
+拖阈值，重放 6 条用户消息，看路由变化
+
+只读操作直接执行的下限
+
+0.50
+
+破坏性操作免确认的下限
+
+0.90
+
+check_balance
+
+0.97
+
+只读 · 直接执行
+
+approve_transfer
+
+0.86
+
+破坏性 · 先向用户求证
+
+support
+
+0.62
+
+中风险 · 带确认执行
+
+approve_transfer
+
+0.44
+
+转人工（<0.5 地板）
+
+support
+
+0.31
+
+转人工（<0.5 地板）
+
+check_balance
+
+0.55
+
+只读 · 直接执行
+
+本轮路由：自动 2 条 · 需确认 2 条 · 转人工 2 条 —— 拖高「破坏性下限」，看转账类消息何时跌回「先求证」。
+
+消息与其 choice/confidence 为模拟（基于官方 confidence 页场景）；路由规则照抄官方示例代码：地板 0.5 转人工、破坏性操作双阈值。另设「中风险」档演示中间态。
+
+**阈值怎么起步**官方建议：从保守值开始，用你自己的数据测，观察结果再调。不同领域的「正确的阈值」没有通解——风险写进你的代码里。
+
+**自测 · 为什么查余额和批准转账不该共用一个 confidence 阈值？**
+因为错误的代价不对称。显示错余额可以马上纠正（低代价），错批准一笔转账可能追不回（高代价）。阈值本质是**风险_tolerance 的代码化**：代价越高，要求的把握越高，自动化的比例就越低、确认环节越多。
+
+
+## 组合拳 —— 并行提问、拆解与代码加权
+
+单发的问题好写，系统的价值在组合。Jev 的组合学有三板斧：**放心多问**（并行）、**拆开问**（原子化）、**代码里合**（加权）。这一章把它们串成完整的工单优先级流水线。
+
+### 第一板斧：放心多问
+
+一次调用里的所有问题**并行、彼此独立**地评估——加问题几乎不增加响应时间，只多花问题本身的几个 token（便宜）。所以官方姿势是「可能用得上就都问」，答案用不用留给代码决定：工单不是退货就不看 severity，不是 shipping 就忽略 shipping_issue。这个模式官方叫 **Speculative fan-out**（投机型扇出）。实测口径：13 个问题合并成一次调用，比 13 次单问**便宜 11.5 倍、快 9.6 倍**，答案不变。上限是请求的 token 预算（state 和问题共享，约 32,000 tokens ≈ 15 万英文字符）。
+
+### 第二板斧：拆开问
+
+「工单优先级」这种复合判断别硬塞一个问题。官方拆法：严重度（3 档）、客户沮丧度（3 档）、报告质量（4 档）三个 Score 一起问。对官方那份「导出转圈、第三次来、附了步骤和浏览器版本」的工单，三个答案是 1.24@0.63、1.45@0.33、3.0@1.0——各自只测一个维度，各自可解释。
+
+### 第三板斧：代码里合
+
+三把尺子刻度不同（0–2、0–2、0–3），先**归一化**：各除以自己的最高档号，全部落到 0–1（0.62、0.725、1.0），再加权求和。权重是你的业务判断，写死在代码里：官方示例 0.6 × 严重度 + 0.3 × 沮丧度 + 0.1 × 报告质量 = **0.69**。下个月老板说「客户情绪优先」，你改一个系数，不用碰任何提示词。
+
+交互 · 优先级计算器
+
+换工单、调权重，看 priority 实时变化
+
+输入工单
+
+severity
+
+1.24 / 2
+
+归一化 0.620 · conf 0.63 · 有绕行但存疑
+
+frustration
+
+1.45 / 2
+
+归一化 0.725 · conf 0.33 · 「第三次了，我受够了」 vs 措辞克制，两档重叠
+
+report_quality
+
+3.00 / 3
+
+归一化 1.000 · conf 1.0 · 步骤 + 浏览器版本都给了
+
+severity 严重度
+
+0.60
+
+frustration 沮丧度
+
+0.30
+
+report_quality 报告质量
+
+0.10
+
+0.69
+
+「导出转圈」三个分数为官方文档真实响应；归一化与加权公式照官方示例代码。权重未归一（和可以 ≠ 1），官方示例如此——排序场景够用。
+
+### 什么时候才需要第二次请求
+
+同请求内的问题互相独立——一个答案**不会**自动成为下一个问题的上下文。真有依赖时（代码必须拿到第一个答案才能：去取更多数据、决定 state 装什么、或挑下一个问题的选项），才发第二个请求。官方口径：**两次请求是例外不是常态**。三个真实例外：先粗排 182 个技能再取前三细评；先判断每行换行是否切断句子、再给拼出的块分类（块在第一问回答前根本不存在）；层级分类里用上一层的 Choice 决定下一层给哪些选项。
+
+**给用 agent 的你**官方观察：编码 agent 比人类更容易养成「一问一调用」的坏习惯，所以他们的 agent skill 会专门叮嘱「每次调用多塞问题，包括只对部分输入有意义的问题」。让 agent 写集成时，先装这个 skill。
+
+
+## 实战地图 —— 用例、模式、食谱与生态
+
+题型只是零件，这一章是一张可点的地图：官方把用例按行业铺开、沉淀出四个架构模式、写了十八份带真实结果的 cookbook 食谱；社区这边 skill、SDK、复刻与实测也都已经有了。拿着你自己的业务对号入座。
+
+### 先看社区把它玩成了什么样：十类高频用法
+
+Jev 发布于 2026 年 9 月 15 日。响应速度官方口径 150ms 级、社区实测约 70–500ms（随 state 大小浮动）；输入 $0.042/Mtok、输出不计费——**「一次判断不到一美分」是下面这些玩法共同的前提**：判断便宜到可以每个 tick 都问、每封邮件都筛、每段上下文都过滤。下表整理自 [awesome-jev](https://github.com/yibie/awesome-jev) 与社区实测帖（数字为发布者口径）：
+
+| 玩法类别 | 它在判断什么 | 社区实测例子 |
+| --- | --- | --- |
+| **分类与路由** | 文本/工单/日志分到固定标签；紧急程度、是否需要人工 | 客服邮件分诊、500 封邮件批量分类、税务 PDF 识别 |
+| **动作选择 （Computer Use）** | 读页面/桌面的结构化状态，选「点哪个元素、执行哪类操作」 | [Browser Use 创始人用 Jev 订机票](https://dev.to/valyuai/how-to-use-jev-a-practical-guide-to-typesafes-system-one-model-g5e)：苏黎世→伦敦 7.1 秒 / $0.0039，单步响应 ~70ms（X 上 180 万播放，[完整实测视频](https://www.youtube.com/watch?v=SNJ3yuJ_QwY)）；macOS 桌面控制 |
+| **Agent 监督与护栏** | agent 跑没跑偏、工具调用安不安全、该停/重试/升级 | 漂移检测、危险工具调用拦截、完成度与卡死判断 |
+| **代码与质量检查** | 给 PR/生成代码打风险分、选审查重点、判规范符合性 | 代码审查仪表盘、14 项 PR 风险检查、AI 生成代码评分 |
+| **检索与过滤** | 片段相不相关、该不该进上下文、保留还是丢弃 | RAG 重排、记忆压缩（保留/删除）、网页去广告、自然语言过滤时间线 |
+| **评分与评估** | 按量表给紧急度、严重度、质量、匹配度打分 | 广告卖点拆解、帖子潜力、标题与摘要筛选 |
+| **实时控制与游戏** | 每个 tick 读结构化状态，选下一步动作 | Doom 演示、Super Mario（读模拟器 RAM）、国际象棋、无人机战术建议 |
+| **交易与策略** | 根据行情/规则状态给买/卖/持有或风险判断 | 链上做市、对冲基金回测、实时下注决策 |
+| **安全与合规** | 是否注入、是否违规、命令是否危险 | Prompt injection 检测、有害文本审核、shell 命令安全判断 |
+| **模拟与群体决策** | 为大量实体并行判断「下一步意图」 | NPC 行为、大规模 3D agent 并行决策 |
+
+这些玩法的公共形状，就是第 3 章那句「答案空间预先定义好」：动作清单、风险档位、保留/删除——全是选择题、打分题、判断题的排列组合。个别例子收录在 awesome-jev（链接见本章末社区动态）。
+
+### 官方用例地图：五大类场景
+
+官方的 [用例地图（Example use cases）](https://docs.typesafe.ai/concepts/use-case-map)按行业列了二十来类用法。先抓它归纳的五大类——每一类都是「为什么非这种模型不可」的一个理由：
+
+| 场景大类 | 一句话 |
+| --- | --- |
+| **AI 自动化软件** | 代码掌管控制流，Jev 管语义判断——无人值守地跑一百万次 |
+| **实时应用** | 官方口径 150ms 级响应：快过人类感知，可做游戏、可嵌进 UI |
+| **大数据 AI Map Reduce** | 便宜一个数量级之后，巨量语料的搜索、分类、特征提取才做得起 |
+| **万能验证** | 验证另一个 AI 的输入、抽取、推理轨迹、工具调用——成本只要被检 LLM 调用的零头 |
+| **Harness 工程** | 让 agent 框架更聪明：模型路由、语义检索、错误检测、护栏 |
+
+行业层各挑两个典型判断感受一下广度（完整清单见用例地图页）：客服（工单分类、紧急度/退款检测、路由到队列）、招聘（简历对照岗位标准打分、经验识别、不确定转人工）、销售线索（ICP 匹配、购买意向打分）、保险理赔（出险报告分类、欺诈信号、直通处理 vs 专家审核）、金融犯罪（交易叙事评估、跨名录实体对齐）、法务合规（合同分类、缺条款与违规声明检测）、电商（跨卖家目录归一、禁售与假货信号）、信任与安全（毒性/骚扰/诈骗审核，severity × confidence 定允许/警告/复核/封禁）、游戏（聊天审核、玩家挫败感打分、流失信号）、知识图谱（关系分类、记录间矛盾检测）。官方还给了十种「决策形状」速查——分类、检测、打分、路由、搜索、检索、排序、验证、ML 特征提取、结构化抽取——拆开看全是三种题型的排列组合。
+
+### 四个架构模式
+
+[Patterns](https://docs.typesafe.ai/patterns) 页把常见做法沉淀成四个模式，本手册已经拆过三个，剩下那个是 agent 工程里最常用的总纲：
+
+- [Speculative fan-out 投机型扇出](https://docs.typesafe.ai/patterns/fan-out)——可能用得上的问题一次全问（第 9 章三板斧之一）；
+- [Confidence-gated routing 置信度门控路由](https://docs.typesafe.ai/patterns/confidence-routing)——答案告诉你是「什么」，confidence 告诉你「要不要动手」（第 8 章）；
+- [Composite scoring 复合打分](https://docs.typesafe.ai/patterns/composite-scoring)——拆成原子分数、代码里加权（第 9 章优先级计算器）；
+- [Intent routing 意图路由](https://docs.typesafe.ai/patterns/intent-routing)——把每个请求分给最优处理者：确定性代码、专家 LLM，或人。
+
+### 十八份 cookbook：带数字的实战食谱
+
+每份 cookbook 都是可以跑起来的完整示例，多数带前后对比数字。建议先扫一遍标题，挑跟自己业务最近的两三份精读：
+
+| 食谱 | 干什么的 |
+| --- | --- |
+| [Parallel questions](https://docs.typesafe.ai/cookbooks/parallel_questions) | 在 GDPR 维基条目上一次批量问 13 个监管问题，验证「合在一起问」更便宜更快且答案不变 |
+| [Re-ranking](https://docs.typesafe.ai/cookbooks/rerank_typesafe) | 40 条法律查询：BM25 短名单重排后 top-1 命中 5% → 18%，top-10 命中 38% → 62% |
+| [Line-by-line search](https://docs.typesafe.ai/cookbooks/semantic_find) | GitHub 服务条款 218 行逐行语义搜索：一次 Choice 问题给 218 个行号打分 |
+| [Structure recovery](https://docs.typesafe.ai/cookbooks/autoformat) | 丢掉格式的纯文本两步恢复成 Markdown：先拼行、再给每个块分类（第 9 章提过的真依赖例子） |
+| [Function calling](https://docs.typesafe.ai/cookbooks/function_calling) | 自然语言交易请求 → 普通类型化函数调用：函数名与闭集参数都映射成问题 |
+| [Skill suggestion](https://docs.typesafe.ai/cookbooks/skill_suggestion) | 182 个 agent 技能里至多挑 1 个：第一问粗排，第二问细读前三并有权全拒 |
+| [Entity alignment](https://docs.typesafe.ai/cookbooks/entity_alignment) | 两份啤酒目录 450 个候选对：一个 Score 包办「合并 / 不连 / 交人工」三决策，无需拟合阈值 |
+| [Classifying RAG passages](https://docs.typesafe.ai/cookbooks/classifying_rag_passages) | 给每段检索材料打分，决定谁有资格进回答模型——顺手拦下藏了 prompt injection 的段落 |
+| [Citation check](https://docs.typesafe.ai/cookbooks/citation_check) | 引文对照原文：一个 Choice 判断引文语境是否支撑论断，confidence 不足就标人工复核 |
+| [LLM guardrails](https://docs.typesafe.ai/cookbooks/llm_guardrails) | LLLM 应用的进出双向筛查：越狱检测（Noul）+ 危害程度打分（Score），阈值决定放行/复核/拦截 |
+| [SDE cascade](https://docs.typesafe.ai/cookbooks/sde_cascade) | 结构化抽取三段级联（小模型 → 验证 → 推理模型）：用零头的价格买到大模型的大部分质量 |
+| [Date extraction](https://docs.typesafe.ai/cookbooks/date_extraction_cookbook) | 绝对与相对日期抽取：Jev 出零件、代码负责解析与校验 |
+| [Pre-parsed value extraction](https://docs.typesafe.ai/cookbooks/pre_parsed_value_extraction_cookbook) | 正则找候选邮箱/电话/金额，Jev 选中目标跨度，代码归一化成标准值 |
+| [Hierarchical classification](https://docs.typesafe.ai/cookbooks/hierarchical_classification) | 专利 / 零售 / 生物医学 / 源码深层级分类：Choice 概率上跑并行 beam search |
+| [Autoresearch features](https://docs.typesafe.ai/cookbooks/autoresearch_feature_discovery) | 自动提出问题 → 把文本变数值特征 → 用模型误差迭代训练下游 CatBoost 回归器 |
+| [Classification using confidence](https://docs.typesafe.ai/cookbooks/classification_using_confidence) | SEC 年报分 75 个行业组：置信度不够就上报上一级门类，而不是硬猜 |
+| [Self-consistency: nouls](https://docs.typesafe.ai/cookbooks/consistency_noul_cookbook) | 不确定的概率转人工，同时底层 noul 值保持可见 |
+| [Self-consistency: choices](https://docs.typesafe.ai/cookbooks/consistency_choice_cookbook) | 审核决策加一个「不确定」出口，用标注一致性对账自动动作占比 |
+
+### Agent skill：让编码 agent 替你写集成
+
+[TypeSafe agent skill](https://docs.typesafe.ai/agent-skill)是一个即插即用的技能包（[SKILL.md 直读](https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md)），给 Claude Code、Codex 等编码 agent 补全题型、模式与最佳实践上下文。安装：
+
+两条路，任选其一
+
+```
+# Claude Code 插件市场
+claude plugin marketplace add typesafe-ai/skills
+claude plugin install typesafe@typesafe-ai
+
+# 其他 agent（skills.sh，项目本地装，-g 全局）
+npx skills add typesafe-ai/skills --skill typesafe-ai
+```
+
+官方给的三个起手 prompt 值得直接抄：①「用 TypeSafe skill 扫一遍我的项目，找用语义判断替代脆弱解析的机会」；②「拿我导出的 `TYPESAFE_API_KEY` 跑些便宜实验，基于最有希望的结果提方案」；③「对照 cookbook 索引看我的代码里有没有类似模式可以重构」。官方经验还提醒：**agent 不擅长写问题**——问题与阈值收拢到一个文件里，和人一起迭代；以及如果你只想要「最好的选项」，直接取最高概率即可，不必处处上 confidence 阈值。
+
+### SDK 与价格账本
+
+客户端两条路：[Python SDK](https://docs.typesafe.ai/sdk/python)（`pip install typesafe-sdk`）与 [JavaScript SDK](https://docs.typesafe.ai/sdk/javascript)（`@typesafe-ai/sdk`），都默认读 `TYPESAFE_API_KEY`、默认 `jev-latest`、失败自动退避重试。硬指标（[models 页](https://docs.typesafe.ai/models)，2026-09）：
+
+| 项 | 数值 / 口径 |
+| --- | --- |
+| **当前版本** | `jev-1.13.0`（`jev-latest` / `jev-preview` 别名都指向它；别名会随新版漂移，调过阈值就锁版本号） |
+| **价格** | 输入 $42 / Btok（=$0.042 / Mtok）；**输出 token 免费**——因为它不生成文本 |
+| **限速** | 250,000 tokens/s、1,200 请求/分钟（官方注明扩容期动态调整，超额返回 429） |
+| **上下文** | 每请求 64k tokens：state 32k + 最长问题 32k（问题共享预算，第 9 章） |
+| **定制方式** | 不做微调 / LoRA：同一套权重服务所有账号，领域知识放 state、边界写进 criteria |
+| **数据** | 不用客户请求/响应训练；企业可零保留（ZDR） |
+| **发布口径** | [官方发布博文](https://typesafe.ai/blog/introducing-system-one-models-and-jev)：System One 形状的查询上比 frontier LLM 快 40–200×、便宜最高 400× |
+
+**先读「毛边」页再上生产**官方自己维护着 [Jev 1.13 已知毛边（jaggedness）](https://docs.typesafe.ai/model-jaggedness/jev-1.13)：列了这版模型已知的弱点，包括准确率随 state 变长如何变化。愿意自曝短板是个好信号，但你要在自己的数据上按这页校准预期——尤其中文场景（第 2 章的提醒仍然成立）。
+
+### 社区动态：一周里的生态
+
+Jev 发布才几天，社区已经有复刻、实测与吐槽。挑真实可点的：
+
+- **热帖** · [HN：Reverse-engineered Jev-like model](https://news.ycombinator.com/item?id=49731282)（161 分）——社区逆向「一段文本 + N 个选项 → N 个概率」的做法；Reddit [r/singularity 发布帖](https://www.reddit.com/r/singularity/comments/1whop6b/)同步在吵
+- **复刻与开源替代** · [mini-jev](https://github.com/r-ms/mini-jev)（LLM 上本地实现）、[open-alternative-jev](https://github.com/ikermoel/open-alternative-jev)（自己 GPU 上跑的开源替代）
+- **实测** · [dabit3/jev-experiments](https://github.com/dabit3/jev-experiments)（Devin 搭的延迟测试）、[lindfors.no 早鸟实测「半美分的校准判断」](https://lindfors.no/blog/a-first-look-at-typesafes-jev/)
+- **第三方解读** · [DataCamp：Jev 解读](https://www.datacamp.com/blog/system-one-models-jev)、[flaviocopes 深潜（含 JS 示例）](https://flaviocopes.com/jev)、[geotoolbox 入门](https://geotoolbox.ai/blog/what-is-jev-ai)
+- **随笔与视频** · [「Jev 是扑克桌上的鱼」](https://backnotprop.com/blog/jev-poker/)（对适用边界的长文思考）、[YouTube：Coding with the new TypeSafe AI JEV Model](https://www.youtube.com/watch?v=5Lx4DLLYafM)
+- **汇总清单** · [awesome-jev](https://github.com/yibie/awesome-jev)（社区项目、集成与讨论的持续收录）
+
+**自测 · 想清楚了再选 Jev：它和「用便宜 LLM 做分类」的边界在哪？**
+Jev 赢在结构化和校准：答案天然在你定义的空间里、概率经过校准可做阈值设计、输出 token 免费且并行多问几乎免费——适合「高频、窄判断、要进代码」的位置。但如果你的任务需要长推理链、开放生成、或多轮对话中的上下文累积，那还是 LLM 的领地；官方模式（intent routing）本身就是让两者分工：Jev 做门厅的快判断，重活转给 LLM 或人。「扑克桌上的鱼」那篇的提醒也值得记住：把 Jev 用在它被训练的形状上，别硬拗。
+
+
+## 参考资料
+
+本手册的事实、示例与数字均整理自 TypeSafe 官方文档（2026-09 读到版本），交互组件为本页自制。
+
+- 官方文档 · [Introduction](https://docs.typesafe.ai/introduction) · [Quick start](https://docs.typesafe.ai/introduction/quickstart) · [System One](https://docs.typesafe.ai/concepts/system-one) · [State](https://docs.typesafe.ai/concepts/state) —— 第 1、2 章的主源
+- 官方文档 · [Primitives 总览](https://docs.typesafe.ai/primitives) · [Choice](https://docs.typesafe.ai/primitives/choice) · [Score](https://docs.typesafe.ai/primitives/score) · [Noul](https://docs.typesafe.ai/primitives/noul) · [Advanced: structure](https://docs.typesafe.ai/primitives/advanced) —— 第 3~5、9 章的题型细节与全部实验数字
+- 官方文档 · [AI primer（RLCD 与校准）](https://docs.typesafe.ai/introduction/machine-learning-primer) · [Confidence](https://docs.typesafe.ai/confidence) —— 第 7、8 章的训练叙事与路由示例
+- 官方入口 · [Playground](https://console.typesafe.ai/playground) · API `POST api.typesafe.ai/v1/systemone` · [TypeSafe Manifesto（Machine Native Intelligence）](https://typesafe.ai/manifesto) · [发布博文：Introducing System One Models & Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
+- 书 · 丹尼尔·卡尼曼《思考，快与慢》—— System One 命名出处
+- 延伸 · [用例地图](https://docs.typesafe.ai/concepts/use-case-map)、[patterns](https://docs.typesafe.ai/patterns)、18 份 [cookbooks](https://docs.typesafe.ai/cookbooks/parallel_questions)、[models（定价/限速/语言支持）](https://docs.typesafe.ai/models)、[agent skill](https://docs.typesafe.ai/agent-skill) 已在第 10 章展开索引；完整文档目录见 [llms.txt](https://docs.typesafe.ai/llms.txt)，社区链接（HN、复刻、实测、第三方解读）同样收录在第 10 章
+
+### 延伸阅读 · 本站相关手册
+
+| 手册 | 关联点 |
+| --- | --- |
+| LLM 前缀缓存 | 省智能调用成本的两个互补机制：Jev 靠「一次调用并行多问」省请求数，前缀缓存靠复用已算过的前缀状态省计算 |
+| Subagent vs 多 Agent | 编排层怎么分工；Jev 是编排体系里那层「秒级微判断」，慢推理与人兜底在别处 |
+| GPU 与模型部署实战 | 模型 API 背后的推理与部署经济学——判断模型再快也要跑在算力账单上 |
+
+回到总目录
+
+know-as-ui · 还有 8 个可交互知识点
+
+↗
+
+jev-typesafe · 事实与数字以 docs.typesafe.ai 为准（2026-09 版）· 封面为 AI 生成插画（豆包 seedream），交互组件与本页图表为自制，模拟数据处均已标注 · RLHF/RLVR/RLCD 对照基于官方 AI primer 叙事
+
+## 外部引用
+
+- https://backnotprop.com/blog/jev-poker/
+- https://console.typesafe.ai/playground
+- https://dev.to/valyuai/how-to-use-jev-a-practical-guide-to-typesafes-system-one-model-g5e
+- https://docs.typesafe.ai/agent-skill
+- https://docs.typesafe.ai/concepts/state
+- https://docs.typesafe.ai/concepts/system-one
+- https://docs.typesafe.ai/concepts/use-case-map
+- https://docs.typesafe.ai/confidence
+- https://docs.typesafe.ai/cookbooks/autoformat
+- https://docs.typesafe.ai/cookbooks/autoresearch_feature_discovery
+- https://docs.typesafe.ai/cookbooks/citation_check
+- https://docs.typesafe.ai/cookbooks/classification_using_confidence
+- https://docs.typesafe.ai/cookbooks/classifying_rag_passages
+- https://docs.typesafe.ai/cookbooks/consistency_choice_cookbook
+- https://docs.typesafe.ai/cookbooks/consistency_noul_cookbook
+- https://docs.typesafe.ai/cookbooks/date_extraction_cookbook
+- https://docs.typesafe.ai/cookbooks/entity_alignment
+- https://docs.typesafe.ai/cookbooks/function_calling
+- https://docs.typesafe.ai/cookbooks/hierarchical_classification
+- https://docs.typesafe.ai/cookbooks/llm_guardrails
+- https://docs.typesafe.ai/cookbooks/parallel_questions
+- https://docs.typesafe.ai/cookbooks/pre_parsed_value_extraction_cookbook
+- https://docs.typesafe.ai/cookbooks/rerank_typesafe
+- https://docs.typesafe.ai/cookbooks/sde_cascade
+- https://docs.typesafe.ai/cookbooks/semantic_find
+- https://docs.typesafe.ai/cookbooks/skill_suggestion
+- https://docs.typesafe.ai/introduction
+- https://docs.typesafe.ai/introduction/machine-learning-primer
+- https://docs.typesafe.ai/introduction/quickstart
+- https://docs.typesafe.ai/llms.txt
+- https://docs.typesafe.ai/model-jaggedness/jev-1.13
+- https://docs.typesafe.ai/models
+- https://docs.typesafe.ai/patterns
+- https://docs.typesafe.ai/patterns/composite-scoring
+- https://docs.typesafe.ai/patterns/confidence-routing
+- https://docs.typesafe.ai/patterns/fan-out
+- https://docs.typesafe.ai/patterns/intent-routing
+- https://docs.typesafe.ai/primitives
+- https://docs.typesafe.ai/primitives/advanced
+- https://docs.typesafe.ai/primitives/choice
+- https://docs.typesafe.ai/primitives/noul
+- https://docs.typesafe.ai/primitives/score
+- https://docs.typesafe.ai/sdk/javascript
+- https://docs.typesafe.ai/sdk/python
+- https://flaviocopes.com/jev
+- https://geotoolbox.ai/blog/what-is-jev-ai
+- https://github.com/dabit3/jev-experiments
+- https://github.com/ikermoel/open-alternative-jev
+- https://github.com/r-ms/mini-jev
+- https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md
+- https://github.com/yibie/awesome-jev
+- https://lindfors.no/blog/a-first-look-at-typesafes-jev/
+- https://news.ycombinator.com/item?id=49731282
+- https://typesafe.ai/blog/introducing-system-one-models-and-jev
+- https://typesafe.ai/manifesto
+- https://www.datacamp.com/blog/system-one-models-jev
+- https://www.reddit.com/r/singularity/comments/1whop6b/
+- https://www.youtube.com/watch?v=5Lx4DLLYafM
+- https://www.youtube.com/watch?v=SNJ3yuJ_QwY
