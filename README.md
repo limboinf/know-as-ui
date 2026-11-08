@@ -106,7 +106,7 @@ jev-typesafe/
 
 ```bash
 cd ~/work/github/know-as-ui
-make open        # 后台启动 http.server :8000，并用浏览器打开
+make open        # 后台启动本地预览服务器 :8000，并用浏览器打开
 make stop        # 停止后台服务器
 make serve       # 前台运行（Ctrl+C 退出，适合调试）
 ```
@@ -123,11 +123,13 @@ Cloudflare Worker 部署：
 npx wrangler deploy --domains dev.limbo101.win
 ```
 
+根目录 `_headers` 会给所有 `*.llms.txt` 显式设置 `Content-Type: text/plain; charset=utf-8`，避免线上浏览器把 UTF-8 正文按 GBK 解码成乱码。
+
 也可以手动起任意静态文件服务器：
 
 ```bash
 cd ~/work/github/know-as-ui
-python3 -m http.server 8000
+python3 scripts/serve.py 8000
 ```
 
-然后访问 <http://localhost:8000>。
+然后访问 <http://localhost:8000>。别直接用 `python3 -m http.server`：它不会给 `text/plain` 声明 UTF-8，中文 `.llms.txt` 会被浏览器按系统编码猜成乱码。

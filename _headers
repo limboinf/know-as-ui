@@ -1,0 +1,3 @@
+# llms.txt 是 UTF-8 正文快照，显式声明编码，避免浏览器按系统编码猜测。
+/*llms.txt
+  Content-Type: text/plain; charset=utf-8
